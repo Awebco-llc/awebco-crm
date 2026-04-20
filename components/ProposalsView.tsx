@@ -1,0 +1,469 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { Search, Filter, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft } from 'lucide-react';
+import { Company, Contact, TeamMember, ProductService } from './Shared';
+
+interface ProposalItem {
+  id: string;
+  name: string;
+  description: string;
+  quantity: number;
+  price: number;
+}
+
+interface Proposal {
+  id: string;
+  title: string;
+  companyId: string;
+  contactId: string;
+  date: string;
+  validUntil: string;
+  items: ProposalItem[];
+  status: 'Draft' | 'Sent' | 'Accepted' | 'Declined';
+  notes: string;
+}
+
+export default function ProposalsView({ teamMembers, companies, contacts, products = [] }: { teamMembers: TeamMember[], companies: Company[], contacts: Contact[], products?: ProductService[] }) {
+  const [proposals, setProposals] = useState<Proposal[]>(() => [
+    {
+      id: '1',
+      title: 'Website Redesign Proposal',
+      companyId: '1',
+      contactId: '1',
+      date: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      items: [
+        { id: 'i1', name: 'Web Design', description: 'Custom responsive design', quantity: 1, price: 3500 },
+        { id: 'i2', name: 'Web Development', description: 'Next.js frontend development', quantity: 1, price: 4500 },
+      ],
+      status: 'Draft',
+      notes: 'Thank you for your business. Please let us know if you have any questions about this proposal.',
+    }
+  ]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeView, setActiveView] = useState<'list' | 'edit'>('list');
+  const [currentDoc, setCurrentDoc] = useState<Proposal | null>(null);
+
+  const filteredProposals = useMemo(() => {
+    return proposals.filter(p => 
+      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      companies.find(c => c.id === p.companyId)?.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [proposals, searchQuery, companies]);
+
+  const handleCreateNew = () => {
+    setCurrentDoc({
+      id: Date.now().toString(),
+      title: 'New Proposal',
+      companyId: companies[0]?.id || '',
+      contactId: contacts[0]?.id || '',
+      date: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      items: [{ id: Date.now().toString(), name: '', description: '', quantity: 1, price: 0 }],
+      status: 'Draft',
+      notes: '',
+    });
+    setActiveView('edit');
+  };
+
+  const handleSave = () => {
+    if (currentDoc) {
+      setProposals(prev => {
+        const index = prev.findIndex(p => p.id === currentDoc.id);
+        if (index > -1) {
+          const newArr = [...prev];
+          newArr[index] = currentDoc;
+          return newArr;
+        } else {
+          return [...prev, currentDoc];
+        }
+      });
+      setActiveView('list');
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const calculateSubtotal = (items: ProposalItem[]) => {
+    return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  };
+
+  if (activeView === 'edit' && currentDoc) {
+    const subtotal = calculateSubtotal(currentDoc.items);
+    
+    return (
+      <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-gray-50 z-10 print:bg-white print:static print:h-auto print:overflow-visible">
+        {/* Editor Top Bar - Hidden when printing */}
+        <div className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0 print:hidden">
+          <button 
+            onClick={() => setActiveView('list')}
+            className="flex items-center gap-2 text-[#4A4D53] hover:text-[#1061E3] font-semibold transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Proposals
+          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => alert('Simulating email sending...')}
+              className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <Mail className="w-4 h-4" />
+              Email
+            </button>
+            <button 
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Print / PDF
+            </button>
+            <button 
+              onClick={handleSave}
+              className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              Save Proposal
+            </button>
+          </div>
+        </div>
+
+        {/* Invoice Form Area */}
+        <div className="flex-grow overflow-y-auto p-8 flex justify-center print:p-0 print:overflow-visible">
+          <div className="w-full max-w-4xl bg-white rounded-lg shadow-sm border border-[#E2E4E9] p-8 print:shadow-none print:border-none print:p-0">
+            {/* Header section */}
+            <div className="flex justify-between items-start mb-8 border-b border-[#E2E4E9] pb-8 print:border-b-2 print:border-gray-300">
+              <div className="w-1/2 pr-4">
+                <input 
+                  type="text" 
+                  value={currentDoc.title}
+                  onChange={(e) => setCurrentDoc({...currentDoc, title: e.target.value})}
+                  className="text-3xl font-bold text-[#1C1F23] border-none outline-none focus:ring-2 focus:ring-[#1061E3] rounded px-2 -mx-2 w-full mb-4 bg-transparent"
+                  placeholder="Proposal Title"
+                />
+                
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Date</label>
+                    <input 
+                      type="date"
+                      value={currentDoc.date}
+                      onChange={(e) => setCurrentDoc({...currentDoc, date: e.target.value})}
+                      className="text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-2 py-1 outline-none w-full max-w-[150px] bg-white print:border-none print:p-0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Valid Until</label>
+                    <input 
+                      type="date"
+                      value={currentDoc.validUntil}
+                      onChange={(e) => setCurrentDoc({...currentDoc, validUntil: e.target.value})}
+                      className="text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-2 py-1 outline-none w-full max-w-[150px] bg-white print:border-none print:p-0"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="w-1/3 bg-[#F9FAFB] p-4 rounded-md border border-[#E2E4E9] print:bg-transparent print:border-none print:p-0">
+                <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Bill To</label>
+                <select 
+                  value={currentDoc.companyId}
+                  onChange={(e) => setCurrentDoc({...currentDoc, companyId: e.target.value})}
+                  className="w-full text-base font-semibold text-[#1C1F23] bg-transparent border-none outline-none focus:ring-2 focus:ring-[#1061E3] rounded -ml-1 py-1 mb-2 appearance-none cursor-pointer print:appearance-none print:pointer-events-none"
+                >
+                  <option value="" disabled>Select Company</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                
+                <label className="block text-xs font-semibold text-[#8E9299] mt-2 mb-1 uppercase tracking-wider">Contact</label>
+                <select 
+                  value={currentDoc.contactId}
+                  onChange={(e) => setCurrentDoc({...currentDoc, contactId: e.target.value})}
+                  className="w-full text-sm text-[#4A4D53] bg-transparent border-none outline-none focus:ring-2 focus:ring-[#1061E3] rounded -ml-1 py-1 appearance-none cursor-pointer print:appearance-none print:pointer-events-none"
+                >
+                  <option value="">No specific contact</option>
+                  {contacts.filter(c => c.companyId === currentDoc.companyId).map(c => (
+                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div className="mb-8">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-[#1C1F23]">
+                    <th className="py-3 px-2 text-xs font-bold text-[#1C1F23] uppercase tracking-wide">Item & Description</th>
+                    <th className="py-3 px-2 text-xs font-bold text-[#1C1F23] uppercase tracking-wide w-24 text-right">Qty</th>
+                    <th className="py-3 px-2 text-xs font-bold text-[#1C1F23] uppercase tracking-wide w-32 text-right">Price</th>
+                    <th className="py-3 px-2 text-xs font-bold text-[#1C1F23] uppercase tracking-wide w-32 text-right">Total</th>
+                    <th className="py-3 px-2 w-10 print:hidden"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentDoc.items.map((item, index) => (
+                    <tr key={item.id} className="border-b border-[#E2E4E9] group/row">
+                      <td className="py-3 px-2 align-top">
+                        <input 
+                          type="text"
+                          value={item.name}
+                          onChange={(e) => {
+                            const newItems = [...currentDoc.items];
+                            newItems[index].name = e.target.value;
+                            setCurrentDoc({...currentDoc, items: newItems});
+                          }}
+                          placeholder="Item name"
+                          className="w-full text-sm font-semibold text-[#1C1F23] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#1061E3] rounded px-1 -ml-1 mb-1"
+                        />
+                        <textarea 
+                          value={item.description}
+                          onChange={(e) => {
+                            const newItems = [...currentDoc.items];
+                            newItems[index].description = e.target.value;
+                            setCurrentDoc({...currentDoc, items: newItems});
+                          }}
+                          placeholder="Description (optional)"
+                          className="w-full text-xs text-[#8E9299] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#1061E3] rounded px-1 -ml-1 resize-y"
+                          rows={2}
+                        />
+                      </td>
+                      <td className="py-3 px-2 align-top col-span-1">
+                        <input 
+                          type="number"
+                          value={item.quantity}
+                          min="1"
+                          onChange={(e) => {
+                            const newItems = [...currentDoc.items];
+                            newItems[index].quantity = parseFloat(e.target.value) || 0;
+                            setCurrentDoc({...currentDoc, items: newItems});
+                          }}
+                          className="w-full text-sm text-[#4A4D53] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#1061E3] rounded text-right px-1"
+                        />
+                      </td>
+                      <td className="py-3 px-2 align-top">
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-sm text-[#8E9299]">$</span>
+                          <input 
+                            type="number"
+                            value={item.price}
+                            min="0"
+                            onChange={(e) => {
+                              const newItems = [...currentDoc.items];
+                              newItems[index].price = parseFloat(e.target.value) || 0;
+                              setCurrentDoc({...currentDoc, items: newItems});
+                            }}
+                            className="w-20 text-sm text-[#4A4D53] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#1061E3] rounded text-right px-1"
+                          />
+                        </div>
+                      </td>
+                      <td className="py-3 px-2 align-top text-right text-sm font-semibold text-[#1C1F23] pt-4">
+                        ${(item.quantity * item.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </td>
+                      <td className="py-3 px-2 align-top text-right print:hidden">
+                        <button 
+                          onClick={() => {
+                            const newItems = currentDoc.items.filter((_, i) => i !== index);
+                            setCurrentDoc({...currentDoc, items: newItems});
+                          }}
+                          className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover/row:opacity-100 mt-0.5"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="print:hidden">
+                    <td colSpan={5} className="py-4">
+                      <div className="flex items-center gap-4">
+                        <button 
+                          onClick={() => {
+                            setCurrentDoc({
+                              ...currentDoc,
+                              items: [...currentDoc.items, { id: Date.now().toString(), name: '', description: '', quantity: 1, price: 0 }]
+                            });
+                          }}
+                          className="text-sm font-semibold text-[#1061E3] hover:text-blue-700 flex items-center gap-1"
+                        >
+                          <Plus className="w-4 h-4" /> Add Blank Item
+                        </button>
+                        
+                        <div className="relative">
+                          <select 
+                            onChange={(e) => {
+                              const prod = products.find(p => p.id === e.target.value);
+                              if (prod) {
+                                setCurrentDoc({
+                                  ...currentDoc,
+                                  items: [...currentDoc.items, {
+                                    id: Date.now().toString(),
+                                    name: prod.name,
+                                    description: prod.description,
+                                    quantity: 1,
+                                    price: parseFloat(prod.price) || 0
+                                  }]
+                                });
+                              }
+                              e.target.value = ''; // Reset select
+                            }}
+                            className="text-sm font-semibold text-[#1061E3] hover:text-blue-700 bg-transparent outline-none cursor-pointer appearance-none pr-4"
+                            defaultValue=""
+                          >
+                            <option value="" disabled>+ Add from Catalog...</option>
+                            {products.map(p => (
+                              <option key={p.id} value={p.id}>{p.name} (${p.price})</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals & Notes */}
+            <div className="flex justify-between items-start">
+              <div className="w-1/2">
+                <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Notes / Terms</label>
+                <textarea 
+                  value={currentDoc.notes}
+                  onChange={(e) => setCurrentDoc({...currentDoc, notes: e.target.value})}
+                  placeholder="Thank you for your business..."
+                  className="w-full text-sm text-[#4A4D53] bg-[#F9FAFB] border border-[#E2E4E9] outline-none focus:ring-2 focus:ring-[#1061E3] rounded p-3 min-h-[100px] resize-y print:border-none print:bg-transparent print:p-0"
+                />
+              </div>
+              
+              <div className="w-1/3">
+                <div className="flex justify-between py-2 border-b border-[#E2E4E9] print:border-gray-200">
+                  <span className="text-sm font-semibold text-[#8E9299]">Subtotal</span>
+                  <span className="text-sm font-semibold text-[#1C1F23]">
+                    ${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                  </span>
+                </div>
+                <div className="flex justify-between py-4 print:border-b-2 print:border-gray-300">
+                  <span className="text-base font-bold text-[#1C1F23] uppercase tracking-wide">Total</span>
+                  <span className="text-lg font-bold text-[#1061E3] print:text-black">
+                    ${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- List View ---
+  return (
+    <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
+      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
+        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+          <Search className="w-4 h-4 text-[#8E9299]" />
+          <input 
+            type="text"
+            placeholder={`Search Proposals...`}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-transparent border-none outline-none text-sm w-full text-[#1C1F23] placeholder:text-[#8E9299]"
+          />
+        </div>
+        <div className="flex gap-3">
+          <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
+            <Filter className="w-4 h-4" />
+            Filter
+          </button>
+          <button 
+            onClick={handleCreateNew}
+            className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Proposal
+          </button>
+        </div>
+      </header>
+      
+      <div className="flex-grow overflow-auto p-6 bg-gray-50">
+        <div className="max-w-6xl mx-auto space-y-4">
+          <h2 className="text-xl font-bold text-[#1C1F23] mb-6">Recent Proposals</h2>
+          
+          <div className="bg-white border text-left border-[#E2E4E9] rounded-lg shadow-sm overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-[#F9FAFB] border-b border-[#E2E4E9]">
+                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Title</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Company</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Date</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Total Amount</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Status</th>
+                  <th className="py-3 px-4 w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProposals.map(proposal => {
+                  const comp = companies.find(c => c.id === proposal.companyId);
+                  const total = calculateSubtotal(proposal.items);
+                  return (
+                    <tr 
+                      key={proposal.id} 
+                      className="border-b border-[#F0F2F5] hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => {
+                        setCurrentDoc(proposal);
+                        setActiveView('edit');
+                      }}
+                    >
+                      <td className="py-3 px-4 text-sm font-semibold text-[#1C1F23] flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-[#8E9299]" />
+                        {proposal.title}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-[#4A4D53]">{comp?.name || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-[#4A4D53]">
+                        {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.date))}
+                      </td>
+                      <td className="py-3 px-4 text-sm font-semibold text-[#4A4D53]">
+                        ${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase ${
+                          proposal.status === 'Draft' ? 'bg-gray-100 text-gray-700' :
+                          proposal.status === 'Sent' ? 'bg-blue-100 text-blue-700' :
+                          proposal.status === 'Accepted' ? 'bg-green-100 text-green-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {proposal.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if(confirm('Are you sure you want to delete this proposal?')) {
+                              setProposals(prev => prev.filter(p => p.id !== proposal.id));
+                            }
+                          }}
+                          className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
+                          title="Delete Proposal"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {filteredProposals.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 px-4 text-center text-[#8E9299] text-sm">
+                      No proposals found. Click &quot;New Proposal&quot; to create one.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
