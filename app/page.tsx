@@ -1044,12 +1044,11 @@ export default function Page() {
                     <div>
                       <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Company</label>
                       <select 
-                        required
                         value={newCompanyId || ''}
                         onChange={e => setNewCompanyId(e.target.value)}
                         className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
                       >
-                        <option value="" disabled>Select Company</option>
+                        <option value="">No Company</option>
                         {companies.map(c => (
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
