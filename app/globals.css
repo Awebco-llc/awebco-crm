@@ -1,1 +1,24 @@
 @import "tailwindcss";
+
+@media print {
+  @page {
+    margin: 0.5in;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .proposal-print-root,
+  .proposal-print-root * {
+    visibility: visible !important;
+  }
+
+  .proposal-print-root {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    min-height: auto !important;
+    margin: 0 !important;
+  }
+}

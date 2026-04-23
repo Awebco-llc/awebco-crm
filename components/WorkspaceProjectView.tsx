@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Plus, GripHorizontal, GripVertical, X, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -65,6 +65,8 @@ const INITIAL_DATA = [
   },
 ];
 
+const SUPPORT_TICKETS_BOARD_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_TICKETS_EMAIL || 'tickets@awebco.com';
+
 function SortableHeader({ column }: { column: Column }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
   const style = {
@@ -100,6 +102,12 @@ const getColor = (str: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+const getInitials = (name?: string) => {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
+};
+
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
   return (
     <div className="min-h-[20px] min-w-[50px] truncate" title={value || ''}>
@@ -108,7 +116,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, onContextMenu }: any) {
+function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -120,6 +128,7 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
   };
 
   const isExpanded = expandedIds?.has(row.id);
+  const subtaskCount = data.filter((item: any) => item.parentId === row.id).length;
 
   return (
     <tr 
@@ -139,11 +148,20 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
           {col.id === 'status' ? (
             <EditableStatus 
               value={row[col.id]} 
+              options={projectType === 'Local Listings'
+                ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
+                : row.parentId
+                  ? (projectType === 'Local Listings'
+                    ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
+                    : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
+                  : (statusOptions || [])}
               onSave={(newVal) => {
                 const newData = [...data];
                 const rowIndex = newData.findIndex((r: any) => r.id === row.id);
                 const updatedRow = { ...newData[rowIndex], [col.id]: newVal };
-                if (newVal === 'Running') {
+                if (projectType === 'Google Ads') {
+                  updatedRow.groupId = newVal === 'Running' ? 'group-running' : 'group-active';
+                } else if (newVal === 'Running') {
                   updatedRow.groupId = 'group-running';
                 } else if (newVal === 'Needs Invoiced') {
                   updatedRow.groupId = 'group-needs-invoiced';
@@ -208,7 +226,14 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
                 }}
                 renderValue={
                   col.id === 'projectName' ? (v) => (
-                    <strong className={isSubRow ? 'font-medium text-[#4A4D53]' : ''}>{v}</strong>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <strong className={`truncate ${isSubRow ? 'font-medium text-[#4A4D53]' : ''}`}>{v}</strong>
+                      {!isSubRow && subtaskCount > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-[10px] font-semibold shrink-0">
+                          {subtaskCount}
+                        </span>
+                      )}
+                    </div>
                   ) : undefined
                 }
               />
@@ -284,7 +309,32 @@ function GroupHeader({ group, onUpdate, onRemove }: { group: { id: string, name:
   );
 }
 
-export default function WorkspaceProjectView({ teamMembers, companies, projectType, flagKey }: { teamMembers: TeamMember[], companies: Company[], projectType: string, flagKey: keyof Company }) {
+export default function WorkspaceProjectView({
+  teamMembers,
+  companies,
+  projectType,
+  flagKey,
+  currentUserName,
+  currentUserId,
+  openRowId,
+  onMention,
+  boardMemberships,
+  setBoardMemberships,
+  canManageBoardMembers,
+}: {
+  teamMembers: TeamMember[],
+  companies: Company[],
+  projectType: string,
+  flagKey: keyof Company,
+  currentUserName: string,
+  currentUserId?: string,
+  openRowId?: string,
+  onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void,
+  boardMemberships: Record<string, string[]>,
+  setBoardMemberships: React.Dispatch<React.SetStateAction<Record<string, string[]>>>,
+  canManageBoardMembers: boolean,
+}) {
+  type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
     if (projectType === 'Local Listings') {
       return [
@@ -302,6 +352,9 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
       }
       return filtered;
     }
+    if (projectType === 'SEO' || projectType === 'Google Ads') {
+      return INITIAL_COLUMNS.filter(c => c.id !== 'pastelUrl');
+    }
     return INITIAL_COLUMNS;
   });
   const [data, setData] = useState<any[]>([]);
@@ -309,6 +362,12 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
     if (projectType === 'Local Listings') {
       return [
         { id: 'group-setup', name: 'Setup' },
+        { id: 'group-running', name: 'Running' }
+      ];
+    }
+    if (projectType === 'SEO' || projectType === 'Google Ads') {
+      return [
+        { id: 'group-active', name: 'Setup' },
         { id: 'group-running', name: 'Running' }
       ];
     }
@@ -334,9 +393,15 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionIndex, setMentionIndex] = useState(-1);
+  const [activeEditTab, setActiveEditTab] = useState<EditTab>('details');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectFileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, rowId: string, isSubRow: boolean } | null>(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [isBoardEmailOpen, setIsBoardEmailOpen] = useState(false);
+  const [copiedBoardEmail, setCopiedBoardEmail] = useState(false);
+  const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
 
   React.useEffect(() => {
     const handleGlobalClick = () => {
@@ -346,9 +411,22 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
     return () => document.removeEventListener('click', handleGlobalClick);
   }, [contextMenu]);
 
+  React.useEffect(() => {
+    if (editingRowId) {
+      setActiveEditTab('details');
+    }
+  }, [editingRowId]);
+
+  React.useEffect(() => {
+    if (openRowId && data.some(row => row.id === openRowId)) {
+      setEditingRowId(openRowId);
+    }
+  }, [openRowId, data]);
+
   const getRowGroupId = (row: any) => {
     if (row.groupId) return row.groupId;
     if (row.status === 'Running') return 'group-running';
+    if (projectType === 'Google Ads') return 'group-active';
     if (row.status === 'Needs Invoiced') return 'group-needs-invoiced';
     if (row.status === 'S14: Launched' || row.status === 'Launched' || row.status === 'Done') {
       return 'group-completed';
@@ -361,6 +439,19 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
     if (projectType === 'Local Listings') {
       return [
         'Not Started',
+        'Setup',
+        'In Progress',
+        'Awaiting Customer',
+        'Needs Invoiced',
+        'Running',
+        'On Hold',
+        'Done'
+      ];
+    }
+    if (projectType === 'Google Ads') {
+      return [
+        'Not Started',
+        'Setup',
         'In Progress',
         'Awaiting Customer',
         'Needs Invoiced',
@@ -407,9 +498,11 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
           status: defaultStatus,
           deadline: '',
           url: c.domain || '',
+          description: '',
           pastelUrl: '',
           googleDriveUrl: '',
           notes: '',
+          files: [],
           planType: projectType === 'Local Listings' ? 'Basic Plan' : undefined,
           priority: projectType === 'Support Tickets' || projectType === 'Design & Print' ? 'Medium' : undefined,
           groupId: projectType === 'Local Listings' ? 'group-setup' : 'group-active'
@@ -422,17 +515,23 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
 
   const handleAddUpdate = (rowId: string) => {
     if (!newUpdateText.trim() && !attachedFile) return;
+
+    const row = data.find(item => item.id === rowId);
+    const author = currentUserName || teamMembers?.[0]?.name || 'You';
+    const trimmedText = newUpdateText.trim();
+
+    if (row && trimmedText) {
+      onMention?.(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId);
+    }
     
     setData(prev => {
       const idx = prev.findIndex(r => r.id === rowId);
       if (idx === -1) return prev;
       
-      const author = teamMembers?.[0]?.name || 'You';
-      
       const newUpdate = {
         id: `update-${Date.now()}`,
         author,
-        text: newUpdateText.trim(),
+        text: trimmedText,
         timestamp: new Date().toISOString(),
         attachment: attachedFile ? attachedFile.name : undefined
       };
@@ -445,6 +544,33 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
     
     setNewUpdateText('');
     setAttachedFile(null);
+  };
+
+  const handleAddProjectFile = (rowId: string, file: File) => {
+    setData(prev => {
+      const idx = prev.findIndex(r => r.id === rowId);
+      if (idx === -1) return prev;
+
+      const next = [...prev];
+      const files = next[idx].files ? [...next[idx].files] : [];
+      files.push({
+        id: `file-${Date.now()}`,
+        name: file.name,
+        uploadedAt: new Date().toISOString(),
+      });
+      next[idx] = { ...next[idx], files };
+      return next;
+    });
+  };
+
+  const handleRemoveProjectFile = (rowId: string, fileId: string) => {
+    setData(prev => prev.map(row => {
+      if (row.id !== rowId) return row;
+      return {
+        ...row,
+        files: (row.files || []).filter((file: any) => file.id !== fileId)
+      };
+    }));
   };
 
   const deleteRow = (id: string) => {
@@ -497,7 +623,9 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
       status: 'Not Started',
       deadline: '',
       url: '',
+      description: '',
       notes: '',
+      files: [],
       planType: projectType === 'Local Listings' ? 'Basic Plan' : undefined,
       priority: projectType === 'Support Tickets' || projectType === 'Design & Print' ? 'Medium' : undefined,
       groupId: parent?.groupId || (projectType === 'Local Listings' ? 'group-setup' : 'group-active')
@@ -605,7 +733,9 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
       status: defaultStatus,
       deadline: '',
       url: '',
+      description: '',
       notes: '',
+      files: [],
       planType: projectType === 'Local Listings' ? 'Basic Plan' : undefined,
       priority: projectType === 'Support Tickets' || projectType === 'Design & Print' ? 'Medium' : undefined,
       isManual: true,
@@ -613,6 +743,35 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
     };
     setData(prev => [manualProject, ...prev]);
   };
+
+  const handleCopyBoardEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(SUPPORT_TICKETS_BOARD_EMAIL);
+      setCopiedBoardEmail(true);
+      window.setTimeout(() => setCopiedBoardEmail(false), 1800);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const toggleBoardMember = (memberId: string) => {
+    setBoardMemberships(prev => {
+      const currentMemberIds = prev[projectType] || [];
+      const isMember = currentMemberIds.includes(memberId);
+
+      return {
+        ...prev,
+        [projectType]: isMember
+          ? currentMemberIds.filter(id => id !== memberId)
+          : [...currentMemberIds, memberId],
+      };
+    });
+  };
+
+  const boardMemberIds = boardMemberships[projectType] || [];
+  const visibleBoardMembers = teamMembers.filter(member =>
+    member.role === 'master_admin' || member.role === 'admin' || boardMemberIds.includes(member.id)
+  );
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
@@ -627,10 +786,126 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
           />
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
+          {canManageBoardMembers && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsBoardMembersOpen(prev => !prev)}
+                className="h-[38px] px-3 rounded-md border border-[#E2E4E9] bg-white hover:bg-gray-50 transition-colors flex items-center"
+                title="Manage board members"
+              >
+                <div className="flex -space-x-2">
+                  {visibleBoardMembers.slice(0, 4).map(member => (
+                    member.photoUrl ? (
+                      <span
+                        key={member.id}
+                        className="w-7 h-7 rounded-full bg-cover bg-center border-2 border-white shadow-sm"
+                        style={{ backgroundImage: `url(${member.photoUrl})` }}
+                        title={member.name}
+                      />
+                    ) : (
+                      <span
+                        key={member.id}
+                        className="w-7 h-7 rounded-full border-2 border-white shadow-sm inline-flex items-center justify-center text-white text-[10px] font-bold"
+                        style={{ backgroundColor: member.color }}
+                        title={member.name}
+                      >
+                        {member.initials}
+                      </span>
+                    )
+                  ))}
+                  {visibleBoardMembers.length > 4 && (
+                    <span className="w-7 h-7 rounded-full border-2 border-white shadow-sm inline-flex items-center justify-center bg-[#F0F2F5] text-[#4A4D53] text-[10px] font-bold">
+                      +{visibleBoardMembers.length - 4}
+                    </span>
+                  )}
+                  {visibleBoardMembers.length === 0 && (
+                    <span className="w-7 h-7 rounded-full border-2 border-white shadow-sm inline-flex items-center justify-center bg-[#F0F2F5] text-[#8E9299] text-sm font-bold">
+                      +
+                    </span>
+                  )}
+                </div>
+              </button>
+              {isBoardMembersOpen && (
+                <div className="absolute right-0 top-11 z-30 w-[320px] rounded-xl border border-[#E2E4E9] bg-white shadow-xl p-4">
+                  <h3 className="text-sm font-bold text-[#1C1F23] mb-1">{projectType} Members</h3>
+                  <p className="text-xs text-[#8E9299] mb-3">
+                    Choose who can see and access this workspace board. Admins always have access.
+                  </p>
+                  <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
+                    {teamMembers.map(member => {
+                      const hasGlobalAccess = member.role === 'master_admin' || member.role === 'admin';
+                      const isChecked = hasGlobalAccess || boardMemberIds.includes(member.id);
+
+                      return (
+                        <label key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-[#E2E4E9] bg-[#F9FAFB] px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-[#1C1F23] truncate">{member.name}</div>
+                            <div className="text-[11px] text-[#8E9299] uppercase tracking-wider">{member.role === 'master_admin' ? 'Master Admin' : member.role || 'staff'}</div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={hasGlobalAccess}
+                            onChange={() => toggleBoardMember(member.id)}
+                            className="h-4 w-4 rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3] disabled:opacity-50"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {projectType === 'Support Tickets' && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsBoardEmailOpen(prev => !prev)}
+                className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <Mail className="w-4 h-4" />
+                Email to Board
+              </button>
+              {isBoardEmailOpen && (
+                <div className="absolute right-0 top-11 z-30 w-[340px] rounded-xl border border-[#E2E4E9] bg-white shadow-xl p-4">
+                  <h3 className="text-sm font-bold text-[#1C1F23] mb-1">Support Tickets Board Email</h3>
+                  <p className="text-xs text-[#8E9299] mb-3">
+                    Send support requests to this address so they can be routed into this board.
+                  </p>
+                  <div className="rounded-md border border-[#E2E4E9] bg-[#F9FAFB] px-3 py-2 text-sm font-semibold text-[#1C1F23] break-all">
+                    {SUPPORT_TICKETS_BOARD_EMAIL}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyBoardEmail}
+                      className="flex-1 px-3 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors"
+                    >
+                      {copiedBoardEmail ? 'Copied' : 'Copy Email'}
+                    </button>
+                    <a
+                      href={`mailto:${SUPPORT_TICKETS_BOARD_EMAIL}?subject=New Support Ticket`}
+                      className="flex-1 px-3 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors text-center"
+                    >
+                      Compose
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] outline-none focus:ring-2 focus:ring-[#1061E3]"
+          >
+            <option value="all">All Statuses</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
           <button 
             onClick={handleAddWebsite}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -657,7 +932,9 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
       <div className="flex-grow px-6 pb-6 overflow-auto">
         <DndContext id="websites-dnd-context" sensors={sensors} collisionDetection={closestCenter} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
           {groups.map((group) => {
-            const groupRows = data.filter(r => !r.parentId && getRowGroupId(r) === group.id);
+            const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
+            const visibleData = data.filter(r => rowMatchesStatus(r));
+            const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
             return (
               <div key={group.id} className="mb-8">
                 <GroupHeader 
@@ -696,7 +973,7 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                     <GroupDroppableBody groupId={group.id}>
                       <SortableContext items={groupRows.flatMap(r => [
                         `row-${r.id}`,
-                        ...(expandedIds.has(r.id) ? data.filter((sub: any) => sub.parentId === r.id).map((sub: any) => `row-${sub.id}`) : [])
+                        ...(expandedIds.has(r.id) ? visibleData.filter((sub: any) => sub.parentId === r.id).map((sub: any) => `row-${sub.id}`) : [])
                       ])} strategy={verticalListSortingStrategy}>
                         {groupRows.map(row => (
                           <React.Fragment key={row.id}>
@@ -707,6 +984,7 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                               setData={setData} 
                               setEditingRowId={setEditingRowId} 
                               teamMembers={teamMembers}
+                              statusOptions={statusOptions}
                               expandedIds={expandedIds}
                               toggleExpand={toggleExpand}
                               addSubRow={addSubRow}
@@ -718,7 +996,7 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                                 setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
                               }}
                             />
-                            {expandedIds.has(row.id) && data.filter(r => r.parentId === row.id).map(subRow => (
+                            {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
                               <SortableRow 
                                 key={subRow.id} 
                                 row={subRow} 
@@ -727,6 +1005,7 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                                 setData={setData} 
                                 setEditingRowId={setEditingRowId} 
                                 teamMembers={teamMembers}
+                                statusOptions={statusOptions}
                                 isSubRow={true}
                                 deleteRow={deleteRow}
                                 projectType={projectType}
@@ -927,8 +1206,31 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                   <X className="w-5 h-5" />
                 </button>
               </div>
+              <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
+                <div className="flex gap-2 overflow-x-auto">
+                  {[
+                    { id: 'details', label: 'Details' },
+                    { id: 'description', label: 'Description' },
+                    { id: 'updates', label: 'Updates' },
+                    { id: 'files', label: 'Files' },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveEditTab(tab.id as EditTab)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+                        activeEditTab === tab.id
+                          ? 'bg-[#1061E3] text-white'
+                          : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
-                {(() => {
+                {activeEditTab === 'details' && (() => {
                   const editingRow = data.find(r => r.id === editingRowId);
                   return columns.map(col => (
                     <div key={col.id}>
@@ -940,7 +1242,9 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                             const newData = [...data];
                             const rowIndex = newData.findIndex(r => r.id === editingRowId);
                             const updatedRow = { ...newData[rowIndex], [col.id]: e.target.value };
-                            if (e.target.value === 'Running') {
+                            if (projectType === 'Google Ads') {
+                              updatedRow.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
+                            } else if (e.target.value === 'Running') {
                               updatedRow.groupId = 'group-running';
                             } else if (e.target.value === 'Needs Invoiced') {
                               updatedRow.groupId = 'group-needs-invoiced';
@@ -954,7 +1258,7 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                           }}
                           className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                         >
-                          {(editingRow?.parentId ? (projectType === 'Local Listings' ? ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'] : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done']) : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          {(editingRow?.parentId ? (projectType === 'Local Listings' ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'] : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done']) : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                         </select>
                       ) : col.id === 'priority' ? (
                         <select
@@ -1033,15 +1337,44 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                 })()}
 
                 {/* Updates Section */}
-                <div className="mt-4 pt-6 border-t border-[#E2E4E9]">
-                  <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates & Comments</h4>
+                {activeEditTab === 'description' && (() => {
+                  const editingRow = data.find(r => r.id === editingRowId);
+                  return (
+                    <div>
+                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Description</label>
+                      <textarea
+                        value={editingRow?.description ?? ''}
+                        onChange={e => {
+                          const newData = [...data];
+                          const rowIndex = newData.findIndex(r => r.id === editingRowId);
+                          newData[rowIndex] = { ...newData[rowIndex], description: e.target.value };
+                          setData(newData);
+                        }}
+                        placeholder={`Add a description for this ${projectType.toLowerCase()} project...`}
+                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[280px] resize-y"
+                      />
+                    </div>
+                  );
+                })()}
+
+                {activeEditTab === 'updates' && (
+                <div>
+                  <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
                   <div className="flex flex-col gap-4 mb-4">
                     {(() => {
                       const editingRow = data.find(r => r.id === editingRowId);
                       return editingRow?.updates?.map((update: any) => (
                         <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="font-semibold text-xs text-[#1C1F23]">{update.author}</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
+                              >
+                                {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
+                              </div>
+                              <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
+                            </div>
                             <span className="text-[10px] text-[#8E9299]">
                               {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
                             </span>
@@ -1210,6 +1543,68 @@ export default function WorkspaceProjectView({ teamMembers, companies, projectTy
                     </div>
                   </div>
                 </div>
+                )}
+
+                {activeEditTab === 'files' && (() => {
+                  const editingRow = data.find(r => r.id === editingRowId);
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-bold text-sm text-[#1C1F23]">Files</h4>
+                        <div>
+                          <input
+                            type="file"
+                            ref={projectFileInputRef}
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                handleAddProjectFile(editingRowId, e.target.files[0]);
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => projectFileInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+                          >
+                            <Paperclip className="w-4 h-4" />
+                            Add File
+                          </button>
+                        </div>
+                      </div>
+                      {editingRow?.files && editingRow.files.length > 0 ? (
+                        <div className="flex flex-col gap-3">
+                          {editingRow.files.map((file: any) => (
+                            <div key={file.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9] flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FileIcon className="w-4 h-4 text-[#1061E3] shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-[#1C1F23] truncate">{file.name}</p>
+                                  <p className="text-[11px] text-[#8E9299]">
+                                    {file.uploadedAt ? new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.uploadedAt)) : 'Just now'}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProjectFile(editingRowId, file.id)}
+                                className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
+                                title="Remove File"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#8E9299] text-center py-8 border border-dashed border-[#D0D5DD] rounded-lg">
+                          No files attached yet.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
                 <button 

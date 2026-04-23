@@ -13,6 +13,8 @@ export interface Contact {
   assignedToId: string;
   email: string;
   status: Status;
+  deadline?: string;
+  groupId?: string;
 }
 
 export interface TeamMember {
@@ -20,7 +22,10 @@ export interface TeamMember {
   name: string;
   initials: string;
   color: string;
+  role?: 'master_admin' | 'admin' | 'staff' | 'freelancer';
   email?: string;
+  password?: string;
+  photoUrl?: string;
   uid?: string;
 }
 
@@ -29,6 +34,55 @@ export interface ProductService {
   name: string;
   description: string;
   price: string;
+}
+
+export interface ProposalItem {
+  id: string;
+  name: string;
+  description: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Proposal {
+  id: string;
+  title: string;
+  companyId: string;
+  contactId: string;
+  dealId?: string;
+  date: string;
+  validUntil: string;
+  items: ProposalItem[];
+  status: 'Draft' | 'Sent' | 'Accepted' | 'Declined';
+  notes: string;
+  clientPrintedName?: string;
+  signatureName?: string;
+  signatureDate?: string;
+  cardholderName?: string;
+  cardNumber?: string;
+  cardExpiry?: string;
+  cardCvv?: string;
+  billingZip?: string;
+}
+
+export interface DealNote {
+  id: string;
+  author?: string;
+  text: string;
+  createdAt: string;
+  attachment?: string;
+}
+
+export interface Deal {
+  id: string;
+  name: string;
+  currentStep: string;
+  status: string;
+  assignedToId: string;
+  value: string;
+  companyId: string;
+  contactId: string;
+  notes: DealNote[];
 }
 
 export const INITIAL_PRODUCTS: ProductService[] = [
@@ -49,6 +103,78 @@ export const INITIAL_PRODUCTS: ProductService[] = [
     name: 'Logo Design',
     description: 'Custom logo design with 3 revisions and brand guidelines.',
     price: '800',
+  }
+];
+
+export const INITIAL_PROPOSALS: Proposal[] = [
+  {
+    id: '1',
+    title: 'Website Redesign Proposal',
+    companyId: '1',
+    contactId: '1',
+    date: new Date().toISOString().split('T')[0],
+    validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    items: [
+      { id: 'i1', name: 'Web Design', description: 'Custom responsive design', quantity: 1, price: 3500 },
+      { id: 'i2', name: 'Web Development', description: 'Next.js frontend development', quantity: 1, price: 4500 },
+    ],
+    status: 'Draft',
+    notes: 'Thank you for your business. Please let us know if you have any questions about this proposal.',
+    clientPrintedName: '',
+    signatureName: '',
+    signatureDate: new Date().toISOString().split('T')[0],
+    cardholderName: '',
+    cardNumber: '',
+    cardExpiry: '',
+    cardCvv: '',
+    billingZip: '',
+  }
+];
+
+export const INITIAL_DEALS: Deal[] = [
+  {
+    id: '1',
+    name: 'Website Redesign',
+    currentStep: 'Step 4: Plan & Proposal',
+    status: 'In Progress',
+    assignedToId: '1',
+    value: '$5,000',
+    companyId: '1',
+    contactId: '1',
+    notes: [{ id: 'n1', text: 'Follow up next Tuesday', createdAt: new Date().toISOString() }],
+  },
+  {
+    id: '2',
+    name: 'SEO Campaign',
+    currentStep: 'Step 1: Discovery Call',
+    status: 'Need to Call / Email',
+    assignedToId: '2',
+    value: '$1,500/mo',
+    companyId: '1',
+    contactId: '2',
+    notes: [{ id: 'n2', text: 'Interested in local SEO', createdAt: new Date().toISOString() }],
+  },
+  {
+    id: '3',
+    name: 'Logo Design',
+    currentStep: 'Step 6: Deposit Payment',
+    status: 'WON',
+    assignedToId: '1',
+    value: '$800',
+    companyId: '1',
+    contactId: '3',
+    notes: [{ id: 'n3', text: 'Paid via Stripe', createdAt: new Date().toISOString() }],
+  },
+  {
+    id: '4',
+    name: 'Social Media Management',
+    currentStep: 'Step 5: Proposal Signing',
+    status: 'LOST',
+    assignedToId: '3',
+    value: '$2,000/mo',
+    companyId: '1',
+    contactId: '4',
+    notes: [{ id: 'n4', text: 'Went with another agency', createdAt: new Date().toISOString() }],
   }
 ];
 
@@ -81,6 +207,14 @@ export interface Company {
   dp?: boolean;
   support?: boolean;
   primaryContactId?: string;
+  deadline?: string;
+  description?: string;
+  updates?: Array<{
+    id: string;
+    author?: string;
+    text: string;
+    createdAt: string;
+  }>;
 }
 
 export const INITIAL_COMPANIES: Company[] = [
@@ -103,6 +237,16 @@ export const INITIAL_COMPANIES: Company[] = [
     facebookUrl: 'facebook.com/acmecorp',
     referralSource: 'Organic Search',
     assignedToId: '1',
+    deadline: '2026-05-10',
+    description: 'Primary website and paid ads client with ongoing digital marketing needs.',
+    updates: [
+      {
+        id: 'company-update-1',
+        author: 'Aaron Webb',
+        text: 'Kickoff completed and waiting on remaining assets.',
+        createdAt: new Date().toISOString(),
+      }
+    ],
     web: true,
     seo: false,
     ll: false,
@@ -116,9 +260,8 @@ export const INITIAL_COMPANIES: Company[] = [
 ];
 
 export const INITIAL_TEAM_MEMBERS: TeamMember[] = [
-  { id: '1', name: 'Aaron Webb', initials: 'AW', color: '#1061E3', email: 'awebbco@gmail.com' },
-  { id: '2', name: 'Michael Thorne', initials: 'MT', color: '#8B5CF6', email: 'mthorne@example.com' },
-  { id: '3', name: 'David Chen', initials: 'DC', color: '#F59E0B', email: 'dchen@example.com' },
+  { id: '1', name: 'Aaron Webb', initials: 'AW', color: '#1061E3', role: 'master_admin', email: 'awebbco@gmail.com', password: 'changeme' },
+  { id: '2', name: 'Tyler Taylor', initials: 'TT', color: '#8B5CF6', role: 'admin', email: 'tyler@awebco.com', password: 'changeme' },
 ];
 
 export function EditablePriority({ value }: { value: string }) {
@@ -138,34 +281,136 @@ export function EditablePriority({ value }: { value: string }) {
   );
 }
 
-export function EditableStatus({ value, onSave }: { value: string, onSave: (val: string) => void }) {
-  return (
-    <span
-      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase inline-block text-center ${
-        value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' : 
-        value === 'Active' ? 'bg-[#ECFDF3] text-[#10B981]' : 
-        value === 'In Progress' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-        value === 'Not Started' ? 'bg-gray-100 text-gray-700' :
-        value === 'Awaiting Customer' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
-        value === 'Needs Invoiced' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-        value === 'Done' ? 'bg-[#ECFDF3] text-[#10B981]' :
-        value === 'Running' ? 'bg-[#ECFDF3] text-[#10B981]' :
-        value === 'On Hold' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-        value === 'Planning' ? 'bg-[#E3F2FD] text-[#1976D2]' :
-        value === 'S7: Content Collection' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-        value === 'S8: Design' ? 'bg-[#F3E8FF] text-[#9333EA]' :
-        value === 'S9: Design Proofing' ? 'bg-[#FAE8FF] text-[#C026D3]' :
-        value === 'S10: Development' ? 'bg-[#E0F2FE] text-[#0284C7]' :
-        value === 'S11: Development Proofing' ? 'bg-[#CCFBF1] text-[#0D9488]' :
-        value === 'S12: Final Payment' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
-        value === 'S13: Launch Checklist' ? 'bg-[#DCFCE7] text-[#16A34A]' :
-        value === 'S14: Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
-        value === 'ON HOLD' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-        'bg-gray-100 text-gray-700'
-      }`}
+function getStatusBadgeClasses(value: string) {
+  return value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' : 
+    value === 'Active' ? 'bg-[#ECFDF3] text-[#10B981]' : 
+    value === 'In Progress' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+    value === 'Not Started' ? 'bg-gray-100 text-gray-700' :
+    value === 'Setup' ? 'bg-[#E3F2FD] text-[#1976D2]' :
+    value === 'Awaiting Customer' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
+    value === 'Needs Invoiced' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+    value === 'Done' ? 'bg-[#ECFDF3] text-[#10B981]' :
+    value === 'Running' ? 'bg-[#ECFDF3] text-[#10B981]' :
+    value === 'On Hold' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+    value === 'Planning' ? 'bg-[#E3F2FD] text-[#1976D2]' :
+    value === 'S7: Content Collection' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+    value === 'S8: Design' ? 'bg-[#F3E8FF] text-[#9333EA]' :
+    value === 'S9: Design Proofing' ? 'bg-[#FAE8FF] text-[#C026D3]' :
+    value === 'S10: Development' ? 'bg-[#E0F2FE] text-[#0284C7]' :
+    value === 'S11: Development Proofing' ? 'bg-[#CCFBF1] text-[#0D9488]' :
+    value === 'S12: Final Payment' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
+    value === 'S13: Launch Checklist' ? 'bg-[#DCFCE7] text-[#16A34A]' :
+    value === 'S14: Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
+    value === 'Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
+    value === 'ON HOLD' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+    value === 'Need to Call / Email' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+    value === 'WON' ? 'bg-[#ECFDF3] text-[#10B981]' :
+    value === 'LOST' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+    'bg-gray-100 text-gray-700';
+}
+
+const DEFAULT_STATUS_OPTIONS = [
+  'Lead',
+  'Active',
+  'Not Started',
+  'Setup',
+  'In Progress',
+  'Awaiting Customer',
+  'Needs Invoiced',
+  'Running',
+  'On Hold',
+  'Done',
+  'Planning',
+  'S7: Content Collection',
+  'S8: Design',
+  'S9: Design Proofing',
+  'S10: Development',
+  'S11: Development Proofing',
+  'S12: Final Payment',
+  'S13: Launch Checklist',
+  'S14: Launched',
+  'Launched',
+  'ON HOLD',
+  'Need to Call / Email',
+  'WON',
+  'LOST',
+];
+
+export function EditableStatus({ value, onSave, options = DEFAULT_STATUS_OPTIONS }: { value: string, onSave: (val: string) => void, options?: string[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const handleGlobalClick = () => setIsOpen(false);
+
+    const updatePosition = () => {
+      if (isOpen && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        const leftPos = rect.left + 224 > window.innerWidth ? window.innerWidth - 232 : rect.left;
+        setPosition({
+          top: rect.bottom + window.scrollY + 4,
+          left: leftPos + window.scrollX
+        });
+      }
+    };
+
+    if (isOpen) {
+      updatePosition();
+      document.addEventListener('click', handleGlobalClick);
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+
+      return () => {
+        document.removeEventListener('click', handleGlobalClick);
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }
+  }, [isOpen]);
+
+  const dropdownMenu = isOpen && typeof document !== 'undefined' ? createPortal(
+    <div
+      className="absolute z-[9999] w-56 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden pb-1"
+      style={{ top: position.top, left: position.left }}
+      onClick={e => e.stopPropagation()}
     >
-      {value || 'LEAD'}
-    </span>
+      <div className="px-3 py-2 text-xs font-semibold text-[#8E9299] bg-[#F9FAFB] border-b border-[#E2E4E9]">
+        Select Status
+      </div>
+      <div className="max-h-64 overflow-y-auto pt-1">
+        {options.map((option) => (
+          <button
+            key={option}
+            className={`w-full text-left px-3 py-1.5 text-sm flex items-center hover:bg-[#F0F2F5] transition-colors ${value === option ? 'bg-blue-50 text-blue-700' : 'text-[#1C1F23]'}`}
+            onClick={() => {
+              onSave(option);
+              setIsOpen(false);
+            }}
+          >
+            <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase inline-block text-center ${getStatusBadgeClasses(option)}`}>
+              {option}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <div className="relative inline-block hover:bg-gray-100 rounded px-1 -mx-1" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase inline-block text-center cursor-pointer ${getStatusBadgeClasses(value)}`}
+        title={value || 'Lead'}
+      >
+        {value || 'Lead'}
+      </button>
+
+      {dropdownMenu}
+    </div>
   );
 }
 

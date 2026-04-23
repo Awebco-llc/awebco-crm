@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon } from 'lucide-react';
+import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TeamMember, AssigneeDropdown, Company, Contact } from '@/components/Shared';
+import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
 import {
   DndContext,
   closestCenter,
@@ -21,26 +21,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
-interface DealNote {
-  id: string;
-  author?: string;
-  text: string;
-  createdAt: string;
-  attachment?: string;
-}
-
-interface Deal {
-  id: string;
-  name: string;
-  currentStep: string;
-  status: string;
-  assignedToId: string;
-  value: string;
-  companyId: string;
-  contactId: string;
-  notes: DealNote[];
-}
 
 const DEAL_STEPS = [
   'Step 1: Discovery Call',
@@ -63,59 +43,28 @@ const DEAL_STATUSES = [
   'LOST'
 ];
 
-const INITIAL_DEALS: Deal[] = [
-  {
-    id: '1',
-    name: 'Website Redesign',
-    currentStep: 'Step 4: Plan & Proposal',
-    status: 'In Progress',
-    assignedToId: '1',
-    value: '$5,000',
-    companyId: '1',
-    contactId: '1',
-    notes: [{ id: 'n1', text: 'Follow up next Tuesday', createdAt: new Date().toISOString() }],
-  },
-  {
-    id: '2',
-    name: 'SEO Campaign',
-    currentStep: 'Step 1: Discovery Call',
-    status: 'Need to Call / Email',
-    assignedToId: '2',
-    value: '$1,500/mo',
-    companyId: '1', /* matching Acme for testing */
-    contactId: '2',
-    notes: [{ id: 'n2', text: 'Interested in local SEO', createdAt: new Date().toISOString() }],
-  },
-  {
-    id: '3',
-    name: 'Logo Design',
-    currentStep: 'Step 6: Deposit Payment',
-    status: 'WON',
-    assignedToId: '1',
-    value: '$800',
-    companyId: '1',
-    contactId: '3',
-    notes: [{ id: 'n3', text: 'Paid via Stripe', createdAt: new Date().toISOString() }],
-  },
-  {
-    id: '4',
-    name: 'Social Media Management',
-    currentStep: 'Step 5: Proposal Signing',
-    status: 'LOST',
-    assignedToId: '3',
-    value: '$2,000/mo',
-    companyId: '1',
-    contactId: '4',
-    notes: [{ id: 'n4', text: 'Went with another agency', createdAt: new Date().toISOString() }],
-  }
-];
-
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
   return (
     <div className="min-h-[20px] truncate" title={value || ''}>
       {renderValue ? renderValue(value) : (value || '-')}
     </div>
   );
+}
+
+function getInitials(name?: string) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
+}
+
+function getAvatarColor(name?: string) {
+  const colors = ['#1061E3', '#10B981', '#F59E0B', '#D32F2F', '#8B5CF6', '#EC4899'];
+  const value = name || 'User';
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = value.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
 }
 
 function EditableSelect({ value, options, onSave }: { value: string, options: string[], onSave: (val: string) => void }) {
@@ -203,8 +152,31 @@ function SortableRow({ deal, onClick, onUpdate, teamMembers, companies, contacts
 }
 
 
-export default function DealsView({ teamMembers, companies, contacts }: { teamMembers: TeamMember[], companies: Company[], contacts: Contact[] }) {
-  const [deals, setDeals] = useState<Deal[]>(INITIAL_DEALS);
+type DealTab = 'details' | 'notes' | 'proposals';
+
+export default function DealsView({
+  teamMembers,
+  companies,
+  contacts,
+  deals,
+  setDeals,
+  proposals,
+  setProposals,
+  currentUserName,
+  currentUserId,
+  onMention,
+}: {
+  teamMembers: TeamMember[],
+  companies: Company[],
+  contacts: Contact[],
+  deals: Deal[],
+  setDeals: React.Dispatch<React.SetStateAction<Deal[]>>,
+  proposals: Proposal[],
+  setProposals: React.Dispatch<React.SetStateAction<Proposal[]>>,
+  currentUserName: string,
+  currentUserId?: string,
+  onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void
+}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
@@ -216,6 +188,7 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionIndex, setMentionIndex] = useState(-1);
+  const [activeTab, setActiveTab] = useState<DealTab>('details');
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -258,6 +231,7 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
     setEditingDealId(null);
     setFormData({});
     setNewNoteText('');
+    setActiveTab('details');
     setIsAddModalOpen(true);
   };
 
@@ -265,6 +239,7 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
     setEditingDealId(deal.id);
     setFormData(deal);
     setNewNoteText('');
+    setActiveTab('details');
     setIsAddModalOpen(true);
   };
 
@@ -275,7 +250,7 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
   const handleAddNote = () => {
     if (!newNoteText.trim() && !attachedFile) return;
     
-    const author = teamMembers?.[0]?.name || 'You';
+    const author = currentUserName || teamMembers?.[0]?.name || 'You';
     const newNote = { 
       id: Date.now().toString(), 
       author,
@@ -296,9 +271,10 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
   const handleSaveDeal = (e: React.FormEvent) => {
     e.preventDefault();
     
+    const existingDeal = editingDealId ? deals.find(d => d.id === editingDealId) : undefined;
     let updatedNotes = formData.notes || [];
     if (newNoteText.trim() || attachedFile) {
-      const author = teamMembers?.[0]?.name || 'You';
+      const author = currentUserName || teamMembers?.[0]?.name || 'You';
       updatedNotes = [...updatedNotes, { 
         id: Date.now().toString(), 
         author,
@@ -307,6 +283,16 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
         attachment: attachedFile ? attachedFile.name : undefined
       }];
     }
+
+    const existingNoteIds = new Set((existingDeal?.notes || []).map(note => note.id));
+    const newNotes = updatedNotes.filter(note => !existingNoteIds.has(note.id));
+    const sourceTitle = formData.name || existingDeal?.name || 'Untitled Deal';
+
+    newNotes.forEach(note => {
+      if (note.text.trim()) {
+        onMention?.(note.text, 'Deal Comment', sourceTitle, note.author || currentUserName, currentUserId);
+      }
+    });
 
     if (editingDealId) {
       setDeals(deals.map(d => {
@@ -337,6 +323,32 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const currentDealId = editingDealId || formData.id;
+  const dealProposals = proposals.filter(proposal => proposal.dealId === currentDealId);
+  const assignableProposals = proposals.filter(proposal => {
+    const companyMatches = !formData.companyId || proposal.companyId === formData.companyId;
+    const alreadyAssignedElsewhere = proposal.dealId && proposal.dealId !== currentDealId;
+    return companyMatches && !alreadyAssignedElsewhere;
+  });
+  const calculateProposalTotal = (proposal: Proposal) => proposal.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+
+  const assignProposalToDeal = (proposalId: string) => {
+    if (!proposalId || !currentDealId) return;
+    setProposals(prev =>
+      prev.map(proposal =>
+        proposal.id === proposalId ? { ...proposal, dealId: currentDealId } : proposal
+      )
+    );
+  };
+
+  const unassignProposalFromDeal = (proposalId: string) => {
+    setProposals(prev =>
+      prev.map(proposal =>
+        proposal.id === proposalId ? { ...proposal, dealId: undefined } : proposal
+      )
+    );
+  };
+
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
@@ -352,10 +364,6 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
           />
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
           <button 
             onClick={openAddModal}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -541,69 +549,97 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
                   <X className="w-5 h-5" />
                 </button>
               </div>
+              <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
+                <div className="flex gap-2 overflow-x-auto">
+                  {[
+                    { id: 'details', label: 'Details' },
+                    { id: 'notes', label: 'Updates & Notes' },
+                    { id: 'proposals', label: `Proposals${dealProposals.length > 0 ? ` (${dealProposals.length})` : ''}` },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id as DealTab)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+                        activeTab === tab.id
+                          ? 'bg-[#1061E3] text-white'
+                          : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <form onSubmit={handleSaveDeal} className="flex flex-col flex-grow overflow-hidden">
                 <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Deal Name</label>
-                    <input required type="text" value={formData.name || ''} onChange={e => updateForm('name', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Current Step</label>
-                    <select value={formData.currentStep || ''} onChange={e => updateForm('currentStep', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
-                      <option value="" disabled>Select Step</option>
-                      {DEAL_STEPS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Status</label>
-                    <select value={formData.status || 'Not started'} onChange={e => updateForm('status', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
-                      {DEAL_STATUSES.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Deal Value</label>
-                    <input type="text" value={formData.value || ''} onChange={e => updateForm('value', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. $5,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Company</label>
-                    <select 
-                      value={formData.companyId || ''} 
-                      onChange={e => {
-                        const newCompanyId = e.target.value;
-                        const matchingContact = contacts.find(c => c.companyId === newCompanyId);
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          companyId: newCompanyId,
-                          contactId: matchingContact ? matchingContact.id : ''
-                        }));
-                      }} 
-                      className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
-                    >
-                      <option value="" disabled>Select Company</option>
-                      {companies.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Contact</label>
-                    <select 
-                      value={formData.contactId || ''} 
-                      onChange={e => updateForm('contactId', e.target.value)} 
-                      className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
-                      disabled={!formData.companyId}
-                    >
-                      <option value="" disabled>Select Contact</option>
-                      {contacts.filter(c => !formData.companyId || c.companyId === formData.companyId).map(c => (
-                        <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
+                  {activeTab === 'details' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Deal Name</label>
+                        <input required type="text" value={formData.name || ''} onChange={e => updateForm('name', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Current Step</label>
+                        <select value={formData.currentStep || ''} onChange={e => updateForm('currentStep', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
+                          <option value="" disabled>Select Step</option>
+                          {DEAL_STEPS.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Status</label>
+                        <select value={formData.status || 'Not started'} onChange={e => updateForm('status', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
+                          {DEAL_STATUSES.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Deal Value</label>
+                        <input type="text" value={formData.value || ''} onChange={e => updateForm('value', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. $5,000" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Company</label>
+                        <select 
+                          value={formData.companyId || ''} 
+                          onChange={e => {
+                            const newCompanyId = e.target.value;
+                            const matchingContact = contacts.find(c => c.companyId === newCompanyId);
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              companyId: newCompanyId,
+                              contactId: matchingContact ? matchingContact.id : ''
+                            }));
+                          }} 
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
+                        >
+                          <option value="" disabled>Select Company</option>
+                          {companies.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Contact</label>
+                        <select 
+                          value={formData.contactId || ''} 
+                          onChange={e => updateForm('contactId', e.target.value)} 
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
+                          disabled={!formData.companyId}
+                        >
+                          <option value="" disabled>Select Contact</option>
+                          {contacts.filter(c => !formData.companyId || c.companyId === formData.companyId).map(c => (
+                            <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {activeTab === 'notes' && (
+                    <div>
                     <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Updates & Notes</label>
                     
                     {formData.notes && formData.notes.length > 0 && (
@@ -611,7 +647,15 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
                         {formData.notes.map(note => (
                           <div key={note.id} className="bg-[#F9FAFB] p-3 rounded-md border border-[#E2E4E9]">
                             <div className="flex justify-between items-center mb-1">
-                              <span className="font-semibold text-xs text-[#1C1F23]">{note.author || 'User'}</span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                  style={{ backgroundColor: teamMembers.find(member => member.name === (note.author || 'User'))?.color || getAvatarColor(note.author) }}
+                                >
+                                  {teamMembers.find(member => member.name === (note.author || 'User'))?.initials || getInitials(note.author || 'User')}
+                                </div>
+                                <span className="font-semibold text-xs text-[#1C1F23] truncate">{note.author || 'User'}</span>
+                              </div>
                               <span className="text-[10px] text-[#8E9299]">
                                 {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(note.createdAt))}
                               </span>
@@ -773,7 +817,85 @@ export default function DealsView({ teamMembers, companies, contacts }: { teamMe
                         </button>
                       </div>
                     </div>
-                  </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'proposals' && (
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Assign Proposal</label>
+                        <select
+                          value=""
+                          onChange={e => {
+                            assignProposalToDeal(e.target.value);
+                            e.target.value = '';
+                          }}
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
+                          disabled={!currentDealId}
+                        >
+                          <option value="" disabled>{currentDealId ? 'Select proposal to assign' : 'Save the deal first to assign proposals'}</option>
+                          {assignableProposals
+                            .filter(proposal => proposal.dealId !== currentDealId)
+                            .map(proposal => (
+                              <option key={proposal.id} value={proposal.id}>{proposal.title}</option>
+                            ))}
+                        </select>
+                      </div>
+
+                      {dealProposals.length === 0 ? (
+                        <div className="border border-dashed border-[#D0D5DD] rounded-lg p-8 text-center text-sm text-[#8E9299]">
+                          No proposals are assigned to this deal.
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {dealProposals.map(proposal => (
+                            <div key={proposal.id} className="rounded-lg border border-[#E2E4E9] bg-[#F9FAFB] p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <FileText className="w-4 h-4 text-[#8E9299]" />
+                                    <h5 className="text-sm font-semibold text-[#1C1F23] truncate">{proposal.title}</h5>
+                                  </div>
+                                  <p className="text-xs text-[#8E9299]">
+                                    Created {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.date))}
+                                  </p>
+                                  <p className="text-xs text-[#8E9299] mt-1">
+                                    Valid until {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.validUntil))}
+                                  </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-2 shrink-0">
+                                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase whitespace-nowrap ${
+                                    proposal.status === 'Draft' ? 'bg-gray-100 text-gray-700' :
+                                    proposal.status === 'Sent' ? 'bg-blue-100 text-blue-700' :
+                                    proposal.status === 'Accepted' ? 'bg-green-100 text-green-700' :
+                                    'bg-red-100 text-red-700'
+                                  }`}>
+                                    {proposal.status}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => unassignProposalFromDeal(proposal.id)}
+                                    className="text-xs font-semibold text-[#D32F2F] hover:text-red-700 transition-colors"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex items-center justify-between text-sm">
+                                <span className="text-[#4A4D53]">{proposal.items.length} item{proposal.items.length === 1 ? '' : 's'}</span>
+                                <span className="font-semibold text-[#1C1F23]">
+                                  ${calculateProposalTotal(proposal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              {proposal.notes && (
+                                <p className="mt-3 text-sm text-[#4A4D53] whitespace-pre-wrap">{proposal.notes}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
                   <button 

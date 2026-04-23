@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Plus, X, GripVertical } from 'lucide-react';
+import { Search, Plus, X, GripVertical } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -22,6 +22,21 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { ProductService } from './Shared';
+
+function formatCatalogPrice(value: string) {
+  const trimmedValue = value.trim();
+  const numericValue = Number(trimmedValue.replace(/[$,\s]/g, ''));
+
+  if (!trimmedValue) return '-';
+  if (!Number.isFinite(numericValue)) return value;
+
+  return numericValue.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
 
 function EditableCell({ value, onSave }: { value: string, onSave: (val: string) => void }) {
   return (
@@ -61,7 +76,7 @@ function SortableRow({ item, onClick, onUpdate }: { item: ProductService; onClic
         <EditableCell value={item.description} onSave={v => onUpdate(item.id, 'description', v)} />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={item.price} onSave={v => onUpdate(item.id, 'price', v)} />
+        <EditableCell value={formatCatalogPrice(item.price)} onSave={v => onUpdate(item.id, 'price', v)} />
       </td>
     </tr>
   );
@@ -119,20 +134,24 @@ export default function ProductsServicesView({ products, setProducts }: { produc
 
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanedFormData = {
+      ...formData,
+      price: (formData.price || '').replace(/[$,\s]/g, ''),
+    };
     
     if (editingItemId) {
       setProducts(products.map(i => {
         if (i.id === editingItemId) {
-          return { ...i, ...formData } as ProductService;
+          return { ...i, ...cleanedFormData } as ProductService;
         }
         return i;
       }));
     } else {
       const newItem: ProductService = {
         id: Date.now().toString(),
-        name: formData.name || '',
-        description: formData.description || '',
-        price: formData.price || '',
+        name: cleanedFormData.name || '',
+        description: cleanedFormData.description || '',
+        price: cleanedFormData.price || '',
       };
       setProducts([...products, newItem]);
     }
@@ -159,10 +178,6 @@ export default function ProductsServicesView({ products, setProducts }: { produc
           />
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
           <button 
             onClick={openAddModal}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"

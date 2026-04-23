@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  Search, Filter, Plus, ChevronDown, X, Mail, GripVertical,
+  Search, Plus, ChevronDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
   FolderOpen, UserCircle, Receipt, LogOut, MessageSquare
@@ -20,9 +20,7 @@ import EmailModal from '@/components/EmailModal';
 import MyTasksView from '@/components/MyTasksView';
 import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
-import { EditableStatus, AssigneeDropdown, TeamMember, INITIAL_TEAM_MEMBERS, Company, INITIAL_COMPANIES, CompanyDropdown, Contact, Status, ProductService, INITIAL_PRODUCTS } from '@/components/Shared';
-import { auth, googleProvider } from '@/lib/firebase';
-import { User, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { EditableStatus, AssigneeDropdown, TeamMember, INITIAL_TEAM_MEMBERS, Company, INITIAL_COMPANIES, CompanyDropdown, Contact, Status, ProductService, INITIAL_PRODUCTS, Proposal, INITIAL_PROPOSALS, Deal, INITIAL_DEALS } from '@/components/Shared';
 import {
   DndContext,
   closestCenter,
@@ -45,12 +43,19 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
 
+const DEFAULT_CONTACT_GROUPS = [
+  { id: 'leads', name: 'Leads', color: '#D32F2F' },
+  { id: 'website-clients', name: 'Website Clients', color: '#10B981' },
+];
+
+type ContactGroup = typeof DEFAULT_CONTACT_GROUPS[number];
+
 const INITIAL_CONTACTS: Contact[] = [
-  { id: '1', firstName: 'Sarah', lastName: 'Jenkins', title: 'CEO', phone: '555-0101', companyId: '1', assignedToId: '1', email: 'sarah.j@apex.com', status: 'Lead' },
-  { id: '2', firstName: 'Michael', lastName: 'Thorne', title: 'Marketing Director', phone: '555-0102', companyId: '1', assignedToId: '2', email: 'm.thorne@horizon.co', status: 'Lead' },
-  { id: '3', firstName: 'Laura', lastName: 'Bennett', title: 'Founder', phone: '555-0103', companyId: '1', assignedToId: '1', email: 'contact@blaw.com', status: 'Lead' },
-  { id: '4', firstName: 'David', lastName: 'Chen', title: 'CTO', phone: '555-0104', companyId: '1', assignedToId: '3', email: 'dchen@cloudnine.io', status: 'Active' },
-  { id: '5', firstName: 'Emma', lastName: 'Wright', title: 'Operations Manager', phone: '555-0105', companyId: '1', assignedToId: '1', email: 'emma@greenspace.com', status: 'Active' },
+  { id: '1', firstName: 'Sarah', lastName: 'Jenkins', title: 'CEO', phone: '555-0101', companyId: '1', assignedToId: '1', email: 'sarah.j@apex.com', status: 'Lead', deadline: '2026-04-25', groupId: 'leads' },
+  { id: '2', firstName: 'Michael', lastName: 'Thorne', title: 'Marketing Director', phone: '555-0102', companyId: '1', assignedToId: '2', email: 'm.thorne@horizon.co', status: 'Lead', deadline: '2026-04-28', groupId: 'leads' },
+  { id: '3', firstName: 'Laura', lastName: 'Bennett', title: 'Founder', phone: '555-0103', companyId: '1', assignedToId: '1', email: 'contact@blaw.com', status: 'Lead', deadline: '2026-05-02', groupId: 'leads' },
+  { id: '4', firstName: 'David', lastName: 'Chen', title: 'CTO', phone: '555-0104', companyId: '1', assignedToId: '3', email: 'dchen@cloudnine.io', status: 'Active', deadline: '2026-05-08', groupId: 'website-clients' },
+  { id: '5', firstName: 'Emma', lastName: 'Wright', title: 'Operations Manager', phone: '555-0105', companyId: '1', assignedToId: '1', email: 'emma@greenspace.com', status: 'Active', deadline: '2026-05-12', groupId: 'website-clients' },
 ];
 
 const NAV_ITEMS_MAIN = [
@@ -66,19 +71,55 @@ const NAV_ITEMS_CRM = [
   { name: 'Price Catalog', icon: Package },
   { name: 'Files', icon: FolderOpen }
 ];
+const CRM_NAV_NAMES = NAV_ITEMS_CRM.map(item => item.name);
 const NAV_ITEMS_WORKSPACE = [
+  { name: 'Support Tickets', icon: Ticket },
   { name: 'Websites', icon: Globe },
   { name: 'Design & Print', icon: Palette },
   { name: 'SEO', icon: LineChart },
   { name: 'Local Listings', icon: MapPin },
   { name: 'Google Ads', icon: MousePointerClick },
-  { name: 'Social Media', icon: Share2 },
-  { name: 'Support Tickets', icon: Ticket }
+  { name: 'Social Media', icon: Share2 }
 ];
+const WORKSPACE_NAV_NAMES = NAV_ITEMS_WORKSPACE.map(item => item.name);
 const NAV_ITEMS_SETTINGS = [
   { name: 'Settings', icon: SettingsIcon },
   { name: 'Profile', icon: UserCircle }
 ];
+
+interface AppNotification {
+  id: string;
+  recipientId: string;
+  actorName: string;
+  sourceLabel: string;
+  sourceTitle: string;
+  preview: string;
+  createdAt: string;
+  read: boolean;
+}
+
+interface WorkspaceOpenRequest {
+  navName: string;
+  rowId: string;
+  requestId: number;
+}
+
+type WorkspaceBoardMemberships = Record<string, string[]>;
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function createInitialBoardMemberships(teamMembers: TeamMember[]): WorkspaceBoardMemberships {
+  const defaultMemberIds = teamMembers
+    .filter(member => member.role === 'master_admin' || member.role === 'admin')
+    .map(member => member.id);
+
+  return NAV_ITEMS_WORKSPACE.reduce((memberships, item) => {
+    memberships[item.name] = defaultMemberIds;
+    return memberships;
+  }, {} as WorkspaceBoardMemberships);
+}
 
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
   return (
@@ -189,45 +230,143 @@ function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers
 }
 
 export default function Page() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [authenticatedMemberId, setAuthenticatedMemberId] = useState<string | null>(null);
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_TEAM_MEMBERS);
+  const [boardMemberships, setBoardMemberships] = useState<WorkspaceBoardMemberships>(() => createInitialBoardMemberships(INITIAL_TEAM_MEMBERS));
   const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
   const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
+  const [contactGroups, setContactGroups] = useState<ContactGroup[]>(DEFAULT_CONTACT_GROUPS);
   const [products, setProducts] = useState<ProductService[]>(INITIAL_PRODUCTS);
+  const [proposals, setProposals] = useState<Proposal[]>(INITIAL_PROPOSALS);
+  const [deals, setDeals] = useState<Deal[]>(INITIAL_DEALS);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNav, setActiveNav] = useState('My Tasks');
   const [navFilter, setNavFilter] = useState<'All' | 'CRM' | 'Workspace'>('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [emailingContact, setEmailingContact] = useState<Contact | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [workspaceOpenRequest, setWorkspaceOpenRequest] = useState<WorkspaceOpenRequest | null>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-    });
-    return () => unsubscribe();
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const login = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error(error);
+  const login = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+
+    const matchingMember = teamMembers.find(member =>
+      member.email?.toLowerCase() === loginEmail.trim().toLowerCase() &&
+      member.password === loginPassword
+    );
+
+    if (!matchingMember) {
+      setAuthError('Invalid email or password.');
+      return;
     }
+
+    setAuthenticatedMemberId(matchingMember.id);
+    setLoginPassword('');
   };
 
-  const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error(error);
-    }
+  const logout = () => {
+    setAuthenticatedMemberId(null);
+    setAuthError('');
   };
 
-  const currentTeamMember = user ? teamMembers.find(m => m.email?.toLowerCase() === user.email?.toLowerCase()) : undefined;
+  const currentTeamMember = authenticatedMemberId ? teamMembers.find(m => m.id === authenticatedMemberId) : undefined;
+  const currentUserName = currentTeamMember?.name || teamMembers[0]?.name || 'You';
+  const isFreelancer = currentTeamMember?.role === 'freelancer';
+  const hasAllWorkspaceAccess = currentTeamMember?.role === 'master_admin' || currentTeamMember?.role === 'admin';
+  const canManageBoardMembers = hasAllWorkspaceAccess;
+  const hasWorkspaceBoardAccess = (boardName: string) => {
+    if (!currentTeamMember) return false;
+    if (hasAllWorkspaceAccess) return true;
+    return boardMemberships[boardName]?.includes(currentTeamMember.id) ?? false;
+  };
+  const visibleWorkspaceItems = NAV_ITEMS_WORKSPACE.filter(item => hasWorkspaceBoardAccess(item.name));
+  const requestedWorkspaceBoardIsHidden = WORKSPACE_NAV_NAMES.includes(activeNav) && !hasWorkspaceBoardAccess(activeNav);
+  const visibleNavFilter = isFreelancer && navFilter === 'CRM' ? 'Workspace' : navFilter;
+  const activeContentNav = (isFreelancer && CRM_NAV_NAMES.includes(activeNav)) || requestedWorkspaceBoardIsHidden ? 'My Tasks' : activeNav;
+
+  const userNotifications = currentTeamMember
+    ? notifications.filter(notification => notification.recipientId === currentTeamMember.id)
+    : [];
+
+  const unreadNotificationCount = userNotifications.filter(notification => !notification.read).length;
+
+  const createMentionNotifications = (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => {
+    const trimmedText = text.trim();
+    if (!trimmedText) return;
+
+    const mentionedMemberIds = teamMembers
+      .filter(member => {
+        const pattern = new RegExp(`@${escapeRegExp(member.name)}(?=\\s|$|[.,!?])`, 'i');
+        return pattern.test(trimmedText);
+      })
+      .map(member => member.id)
+      .filter(memberId => memberId !== actorId);
+
+    if (mentionedMemberIds.length === 0) return;
+
+    const uniqueMentionedMemberIds = [...new Set(mentionedMemberIds)];
+    const preview = trimmedText.length > 120 ? `${trimmedText.slice(0, 117)}...` : trimmedText;
+    const createdAt = new Date().toISOString();
+
+    setNotifications(prev => [
+      ...uniqueMentionedMemberIds.map(recipientId => ({
+        id: `${recipientId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        recipientId,
+        actorName,
+        sourceLabel,
+        sourceTitle,
+        preview,
+        createdAt,
+        read: false,
+      })),
+      ...prev,
+    ]);
+  };
+
+  const markNotificationAsRead = (notificationId: string) => {
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.id === notificationId ? { ...notification, read: true } : notification
+      )
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    if (!currentTeamMember) return;
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.recipientId === currentTeamMember.id ? { ...notification, read: true } : notification
+      )
+    );
+  };
+
+  const handleOpenTask = (navName: string, rowId: string) => {
+    setWorkspaceOpenRequest({
+      navName,
+      rowId,
+      requestId: Date.now(),
+    });
+    setActiveNav(navName);
+  };
 
   // New Contact Form State
   const [newFirstName, setNewFirstName] = useState('');
@@ -237,6 +376,7 @@ export default function Page() {
   const [newCompanyId, setNewCompanyId] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newStatus, setNewStatus] = useState<Status>('Lead');
+  const [newContactGroupId, setNewContactGroupId] = useState(DEFAULT_CONTACT_GROUPS[0].id);
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
@@ -265,8 +405,25 @@ export default function Page() {
     });
   }, [contacts, companies, searchQuery]);
 
-  const leads = filteredContacts.filter(c => c.status === 'Lead');
-  const activeClients = filteredContacts.filter(c => c.status === 'Active');
+  const contactsByGroup = useMemo(() => {
+    const fallbackGroupId = contactGroups[0]?.id || '';
+
+    return contactGroups.map(group => ({
+      ...group,
+      contacts: filteredContacts.filter(contact => (contact.groupId || fallbackGroupId) === group.id),
+    }));
+  }, [contactGroups, filteredContacts]);
+
+  const handleCreateContactGroup = () => {
+    const colors = ['#D32F2F', '#10B981', '#1061E3', '#8B5CF6', '#F59E0B', '#0D9488'];
+    const newGroup: ContactGroup = {
+      id: `group-${Date.now()}`,
+      name: 'New Group',
+      color: colors[contactGroups.length % colors.length],
+    };
+
+    setContactGroups(prev => [...prev, newGroup]);
+  };
 
   const openAddModal = () => {
     setEditingContactId(null);
@@ -277,6 +434,7 @@ export default function Page() {
     setNewCompanyId('');
     setNewEmail('');
     setNewStatus('Lead');
+    setNewContactGroupId(contactGroups[0]?.id || DEFAULT_CONTACT_GROUPS[0].id);
     setIsAddModalOpen(true);
   };
 
@@ -289,6 +447,7 @@ export default function Page() {
     setNewCompanyId(contact.companyId || '');
     setNewEmail(contact.email || '');
     setNewStatus(contact.status || 'Lead');
+    setNewContactGroupId(contact.groupId || contactGroups[0]?.id || DEFAULT_CONTACT_GROUPS[0].id);
     setIsAddModalOpen(true);
   };
 
@@ -306,7 +465,8 @@ export default function Page() {
             phone: newPhone,
             companyId: newCompanyId,
             email: newEmail,
-            status: newStatus
+            status: newStatus,
+            groupId: newContactGroupId,
           };
         }
         return c;
@@ -325,6 +485,7 @@ export default function Page() {
         companyId: newCompanyId,
         email: newEmail,
         status: newStatus,
+        groupId: newContactGroupId,
         assignedToId: teamMembers[0]?.id || '1'
       };
 
@@ -352,17 +513,17 @@ export default function Page() {
 
     if (!isActiveContact) return;
 
-    const activeStatus = isActiveContact.status;
-    const overStatus = isOverContact ? isOverContact.status : overId;
+    const activeGroupId = isActiveContact.groupId || contactGroups[0]?.id;
+    const overGroupId = isOverContact ? (isOverContact.groupId || contactGroups[0]?.id) : overId;
 
-    if (activeStatus !== overStatus && (overStatus === 'Lead' || overStatus === 'Active')) {
+    if (activeGroupId !== overGroupId && contactGroups.some(group => group.id === overGroupId)) {
       setContacts((prev) => {
         const activeIndex = prev.findIndex(c => c.id === activeId);
         const overIndex = prev.findIndex(c => c.id === overId);
 
         const newContacts = [...prev];
         const [movedContact] = newContacts.splice(activeIndex, 1);
-        movedContact.status = overStatus as Status;
+        movedContact.groupId = overGroupId as string;
 
         if (overIndex >= 0) {
           newContacts.splice(overIndex, 0, movedContact);
@@ -399,28 +560,48 @@ export default function Page() {
 
   const activeDragContact = activeDragId ? contacts.find(c => c.id === activeDragId) : null;
 
-  if (authLoading) {
+  if (!currentTeamMember) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA] text-[#1C1F23]">
-        <div className="text-sm text-[#8E9299]">Loading profile...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA] text-[#1C1F23]">
-        <div className="bg-white p-8 rounded-lg border border-[#E2E4E9] shadow-sm max-w-sm w-full text-center">
+        <form onSubmit={login} className="bg-white p-8 rounded-lg border border-[#E2E4E9] shadow-sm max-w-sm w-full">
           <div className="w-12 h-12 bg-[#003366] text-white rounded-md flex items-center justify-center text-xl font-bold mx-auto mb-4">A</div>
-          <h1 className="text-xl font-bold mb-2">Welcome to Awebco</h1>
-          <p className="text-sm text-[#8E9299] mb-6">Please log in to access your dashboard.</p>
+          <h1 className="text-xl font-bold mb-2 text-center">Welcome to Awebco</h1>
+          <p className="text-sm text-[#8E9299] mb-6 text-center">Log in with your team account.</p>
+          {authError && (
+            <div className="mb-4 rounded-md border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-sm text-[#B91C1C]">
+              {authError}
+            </div>
+          )}
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-[#8E9299] mb-1.5 uppercase tracking-wider">Email</label>
+            <input
+              type="email"
+              value={loginEmail}
+              onChange={e => setLoginEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+              required
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-xs font-semibold text-[#8E9299] mb-1.5 uppercase tracking-wider">Password</label>
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={e => setLoginPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+              required
+            />
+          </div>
           <button 
-            onClick={login}
+            type="submit"
             className="w-full bg-[#1061E3] hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
           >
-            Log in with Google
+            Log in
           </button>
-        </div>
+          <p className="text-xs text-[#8E9299] mt-4 text-center">
+            Default seeded passwords are <span className="font-semibold">changeme</span>. Change them in Settings.
+          </p>
+        </form>
       </div>
     );
   }
@@ -439,12 +620,12 @@ export default function Page() {
         <div className="px-5 pb-4">
           <div className="relative">
             <select 
-              value={navFilter}
+              value={visibleNavFilter}
               onChange={e => setNavFilter(e.target.value as any)}
               className="w-full bg-[#002244] border border-[#004080] text-white rounded-md px-3 py-2 text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-[#66B2FF] cursor-pointer hover:bg-[#002a55] transition-colors"
             >
               <option value="All">All Apps</option>
-              <option value="CRM">CRM</option>
+              {!isFreelancer && <option value="CRM">CRM</option>}
               <option value="Workspace">Workspace</option>
             </select>
             <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
@@ -459,18 +640,18 @@ export default function Page() {
               key={item.name}
               onClick={() => setActiveNav(item.name)}
               className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
-                activeNav === item.name 
+                activeContentNav === item.name 
                   ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
                   : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
               }`}
             >
-              <item.icon className={`w-4 h-4 ${activeNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
+              <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
               {item.name}
             </div>
           ))}
         </nav>
 
-        {(navFilter === 'All' || navFilter === 'CRM') && (
+        {!isFreelancer && (visibleNavFilter === 'All' || visibleNavFilter === 'CRM') && (
           <nav className="py-2.5">
             <div className="text-[11px] font-bold uppercase text-[#88AADD] px-5 pb-2 tracking-wide">
               CRM
@@ -480,34 +661,34 @@ export default function Page() {
                 key={item.name}
                 onClick={() => setActiveNav(item.name)}
                 className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
-                  activeNav === item.name 
+                  activeContentNav === item.name 
                     ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
                     : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
                 }`}
               >
-                <item.icon className={`w-4 h-4 ${activeNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
+                <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
                 {item.name}
               </div>
             ))}
           </nav>
         )}
 
-        {(navFilter === 'All' || navFilter === 'Workspace') && (
+        {(visibleNavFilter === 'All' || visibleNavFilter === 'Workspace') && (
           <nav className="py-2.5">
             <div className="text-[11px] font-bold uppercase text-[#88AADD] px-5 pb-2 tracking-wide">
               Workspace
             </div>
-            {NAV_ITEMS_WORKSPACE.map(item => (
+            {visibleWorkspaceItems.map(item => (
               <div 
                 key={item.name}
                 onClick={() => setActiveNav(item.name)}
                 className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
-                  activeNav === item.name 
+                  activeContentNav === item.name 
                     ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
                     : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
                 }`}
               >
-                <item.icon className={`w-4 h-4 ${activeNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
+                <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
                 {item.name}
               </div>
             ))}
@@ -520,9 +701,74 @@ export default function Page() {
         {/* Global Top Navigation */}
         <header className="h-14 bg-white border-b border-[#E2E4E9] flex items-center justify-end px-6 shrink-0 z-20">
           <div className="flex items-center gap-5">
+            <div className="relative" ref={notificationsRef}>
+              <button
+                onClick={() => setIsNotificationsOpen(prev => !prev)}
+                className={`relative hover:text-[#1C1F23] transition-colors ${isNotificationsOpen ? 'text-[#1061E3]' : 'text-[#8E9299]'}`}
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-[#D32F2F] text-white text-[10px] font-bold flex items-center justify-center">
+                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                  </span>
+                )}
+              </button>
+
+              {isNotificationsOpen && (
+                <div className="absolute right-0 top-10 w-[360px] bg-white border border-[#E2E4E9] rounded-xl shadow-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-[#E2E4E9] flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-[#1C1F23]">Notifications</h3>
+                      <p className="text-xs text-[#8E9299]">
+                        {unreadNotificationCount > 0 ? `${unreadNotificationCount} unread` : 'All caught up'}
+                      </p>
+                    </div>
+                    {userNotifications.length > 0 && (
+                      <button
+                        onClick={markAllNotificationsAsRead}
+                        className="text-xs font-semibold text-[#1061E3] hover:text-blue-700 transition-colors"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-[420px] overflow-y-auto">
+                    {userNotifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-[#8E9299]">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      userNotifications.map(notification => (
+                        <button
+                          key={notification.id}
+                          onClick={() => markNotificationAsRead(notification.id)}
+                          className={`w-full text-left px-4 py-3 border-b border-[#F0F2F5] hover:bg-[#F9FAFB] transition-colors ${notification.read ? 'bg-white' : 'bg-[#F5F9FF]'}`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-1">
+                            <p className="text-sm text-[#1C1F23]">
+                              <span className="font-semibold">{notification.actorName}</span> mentioned you in {notification.sourceLabel.toLowerCase()}
+                            </p>
+                            {!notification.read && (
+                              <span className="mt-1 w-2 h-2 rounded-full bg-[#1061E3] shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-xs font-semibold text-[#4A4D53] truncate">{notification.sourceTitle}</p>
+                          <p className="text-xs text-[#8E9299] mt-1 whitespace-pre-wrap break-words">{notification.preview}</p>
+                          <p className="text-[10px] text-[#8E9299] mt-2">
+                            {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(notification.createdAt))}
+                          </p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button 
               onClick={() => setActiveNav('Settings')} 
-              className={`hover:text-[#1C1F23] transition-colors ${activeNav === 'Settings' ? 'text-[#1061E3]' : 'text-[#8E9299]'}`}
+              className={`hover:text-[#1C1F23] transition-colors ${activeContentNav === 'Settings' ? 'text-[#1061E3]' : 'text-[#8E9299]'}`}
               title="Settings"
             >
               <SettingsIcon className="w-5 h-5" />
@@ -546,7 +792,7 @@ export default function Page() {
         </header>
 
         <div className="flex-grow relative overflow-hidden">
-          {activeNav === 'Contacts' ? (
+          {!isFreelancer && activeContentNav === 'Contacts' ? (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
             {/* Top Bar */}
             <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
@@ -561,10 +807,6 @@ export default function Page() {
                 />
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-                  <Filter className="w-4 h-4" />
-                  Filter
-                </button>
                 <button 
                   onClick={openAddModal}
                   className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -579,9 +821,14 @@ export default function Page() {
             <div className="p-6 shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">Contacts View</h1>
-                <div className="flex gap-4 text-[13px] text-[#666]">
-                  <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">Group by: Status <ChevronDown className="w-3 h-3" /></span>
-                  <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">Sort by: Last Activity <ChevronDown className="w-3 h-3" /></span>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={handleCreateContactGroup}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-[#1061E3] hover:text-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Group
+                  </button>
                 </div>
               </div>
             </div>
@@ -596,21 +843,16 @@ export default function Page() {
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
               >
-                {/* Group 1: Leads */}
-                <div className="flex items-center gap-2 py-3 mt-2">
-                  <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-[#666]"></div>
-                  <span className="font-bold text-[15px] uppercase tracking-wide text-[#D32F2F]">Leads</span>
-                  <span className="text-[#8E9299] text-[13px]">({leads.length})</span>
-                </div>
-                <DroppableTable id="Lead" contacts={leads} onRowClick={openEditModal} onUpdateContact={handleUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={setEmailingContact} />
-
-                {/* Group 2: Website Clients */}
-                <div className="flex items-center gap-2 py-3 mt-2">
-                  <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-[#666]"></div>
-                  <span className="font-bold text-[15px] uppercase tracking-wide text-[#10B981]">Website Clients</span>
-                  <span className="text-[#8E9299] text-[13px]">({activeClients.length})</span>
-                </div>
-                <DroppableTable id="Active" contacts={activeClients} onRowClick={openEditModal} onUpdateContact={handleUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={setEmailingContact} />
+                {contactsByGroup.map(group => (
+                  <div key={group.id}>
+                    <div className="flex items-center gap-2 py-3 mt-2">
+                      <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-[#666]"></div>
+                      <span className="font-bold text-[15px] uppercase tracking-wide" style={{ color: group.color }}>{group.name}</span>
+                      <span className="text-[#8E9299] text-[13px]">({group.contacts.length})</span>
+                    </div>
+                    <DroppableTable id={group.id} contacts={group.contacts} onRowClick={openEditModal} onUpdateContact={handleUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={setEmailingContact} />
+                  </div>
+                ))}
 
                 <DragOverlay>
                   {activeDragContact ? (
@@ -651,38 +893,43 @@ export default function Page() {
               </DndContext>
             </div>
           </div>
-        ) : activeNav === 'My Tasks' ? (
-          <MyTasksView teamMembers={teamMembers} companies={companies} contacts={contacts} currentUserId={currentTeamMember?.id} />
-        ) : activeNav === 'Inbox' ? (
+        ) : activeContentNav === 'My Tasks' ? (
+          <MyTasksView teamMembers={teamMembers} companies={companies} contacts={contacts} currentUserId={currentTeamMember?.id} onOpenTask={handleOpenTask} />
+        ) : activeContentNav === 'Inbox' ? (
           <InboxView teamMembers={teamMembers} currentUserId={currentTeamMember?.id} />
-        ) : activeNav === 'Websites' ? (
-          <WorkspaceProjectView key="web" teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" />
-        ) : activeNav === 'Design & Print' ? (
-          <WorkspaceProjectView key="dp" teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" />
-        ) : activeNav === 'Google Ads' ? (
-          <WorkspaceProjectView key="ppc" teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" />
-        ) : activeNav === 'Local Listings' ? (
-          <WorkspaceProjectView key="ll" teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" />
-        ) : activeNav === 'SEO' ? (
-          <WorkspaceProjectView key="seo" teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" />
-        ) : activeNav === 'Social Media' ? (
-          <SocialMediaProjectView teamMembers={teamMembers} companies={companies} />
-        ) : activeNav === 'Support Tickets' ? (
-          <WorkspaceProjectView key="support" teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" />
-        ) : activeNav === 'Companies' ? (
-          <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} />
-        ) : activeNav === 'Deals / Sales' ? (
-          <DealsView teamMembers={teamMembers} companies={companies} contacts={contacts} />
-        ) : activeNav === 'Proposals' ? (
-          <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} products={products} />
-        ) : activeNav === 'Price Catalog' ? (
+        ) : activeContentNav === 'Websites' ? (
+          <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+        ) : activeContentNav === 'Design & Print' ? (
+          <WorkspaceProjectView key={`dp-${workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+        ) : activeContentNav === 'Google Ads' ? (
+          <WorkspaceProjectView key={`ppc-${workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+        ) : activeContentNav === 'Local Listings' ? (
+          <WorkspaceProjectView key={`ll-${workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+        ) : activeContentNav === 'SEO' ? (
+          <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+        ) : activeContentNav === 'Social Media' ? (
+          <SocialMediaProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+        ) : activeContentNav === 'Support Tickets' ? (
+          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+        ) : !isFreelancer && activeContentNav === 'Companies' ? (
+          <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} />
+        ) : !isFreelancer && activeContentNav === 'Deals / Sales' ? (
+          <DealsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} setDeals={setDeals} proposals={proposals} setProposals={setProposals} currentUserName={currentUserName} currentUserId={currentTeamMember?.id} onMention={createMentionNotifications} />
+        ) : !isFreelancer && activeContentNav === 'Proposals' ? (
+          <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} products={products} proposals={proposals} setProposals={setProposals} />
+        ) : !isFreelancer && activeContentNav === 'Price Catalog' ? (
           <ProductsServicesView products={products} setProducts={setProducts} />
-        ) : activeNav === 'Files' ? (
+        ) : !isFreelancer && activeContentNav === 'Files' ? (
           <FilesView />
-        ) : activeNav === 'Profile' ? (
+        ) : activeContentNav === 'Profile' ? (
           <ProfileView teamMembers={teamMembers} setTeamMembers={setTeamMembers} currentUserId={currentTeamMember?.id} />
-        ) : activeNav === 'Settings' ? (
-          <SettingsView teamMembers={teamMembers} setTeamMembers={setTeamMembers} />
+        ) : activeContentNav === 'Settings' ? (
+          <SettingsView
+            teamMembers={teamMembers}
+            setTeamMembers={setTeamMembers}
+            setBoardMemberships={setBoardMemberships}
+            currentUserRole={currentTeamMember?.role}
+          />
         ) : (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
             {/* Top Bar */}
@@ -696,16 +943,12 @@ export default function Page() {
                 />
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-                  <Filter className="w-4 h-4" />
-                  Filter
-                </button>
                 <button 
                   onClick={() => alert('This module is currently under construction.')}
                   className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  New {activeNav === 'Companies' ? 'Company' : activeNav === 'Deals / Sales' ? 'Deal' : activeNav.replace(/s$/, '')}
+                  New {activeContentNav === 'Companies' ? 'Company' : activeContentNav === 'Deals / Sales' ? 'Deal' : activeContentNav.replace(/s$/, '')}
                 </button>
               </div>
             </header>
@@ -822,6 +1065,18 @@ export default function Page() {
                         className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
                         placeholder="jane@acme.com"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Group</label>
+                      <select
+                        value={newContactGroupId}
+                        onChange={e => setNewContactGroupId(e.target.value)}
+                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                      >
+                        {contactGroups.map(group => (
+                          <option key={group.id} value={group.id}>{group.name}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>

@@ -15,6 +15,8 @@ export default function ProfileView({
   const [name, setName] = useState(currentMember?.name || '');
   const [initials, setInitials] = useState(currentMember?.initials || '');
   const [color, setColor] = useState(currentMember?.color || '#1061E3');
+  const [photoUrl, setPhotoUrl] = useState(currentMember?.photoUrl || '');
+  const [password, setPassword] = useState(currentMember?.password || '');
 
   if (!currentMember) {
     return (
@@ -35,9 +37,21 @@ export default function ProfileView({
       ...m,
       name,
       initials,
-      color
+      color,
+      password,
+      photoUrl: photoUrl || undefined,
     } : m));
     alert('Profile updated successfully!');
+  };
+
+  const handlePhotoChange = (file?: File) => {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoUrl(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -49,12 +63,20 @@ export default function ProfileView({
       <div className="flex-grow p-6 overflow-auto">
         <div className="max-w-2xl bg-white border border-[#E2E4E9] rounded-lg shadow-sm p-6">
           <div className="flex items-center gap-6 mb-8 pb-8 border-b border-[#E2E4E9]">
-            <div 
-              className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-sm"
-              style={{ backgroundColor: color }}
-            >
-              {initials || '!'}
-            </div>
+            {photoUrl ? (
+              <div
+                aria-label={name || currentMember.name}
+                className="w-20 h-20 rounded-full bg-cover bg-center border border-[#E2E4E9] shadow-sm"
+                style={{ backgroundImage: `url(${photoUrl})` }}
+              />
+            ) : (
+              <div 
+                className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-sm"
+                style={{ backgroundColor: color }}
+              >
+                {initials || '!'}
+              </div>
+            )}
             <div>
               <h2 className="text-xl font-bold text-[#1C1F23]">{currentMember.name}</h2>
               <p className="text-sm text-[#8E9299]">{currentMember.email}</p>
@@ -86,6 +108,18 @@ export default function ProfileView({
             </div>
 
             <div>
+              <label className="block text-sm font-semibold text-[#1C1F23] mb-1.5">Password</label>
+              <input
+                type="text"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full h-10 px-3 rounded-md border border-[#E2E4E9] text-sm focus:ring-2 focus:ring-[#1061E3] outline-none"
+                required
+              />
+              <p className="text-xs text-[#8E9299] mt-2">This controls your local app login password.</p>
+            </div>
+
+            <div>
               <label className="block text-sm font-semibold text-[#1C1F23] mb-1.5">Avatar Color</label>
               <div className="flex items-center gap-4">
                 <input 
@@ -96,6 +130,31 @@ export default function ProfileView({
                 />
                 <div className="text-sm text-[#8E9299]">Choose a color for your avatar.</div>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[#1C1F23] mb-1.5">Profile Photo</label>
+              <div className="flex items-center gap-3">
+                <label className="h-10 px-4 rounded-md border border-[#E2E4E9] bg-white text-sm font-semibold text-[#4A4D53] hover:bg-gray-50 transition-colors cursor-pointer flex items-center">
+                  Upload Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => handlePhotoChange(e.target.files?.[0])}
+                  />
+                </label>
+                {photoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setPhotoUrl('')}
+                    className="text-sm font-semibold text-[#8E9299] hover:text-[#D32F2F] transition-colors"
+                  >
+                    Remove photo
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-[#8E9299] mt-2">This photo will be used as your avatar where profile photos are supported.</p>
             </div>
 
             <div className="pt-4 flex justify-end">

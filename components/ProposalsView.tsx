@@ -1,46 +1,41 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft } from 'lucide-react';
-import { Company, Contact, TeamMember, ProductService } from './Shared';
+import { Search, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft } from 'lucide-react';
+import { Company, Contact, TeamMember, ProductService, Proposal, ProposalItem, Deal } from './Shared';
 
-interface ProposalItem {
-  id: string;
-  name: string;
-  description: string;
-  quantity: number;
-  price: number;
+function formatCatalogPrice(value: string) {
+  const trimmedValue = value.trim();
+  const numericValue = Number(trimmedValue.replace(/[$,\s]/g, ''));
+
+  if (!trimmedValue) return '$0.00';
+  if (!Number.isFinite(numericValue)) return value;
+
+  return numericValue.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
-interface Proposal {
-  id: string;
-  title: string;
-  companyId: string;
-  contactId: string;
-  date: string;
-  validUntil: string;
-  items: ProposalItem[];
-  status: 'Draft' | 'Sent' | 'Accepted' | 'Declined';
-  notes: string;
-}
-
-export default function ProposalsView({ teamMembers, companies, contacts, products = [] }: { teamMembers: TeamMember[], companies: Company[], contacts: Contact[], products?: ProductService[] }) {
-  const [proposals, setProposals] = useState<Proposal[]>(() => [
-    {
-      id: '1',
-      title: 'Website Redesign Proposal',
-      companyId: '1',
-      contactId: '1',
-      date: new Date().toISOString().split('T')[0],
-      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      items: [
-        { id: 'i1', name: 'Web Design', description: 'Custom responsive design', quantity: 1, price: 3500 },
-        { id: 'i2', name: 'Web Development', description: 'Next.js frontend development', quantity: 1, price: 4500 },
-      ],
-      status: 'Draft',
-      notes: 'Thank you for your business. Please let us know if you have any questions about this proposal.',
-    }
-  ]);
+export default function ProposalsView({
+  teamMembers,
+  companies,
+  contacts,
+  deals,
+  products = [],
+  proposals,
+  setProposals
+}: {
+  teamMembers: TeamMember[],
+  companies: Company[],
+  contacts: Contact[],
+  deals: Deal[],
+  products?: ProductService[],
+  proposals: Proposal[],
+  setProposals: React.Dispatch<React.SetStateAction<Proposal[]>>
+}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'list' | 'edit'>('list');
   const [currentDoc, setCurrentDoc] = useState<Proposal | null>(null);
@@ -58,11 +53,20 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
       title: 'New Proposal',
       companyId: companies[0]?.id || '',
       contactId: contacts[0]?.id || '',
+      dealId: deals.find(deal => deal.companyId === (companies[0]?.id || ''))?.id,
       date: new Date().toISOString().split('T')[0],
       validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       items: [{ id: Date.now().toString(), name: '', description: '', quantity: 1, price: 0 }],
       status: 'Draft',
       notes: '',
+      clientPrintedName: '',
+      signatureName: '',
+      signatureDate: new Date().toISOString().split('T')[0],
+      cardholderName: '',
+      cardNumber: '',
+      cardExpiry: '',
+      cardCvv: '',
+      billingZip: '',
     });
     setActiveView('edit');
   };
@@ -93,9 +97,11 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
 
   if (activeView === 'edit' && currentDoc) {
     const subtotal = calculateSubtotal(currentDoc.items);
+    const availableDeals = deals.filter(deal => deal.companyId === currentDoc.companyId);
+    const todayString = new Date().toISOString().split('T')[0];
     
     return (
-      <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-gray-50 z-10 print:bg-white print:static print:h-auto print:overflow-visible">
+      <div className="proposal-print-root flex-grow flex flex-col overflow-hidden absolute inset-0 bg-gray-50 z-10 print:bg-white print:static print:h-auto print:overflow-visible">
         {/* Editor Top Bar - Hidden when printing */}
         <div className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0 print:hidden">
           <button 
@@ -130,7 +136,7 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
         </div>
 
         {/* Invoice Form Area */}
-        <div className="flex-grow overflow-y-auto p-8 flex justify-center print:p-0 print:overflow-visible">
+        <div className="flex-grow overflow-y-auto p-8 flex justify-center items-start print:p-0 print:overflow-visible">
           <div className="w-full max-w-4xl bg-white rounded-lg shadow-sm border border-[#E2E4E9] p-8 print:shadow-none print:border-none print:p-0">
             {/* Header section */}
             <div className="flex justify-between items-start mb-8 border-b border-[#E2E4E9] pb-8 print:border-b-2 print:border-gray-300">
@@ -163,13 +169,30 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
                     />
                   </div>
                 </div>
+
+                <div className="mt-6 text-sm text-[#4A4D53] leading-relaxed">
+                  <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">From</label>
+                  <p className="font-bold text-[#1C1F23]">Awebco</p>
+                  <p>217-903-5999</p>
+                  <p>806 Sheridan St. Danville, IL 61832</p>
+                  <p>www.awebco.com</p>
+                </div>
               </div>
               
               <div className="w-1/3 bg-[#F9FAFB] p-4 rounded-md border border-[#E2E4E9] print:bg-transparent print:border-none print:p-0">
                 <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Bill To</label>
                 <select 
                   value={currentDoc.companyId}
-                  onChange={(e) => setCurrentDoc({...currentDoc, companyId: e.target.value})}
+                  onChange={(e) => {
+                    const companyId = e.target.value;
+                    const matchingDealId = deals.find(deal => deal.companyId === companyId)?.id;
+                    setCurrentDoc({
+                      ...currentDoc,
+                      companyId,
+                      contactId: contacts.find(contact => contact.companyId === companyId)?.id || '',
+                      dealId: matchingDealId
+                    });
+                  }}
                   className="w-full text-base font-semibold text-[#1C1F23] bg-transparent border-none outline-none focus:ring-2 focus:ring-[#1061E3] rounded -ml-1 py-1 mb-2 appearance-none cursor-pointer print:appearance-none print:pointer-events-none"
                 >
                   <option value="" disabled>Select Company</option>
@@ -185,6 +208,18 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
                   <option value="">No specific contact</option>
                   {contacts.filter(c => c.companyId === currentDoc.companyId).map(c => (
                     <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                  ))}
+                </select>
+
+                <label className="block text-xs font-semibold text-[#8E9299] mt-2 mb-1 uppercase tracking-wider">Deal</label>
+                <select
+                  value={currentDoc.dealId || ''}
+                  onChange={(e) => setCurrentDoc({...currentDoc, dealId: e.target.value || undefined})}
+                  className="w-full text-sm text-[#4A4D53] bg-transparent border-none outline-none focus:ring-2 focus:ring-[#1061E3] rounded -ml-1 py-1 appearance-none cursor-pointer print:appearance-none print:pointer-events-none"
+                >
+                  <option value="">No linked deal</option>
+                  {availableDeals.map(deal => (
+                    <option key={deal.id} value={deal.id}>{deal.name}</option>
                   ))}
                 </select>
               </div>
@@ -312,7 +347,7 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
                           >
                             <option value="" disabled>+ Add from Catalog...</option>
                             {products.map(p => (
-                              <option key={p.id} value={p.id}>{p.name} (${p.price})</option>
+                              <option key={p.id} value={p.id}>{p.name} ({formatCatalogPrice(p.price)})</option>
                             ))}
                           </select>
                         </div>
@@ -350,6 +385,92 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
                 </div>
               </div>
             </div>
+
+            <div className="mt-10 print:mt-8">
+              <div className="border-t border-[#E2E4E9] pt-8 print:pt-6">
+                <h4 className="text-sm font-bold text-[#1C1F23] mb-4 uppercase tracking-wider">Credit Card Information</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Cardholder Name</label>
+                    <input
+                      type="text"
+                      value={currentDoc.cardholderName || ''}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardholderName: e.target.value })}
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Card Number</label>
+                    <input
+                      type="text"
+                      value={currentDoc.cardNumber || ''}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardNumber: e.target.value })}
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Expiry</label>
+                    <input
+                      type="text"
+                      value={currentDoc.cardExpiry || ''}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardExpiry: e.target.value })}
+                      placeholder="MM/YY"
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">CVV</label>
+                    <input
+                      type="text"
+                      value={currentDoc.cardCvv || ''}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardCvv: e.target.value })}
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Billing Zip</label>
+                    <input
+                      type="text"
+                      value={currentDoc.billingZip || ''}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, billingZip: e.target.value })}
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-6 mt-8 print:gap-8">
+                <div>
+                  <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Today&apos;s Date</label>
+                  <input
+                    type="date"
+                    value={currentDoc.signatureDate || todayString}
+                    onChange={(e) => setCurrentDoc({ ...currentDoc, signatureDate: e.target.value })}
+                    className="w-full max-w-[180px] text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-2 py-1 outline-none bg-white print:border-none print:bg-transparent print:p-0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Client Printed Name</label>
+                  <input
+                    type="text"
+                    value={currentDoc.clientPrintedName || ''}
+                    onChange={(e) => setCurrentDoc({ ...currentDoc, clientPrintedName: e.target.value })}
+                    placeholder="Printed name"
+                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Signature</label>
+                  <input
+                    type="text"
+                    value={currentDoc.signatureName || ''}
+                    onChange={(e) => setCurrentDoc({ ...currentDoc, signatureName: e.target.value })}
+                    placeholder="Signature"
+                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -371,10 +492,6 @@ export default function ProposalsView({ teamMembers, companies, contacts, produc
           />
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
           <button 
             onClick={handleCreateNew}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"

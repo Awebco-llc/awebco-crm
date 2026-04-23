@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, GripHorizontal, GripVertical, X, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, Trash2 } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -34,6 +34,21 @@ const INITIAL_COLUMNS: Column[] = [
   { id: 'deadline', header: 'Deadline' },
   { id: 'notes', header: 'Notes' },
 ];
+
+const getColor = (str: string) => {
+  const colors = ['#1061E3', '#10B981', '#F59E0B', '#D32F2F', '#8B5CF6', '#EC4899'];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const getInitials = (name?: string) => {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
+};
 
 function SortableHeader({ column }: { column: Column }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
@@ -81,6 +96,7 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
   };
 
   const isExpanded = expandedIds?.has(row.id);
+  const subtaskCount = data.filter((item: any) => item.parentId === row.id).length;
 
   return (
     <tr 
@@ -101,6 +117,7 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
           {col.id === 'status' ? (
             <EditableStatus 
               value={row[col.id]} 
+              options={STATUS_OPTIONS}
               onSave={(newVal) => {
                 const newData = [...data];
                 const rowIndex = newData.findIndex((r: any) => r.id === row.id);
@@ -142,7 +159,14 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
                 }}
                 renderValue={
                   col.id === 'projectName' ? (v) => (
-                    <strong className={isSubRow ? 'font-medium text-[#4A4D53]' : ''}>{v}</strong>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <strong className={`truncate ${isSubRow ? 'font-medium text-[#4A4D53]' : ''}`}>{v}</strong>
+                      {!isSubRow && subtaskCount > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-[10px] font-semibold shrink-0">
+                          {subtaskCount}
+                        </span>
+                      )}
+                    </div>
                   ) : undefined
                 }
               />
@@ -173,13 +197,53 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
 }
 
 const STATUS_OPTIONS = [
-  'Planning',
+  'Not Started',
+  'Setup',
   'In Progress',
-  'Active',
-  'ON HOLD'
+  'Awaiting Customer',
+  'Needs Invoiced',
+  'Running',
+  'On Hold',
+  'Done'
 ];
 
-export default function SocialMediaProjectView({ teamMembers, companies }: { teamMembers: TeamMember[], companies: Company[] }) {
+const MONTH_SUBTASKS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function createMonthlySubTasks(parentId: string, parent: any, existingSubRows: any[] = []) {
+  const existingNames = new Set(existingSubRows.map(row => row.projectName));
+
+  return MONTH_SUBTASKS
+    .filter(month => !existingNames.has(month))
+    .map(month => ({
+      id: `sub-${parentId}-${month.toLowerCase()}`,
+      parentId,
+      serviceType: parent?.serviceType || 'smm',
+      projectName: month,
+      assignee: parent?.assignee || '',
+      status: 'Not Started',
+      deadline: '',
+      description: '',
+      notes: '',
+      updates: []
+    }));
+}
+
+export default function SocialMediaProjectView({
+  teamMembers,
+  companies,
+  openRowId,
+  boardMemberships,
+  setBoardMemberships,
+  canManageBoardMembers,
+}: {
+  teamMembers: TeamMember[],
+  companies: Company[],
+  openRowId?: string,
+  boardMemberships: Record<string, string[]>,
+  setBoardMemberships: React.Dispatch<React.SetStateAction<Record<string, string[]>>>,
+  canManageBoardMembers: boolean,
+}) {
+  type EditTab = 'details' | 'description' | 'updates';
   const [columns, setColumns] = useState<Column[]>(INITIAL_COLUMNS);
   const [data, setData] = useState<any[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -187,6 +251,10 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
   const [isAddColOpen, setIsAddColOpen] = useState(false);
   const [newColName, setNewColName] = useState('');
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [activeEditTab, setActiveEditTab] = useState<EditTab>('details');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [newUpdateText, setNewUpdateText] = useState('');
+  const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
 
   React.useEffect(() => {
     setData((prev) => {
@@ -199,16 +267,22 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
 
       const newSMMRows = companies
         .filter(c => c.smm && !deletedIds.has(c.id + '-smm') && !existingSMM.some(r => r.id === c.id + '-smm'))
-        .map(c => ({
-          id: c.id + '-smm',
-          companyId: c.id,
-          serviceType: 'smm',
+        .flatMap(c => {
+          const parentRow = {
+            id: c.id + '-smm',
+            companyId: c.id,
+            serviceType: 'smm',
           projectName: c.name + ' SMM',
           assignee: c.assignedToId || teamMembers[0]?.id || '',
-          status: 'Planning',
+          status: 'Not Started',
           deadline: '',
-          notes: ''
-        }));
+          description: '',
+          notes: '',
+          updates: []
+          };
+
+          return [parentRow, ...createMonthlySubTasks(parentRow.id, parentRow)];
+        });
 
       const newSMARows = companies
         .filter(c => c.sma && !deletedIds.has(c.id + '-sma') && !existingSMA.some(r => r.id === c.id + '-sma'))
@@ -218,9 +292,11 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
           serviceType: 'sma',
           projectName: c.name + ' SMA',
           assignee: c.assignedToId || teamMembers[0]?.id || '',
-          status: 'Planning',
+          status: 'Not Started',
           deadline: '',
-          notes: ''
+          description: '',
+          notes: '',
+          updates: []
         }));
 
       const keptRows = prev.filter(r => 
@@ -234,9 +310,27 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
         )))
       );
 
-      return [...keptRows, ...newSMMRows, ...newSMARows];
+      const smmParents = keptRows.filter(row => row.serviceType === 'smm' && !row.parentId);
+      const missingMonthlyRows = smmParents.flatMap(parent =>
+        createMonthlySubTasks(parent.id, parent, keptRows.filter(row => row.parentId === parent.id))
+      );
+
+      return [...keptRows, ...missingMonthlyRows, ...newSMMRows, ...newSMARows];
     });
+
   }, [companies, teamMembers, deletedIds]);
+
+  React.useEffect(() => {
+    if (openRowId && data.some(row => row.id === openRowId)) {
+      setEditingRowId(openRowId);
+    }
+  }, [openRowId, data]);
+
+  React.useEffect(() => {
+    if (editingRowId) {
+      setActiveEditTab('details');
+    }
+  }, [editingRowId]);
 
   const deleteRow = (id: string) => {
     setData(prev => prev.filter(r => r.id !== id && r.parentId !== id));
@@ -268,7 +362,9 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
       assignee: parent?.assignee || teamMembers[0]?.id || '',
       status: 'Not Started',
       deadline: '',
-      notes: ''
+      description: '',
+      notes: '',
+      updates: []
     };
     
     setData(prev => {
@@ -340,15 +436,77 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
       serviceType: type,
       projectName: `New ${type === 'smm' ? 'SMM' : 'SMA'} Project`,
       assignee: teamMembers[0]?.id || '',
-      status: 'Planning',
+      status: 'Not Started',
       deadline: '',
+      description: '',
       notes: '',
+      updates: [],
       isManual: true,
     };
+    if (type === 'smm') {
+      setData(prev => [manualProject, ...createMonthlySubTasks(manualProject.id, manualProject), ...prev]);
+      return;
+    }
+
     setData(prev => [manualProject, ...prev]);
   };
 
-  const renderTableData = (groupData: any[], emptyMessage: string) => (
+  const handleAddUpdate = (rowId: string) => {
+    const trimmedText = newUpdateText.trim();
+    if (!trimmedText) return;
+
+    setData(prev => {
+      const idx = prev.findIndex(row => row.id === rowId);
+      if (idx === -1) return prev;
+
+      const author = teamMembers[0]?.name || 'You';
+      const next = [...prev];
+      const updates = next[idx].updates ? [...next[idx].updates] : [];
+      updates.push({
+        id: `update-${Date.now()}`,
+        author,
+        text: trimmedText,
+        timestamp: new Date().toISOString(),
+      });
+      next[idx] = { ...next[idx], updates };
+      return next;
+    });
+
+    setNewUpdateText('');
+  };
+
+  const toggleBoardMember = (memberId: string) => {
+    setBoardMemberships(prev => {
+      const currentMemberIds = prev['Social Media'] || [];
+      const isMember = currentMemberIds.includes(memberId);
+
+      return {
+        ...prev,
+        'Social Media': isMember
+          ? currentMemberIds.filter(id => id !== memberId)
+          : [...currentMemberIds, memberId],
+      };
+    });
+  };
+
+  const boardMemberIds = boardMemberships['Social Media'] || [];
+  const visibleBoardMembers = teamMembers.filter(member =>
+    member.role === 'master_admin' || member.role === 'admin' || boardMemberIds.includes(member.id)
+  );
+
+  const renderTableData = (groupData: any[], emptyMessage: string, options?: { hideDone?: boolean }) => {
+    const visibleGroupData = groupData.filter(row => {
+      if (options?.hideDone && row.status === 'Done') {
+        return false;
+      }
+      if (statusFilter !== 'all' && row.status !== statusFilter) {
+        return false;
+      }
+      return true;
+    });
+    const visibleParentRows = visibleGroupData.filter(r => !r.parentId);
+
+    return (
     <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
       <table className="w-full border-collapse text-left">
         <thead>
@@ -371,8 +529,8 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
           </tr>
         </thead>
         <tbody className="min-h-[50px]">
-          <SortableContext items={groupData.filter(r => !r.parentId).map(r => `row-${r.id}`)} strategy={verticalListSortingStrategy}>
-            {groupData.filter(r => !r.parentId).map(row => (
+          <SortableContext items={visibleParentRows.map(r => `row-${r.id}`)} strategy={verticalListSortingStrategy}>
+            {visibleParentRows.map(row => (
               <React.Fragment key={row.id}>
                 <SortableRow 
                   row={row} 
@@ -387,7 +545,7 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
                   isSubRow={false}
                   deleteRow={deleteRow}
                 />
-                {expandedIds.has(row.id) && groupData.filter(r => r.parentId === row.id).map(subRow => (
+                {expandedIds.has(row.id) && visibleGroupData.filter(r => r.parentId === row.id).map(subRow => (
                   <SortableRow 
                     key={subRow.id} 
                     row={subRow} 
@@ -403,7 +561,7 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
               </React.Fragment>
             ))}
           </SortableContext>
-          {groupData.filter(r => !r.parentId).length === 0 && (
+          {visibleParentRows.length === 0 && (
             <tr>
               <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">
                 {emptyMessage}
@@ -413,7 +571,8 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
@@ -428,10 +587,88 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
           />
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
+          {canManageBoardMembers && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsBoardMembersOpen(prev => !prev)}
+                className="h-[38px] px-3 rounded-md border border-[#E2E4E9] bg-white hover:bg-gray-50 transition-colors flex items-center"
+                title="Manage board members"
+              >
+                <div className="flex -space-x-2">
+                  {visibleBoardMembers.slice(0, 4).map(member => (
+                    member.photoUrl ? (
+                      <span
+                        key={member.id}
+                        className="w-7 h-7 rounded-full bg-cover bg-center border-2 border-white shadow-sm"
+                        style={{ backgroundImage: `url(${member.photoUrl})` }}
+                        title={member.name}
+                      />
+                    ) : (
+                      <span
+                        key={member.id}
+                        className="w-7 h-7 rounded-full border-2 border-white shadow-sm inline-flex items-center justify-center text-white text-[10px] font-bold"
+                        style={{ backgroundColor: member.color }}
+                        title={member.name}
+                      >
+                        {member.initials}
+                      </span>
+                    )
+                  ))}
+                  {visibleBoardMembers.length > 4 && (
+                    <span className="w-7 h-7 rounded-full border-2 border-white shadow-sm inline-flex items-center justify-center bg-[#F0F2F5] text-[#4A4D53] text-[10px] font-bold">
+                      +{visibleBoardMembers.length - 4}
+                    </span>
+                  )}
+                  {visibleBoardMembers.length === 0 && (
+                    <span className="w-7 h-7 rounded-full border-2 border-white shadow-sm inline-flex items-center justify-center bg-[#F0F2F5] text-[#8E9299] text-sm font-bold">
+                      +
+                    </span>
+                  )}
+                </div>
+              </button>
+              {isBoardMembersOpen && (
+                <div className="absolute right-0 top-11 z-30 w-[320px] rounded-xl border border-[#E2E4E9] bg-white shadow-xl p-4">
+                  <h3 className="text-sm font-bold text-[#1C1F23] mb-1">Social Media Members</h3>
+                  <p className="text-xs text-[#8E9299] mb-3">
+                    Choose who can see and access this workspace board. Admins always have access.
+                  </p>
+                  <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
+                    {teamMembers.map(member => {
+                      const hasGlobalAccess = member.role === 'master_admin' || member.role === 'admin';
+                      const isChecked = hasGlobalAccess || boardMemberIds.includes(member.id);
+
+                      return (
+                        <label key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-[#E2E4E9] bg-[#F9FAFB] px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-[#1C1F23] truncate">{member.name}</div>
+                            <div className="text-[11px] text-[#8E9299] uppercase tracking-wider">{member.role === 'master_admin' ? 'Master Admin' : member.role || 'staff'}</div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={hasGlobalAccess}
+                            onChange={() => toggleBoardMember(member.id)}
+                            className="h-4 w-4 rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3] disabled:opacity-50"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] outline-none focus:ring-2 focus:ring-[#1061E3]"
+          >
+            <option value="all">All Statuses</option>
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
           <div className="flex border border-[#1061E3] rounded-md overflow-hidden bg-[#1061E3] transition-colors">
             <button 
               onClick={() => handleAddWebsite('smm')}
@@ -459,7 +696,7 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
         <DndContext id="social-media-dnd-context" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="mb-8">
             <h2 className="text-lg font-bold text-[#1C1F23] mb-3">Social Media Management</h2>
-            {renderTableData(data.filter(r => r.serviceType === 'smm'), 'No Social Media Management projects found.')}
+            {renderTableData(data.filter(r => r.serviceType === 'smm'), 'No Social Media Management projects found.', { hideDone: true })}
           </div>
 
           <div>
@@ -550,8 +787,30 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
                   <X className="w-5 h-5" />
                 </button>
               </div>
+              <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
+                <div className="flex gap-2 overflow-x-auto">
+                  {[
+                    { id: 'details', label: 'Details' },
+                    { id: 'description', label: 'Description' },
+                    { id: 'updates', label: 'Updates' },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveEditTab(tab.id as EditTab)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+                        activeEditTab === tab.id
+                          ? 'bg-[#1061E3] text-white'
+                          : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
-                {(() => {
+                {activeEditTab === 'details' && (() => {
                   const editingRow = data.find(r => r.id === editingRowId);
                   return columns.map(col => (
                     <div key={col.id}>
@@ -567,7 +826,7 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
                           }}
                           className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                         >
-                          {(editingRow?.parentId ? ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'] : STATUS_OPTIONS).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                         </select>
                       ) : (
                         <input 
@@ -584,6 +843,83 @@ export default function SocialMediaProjectView({ teamMembers, companies }: { tea
                       )}
                     </div>
                   ));
+                })()}
+                {activeEditTab === 'description' && (() => {
+                  const editingRow = data.find(r => r.id === editingRowId);
+                  return (
+                    <div>
+                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Description</label>
+                      <textarea
+                        value={editingRow?.description ?? ''}
+                        onChange={e => {
+                          const newData = [...data];
+                          const rowIndex = newData.findIndex(r => r.id === editingRowId);
+                          newData[rowIndex] = { ...newData[rowIndex], description: e.target.value };
+                          setData(newData);
+                        }}
+                        placeholder="Add a description for this social media project..."
+                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[280px] resize-y"
+                      />
+                    </div>
+                  );
+                })()}
+                {activeEditTab === 'updates' && (() => {
+                  const editingRow = data.find(r => r.id === editingRowId);
+                  return (
+                    <div>
+                      <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
+                      <div className="flex flex-col gap-4 mb-4">
+                        {editingRow?.updates && editingRow.updates.length > 0 ? (
+                          editingRow.updates.map((update: any) => {
+                            const member = teamMembers.find(teamMember => teamMember.name === update.author);
+                            return (
+                              <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
+                                <div className="flex justify-between items-center mb-1">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div
+                                      className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                      style={{ backgroundColor: member?.color || getColor(update.author || 'User') }}
+                                    >
+                                      {member?.initials || getInitials(update.author)}
+                                    </div>
+                                    <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author || 'User'}</span>
+                                  </div>
+                                  <span className="text-[10px] text-[#8E9299]">
+                                    {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-[#8E9299] text-center py-2">No updates yet.</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 items-start">
+                        <textarea
+                          value={newUpdateText}
+                          onChange={e => setNewUpdateText(e.target.value)}
+                          placeholder="Write an update..."
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[90px] resize-y"
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleAddUpdate(editingRowId);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddUpdate(editingRowId)}
+                          disabled={!newUpdateText.trim()}
+                          className="px-4 py-2 h-[90px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        >
+                          Post
+                        </button>
+                      </div>
+                    </div>
+                  );
                 })()}
               </div>
               <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">

@@ -3,16 +3,54 @@
 import React from 'react';
 import { Company, Contact, TeamMember } from './Shared';
 
+const WORKSPACE_SERVICES: Array<{ key: keyof Company; label: string }> = [
+  { key: 'web', label: 'Websites' },
+  { key: 'dp', label: 'Design & Print' },
+  { key: 'seo', label: 'SEO' },
+  { key: 'll', label: 'Local Listings' },
+  { key: 'ppc', label: 'Google Ads' },
+  { key: 'smm', label: 'Social Media Management' },
+  { key: 'sma', label: 'Social Media Ads' },
+  { key: 'support', label: 'Support Tickets' },
+];
+
+function formatDeadline(value?: string) {
+  if (!value) return '-';
+
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(date);
+}
+
+function getWorkspaceTasks(companies: Company[], currentUserId: string) {
+  return companies
+    .filter(company => company.assignedToId === currentUserId)
+    .flatMap(company =>
+      WORKSPACE_SERVICES
+        .filter(service => Boolean(company[service.key]))
+        .map(service => ({
+          id: `${company.id}-${String(service.key)}`,
+          companyName: company.name,
+          workspace: service.label,
+          navName: service.key === 'smm' || service.key === 'sma' ? 'Social Media' : service.label,
+          rowId: service.key === 'smm' || service.key === 'sma' ? `${company.id}-${String(service.key)}` : company.id,
+          status: company.deadline ? 'Scheduled' : 'Pending',
+          deadline: company.deadline,
+        }))
+    );
+}
+
 export default function MyTasksView({
-  teamMembers,
   companies,
-  contacts,
-  currentUserId
+  currentUserId,
+  onOpenTask
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
   contacts: Contact[],
-  currentUserId: string | undefined
+  currentUserId: string | undefined,
+  onOpenTask?: (navName: string, rowId: string) => void
 }) {
   if (!currentUserId) {
     return (
@@ -27,11 +65,7 @@ export default function MyTasksView({
     );
   }
 
-  // Aggregate tasks from different areas. For now we use Companies, Contacts and maybe other static project rows if we passed them down, 
-  // but Workspace/SocialMedia are tightly coupled inside their own components right now. 
-  // We will show assigned Contacts and Companies as tasks.
-  const myContacts = contacts.filter(c => c.assignedToId === currentUserId);
-  const myCompanies = companies.filter(c => c.assignedToId === currentUserId);
+  const workspaceTasks = getWorkspaceTasks(companies, currentUserId);
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-[#F9FAFB]">
@@ -39,35 +73,38 @@ export default function MyTasksView({
         <h1 className="text-xl font-bold text-[#1C1F23]">My Tasks</h1>
       </header>
       <div className="flex-grow p-6 overflow-auto">
-        
-        <div className="mb-8">
-          <h2 className="text-lg font-bold text-[#1C1F23] mb-4">Assigned Active Leads & Contacts</h2>
-          {myContacts.length === 0 ? (
-            <p className="text-sm text-[#8E9299]">You have no assigned contacts.</p>
+        <div>
+          <h2 className="text-lg font-bold text-[#1C1F23] mb-4">Assigned Workspace Items</h2>
+          {workspaceTasks.length === 0 ? (
+            <p className="text-sm text-[#8E9299]">You have no assigned workspace items.</p>
           ) : (
             <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NAME</th>
                     <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
+                    <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">WORKSPACE</th>
                     <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
+                    <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEADLINE</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {myContacts.map(c => (
-                    <tr key={c.id} className="border-b border-[#F0F2F5] hover:bg-gray-50">
-                      <td className="px-4 py-3 text-[13px] font-medium text-[#1C1F23]">{c.firstName} {c.lastName}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#8E9299]">
-                        {companies.find(comp => comp.id === c.companyId)?.name || 'Unknown'}
-                      </td>
+                  {workspaceTasks.map(task => (
+                    <tr
+                      key={task.id}
+                      className="border-b border-[#F0F2F5] hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => onOpenTask?.(task.navName, task.rowId)}
+                    >
+                      <td className="px-4 py-3 text-[13px] font-medium text-[#1C1F23]">{task.companyName}</td>
+                      <td className="px-4 py-3 text-[13px] text-[#8E9299]">{task.workspace}</td>
                       <td className="px-4 py-3 text-[13px]">
                         <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase ${
-                          c.status === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' : 'bg-[#ECFDF3] text-[#10B981]'
+                          task.status === 'Scheduled' ? 'bg-[#E3F2FD] text-[#1976D2]' : 'bg-gray-100 text-gray-700'
                         }`}>
-                          {c.status}
+                          {task.status}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-[13px] text-[#8E9299]">{formatDeadline(task.deadline)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -75,33 +112,6 @@ export default function MyTasksView({
             </div>
           )}
         </div>
-
-        <div>
-          <h2 className="text-lg font-bold text-[#1C1F23] mb-4">Assigned Companies</h2>
-          {myCompanies.length === 0 ? (
-            <p className="text-sm text-[#8E9299]">You have no assigned companies.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr>
-                    <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY NAME</th>
-                    <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">SERVICES NEEDED</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myCompanies.map(c => (
-                    <tr key={c.id} className="border-b border-[#F0F2F5] hover:bg-gray-50">
-                      <td className="px-4 py-3 text-[13px] font-medium text-[#1C1F23]">{c.name}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#8E9299]">{c.servicesNeeded || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Plus, X, Check, GripVertical } from 'lucide-react';
+import { Search, Plus, X, Check, GripVertical, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown } from '@/components/Shared';
+import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
 import {
   DndContext,
   closestCenter,
@@ -28,6 +28,22 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
       {renderValue ? renderValue(value) : (value || '-')}
     </div>
   );
+}
+
+function getInitials(name?: string) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
+}
+
+function getAvatarColor(name?: string) {
+  const colors = ['#1061E3', '#10B981', '#F59E0B', '#D32F2F', '#8B5CF6', '#EC4899'];
+  const value = name || 'User';
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = value.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
 }
 
 function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, contacts }: { company: Company; onClick: () => void; onUpdate: (id: string, field: keyof Company, value: any) => void; toggleService: (e: React.MouseEvent, id: string, field: keyof Company) => void; teamMembers: TeamMember[]; contacts: Contact[] }) {
@@ -99,13 +115,17 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
   );
 }
 
-export default function CompaniesView({ teamMembers, companies, setCompanies, contacts }: { teamMembers: TeamMember[], companies: Company[], setCompanies: React.Dispatch<React.SetStateAction<Company[]>>, contacts: Contact[] }) {
+type CompanyProfileTab = 'details' | 'description' | 'updates' | 'proposals';
+
+export default function CompaniesView({ teamMembers, companies, setCompanies, contacts, proposals }: { teamMembers: TeamMember[], companies: Company[], setCompanies: React.Dispatch<React.SetStateAction<Company[]>>, contacts: Contact[], proposals: Proposal[] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<CompanyProfileTab>('details');
 
   // Form State
   const [formData, setFormData] = useState<Partial<Company>>({});
+  const [newUpdateText, setNewUpdateText] = useState('');
 
   const [confirmAction, setConfirmAction] = useState<{id: string, field: keyof Company} | null>(null);
 
@@ -139,12 +159,16 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const openAddModal = () => {
     setEditingCompanyId(null);
     setFormData({});
+    setNewUpdateText('');
+    setActiveTab('details');
     setIsAddModalOpen(true);
   };
 
   const openEditModal = (company: Company) => {
     setEditingCompanyId(company.id);
     setFormData(company);
+    setNewUpdateText('');
+    setActiveTab('details');
     setIsAddModalOpen(true);
   };
 
@@ -154,11 +178,25 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
 
   const handleSaveCompany = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let updatedUpdates = formData.updates || [];
+    if (newUpdateText.trim()) {
+      const author = teamMembers?.[0]?.name || 'You';
+      updatedUpdates = [
+        ...updatedUpdates,
+        {
+          id: Date.now().toString(),
+          author,
+          text: newUpdateText.trim(),
+          createdAt: new Date().toISOString(),
+        }
+      ];
+    }
     
     if (editingCompanyId) {
       setCompanies(companies.map(c => {
         if (c.id === editingCompanyId) {
-          return { ...c, ...formData } as Company;
+          return { ...c, ...formData, updates: updatedUpdates } as Company;
         }
         return c;
       }));
@@ -183,6 +221,8 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         referralSource: formData.referralSource || '',
         assignedToId: formData.assignedToId || teamMembers[0]?.id || '1',
         primaryContactId: formData.primaryContactId || '',
+        description: formData.description || '',
+        updates: updatedUpdates,
         web: formData.web || false,
         seo: formData.seo || false,
         ll: formData.ll || false,
@@ -195,6 +235,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       setCompanies([...companies, newCompany]);
     }
     
+    setNewUpdateText('');
     setIsAddModalOpen(false);
   };
 
@@ -214,6 +255,9 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: !c[field] } : c));
   };
 
+  const companyProposals = proposals.filter(proposal => proposal.companyId === editingCompanyId);
+  const calculateProposalTotal = (proposal: Proposal) => proposal.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
@@ -229,10 +273,6 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           />
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
           <button 
             onClick={openAddModal}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -329,104 +369,225 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   <X className="w-5 h-5" />
                 </button>
               </div>
+              <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
+                <div className="flex gap-2 overflow-x-auto">
+                  {[
+                    { id: 'details', label: 'Details' },
+                    { id: 'description', label: 'Description' },
+                    { id: 'updates', label: 'Updates & Comments' },
+                    { id: 'proposals', label: `Proposals${editingCompanyId && companyProposals.length > 0 ? ` (${companyProposals.length})` : ''}` },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id as CompanyProfileTab)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+                        activeTab === tab.id
+                          ? 'bg-[#1061E3] text-white'
+                          : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <form onSubmit={handleSaveCompany} className="flex flex-col flex-grow overflow-hidden">
                 <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-6">
-                  
-                  {/* Basic Info */}
-                  <div>
-                    <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Basic Information</h4>
-                    <div className="grid grid-cols-2 gap-4">
+                  {activeTab === 'details' && (
+                    <>
                       <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Company Name</label>
-                        <input required type="text" value={formData.name || ''} onChange={e => updateForm('name', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                        <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Basic Information</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Company Name</label>
+                            <input required type="text" value={formData.name || ''} onChange={e => updateForm('name', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Domain</label>
+                            <input type="text" value={formData.domain || ''} onChange={e => updateForm('domain', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. acme.com" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Primary Contact</label>
+                            <select value={formData.primaryContactId || ''} onChange={e => updateForm('primaryContactId', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
+                              <option value="">Select Contact</option>
+                              {contacts.map(c => (
+                                <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Phone</label>
+                            <input type="tel" value={formData.phone || ''} onChange={e => updateForm('phone', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Email</label>
+                            <input type="email" value={formData.email || ''} onChange={e => updateForm('email', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                        </div>
                       </div>
+
                       <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Domain</label>
-                        <input type="text" value={formData.domain || ''} onChange={e => updateForm('domain', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. acme.com" />
+                        <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Location</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2">
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Street</label>
+                            <input type="text" value={formData.street || ''} onChange={e => updateForm('street', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">City</label>
+                            <input type="text" value={formData.city || ''} onChange={e => updateForm('city', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">State</label>
+                              <input type="text" value={formData.state || ''} onChange={e => updateForm('state', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Zipcode</label>
+                              <input type="text" value={formData.zipcode || ''} onChange={e => updateForm('zipcode', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                            </div>
+                          </div>
+                        </div>
                       </div>
+
                       <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Primary Contact</label>
-                        <select value={formData.primaryContactId || ''} onChange={e => updateForm('primaryContactId', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
-                          <option value="">Select Contact</option>
-                          {contacts.map(c => (
-                            <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                        <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Company Details</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Industry</label>
+                            <input type="text" value={formData.industry || ''} onChange={e => updateForm('industry', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Founded</label>
+                            <input type="text" value={formData.founded || ''} onChange={e => updateForm('founded', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. 2010" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Services Offered</label>
+                            <input type="text" value={formData.servicesOffered || ''} onChange={e => updateForm('servicesOffered', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Products Offered</label>
+                            <input type="text" value={formData.productsOffered || ''} onChange={e => updateForm('productsOffered', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Hours of Operation</label>
+                            <input type="text" value={formData.hoursOfOperation || ''} onChange={e => updateForm('hoursOfOperation', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Services Needed</label>
+                            <input type="text" value={formData.servicesNeeded || ''} onChange={e => updateForm('servicesNeeded', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Facebook URL</label>
+                            <input type="text" value={formData.facebookUrl || ''} onChange={e => updateForm('facebookUrl', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Referral Source</label>
+                            <input type="text" value={formData.referralSource || ''} onChange={e => updateForm('referralSource', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {activeTab === 'description' && (
+                    <div>
+                      <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Description</h4>
+                      <textarea
+                        value={formData.description || ''}
+                        onChange={e => updateForm('description', e.target.value)}
+                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[320px] resize-y"
+                        placeholder="Add a company description..."
+                      />
+                    </div>
+                  )}
+
+                  {activeTab === 'updates' && (
+                    <div>
+                      <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Updates & Comments</h4>
+                      {formData.updates && formData.updates.length > 0 ? (
+                        <div className="flex flex-col gap-3 mb-4 max-h-[280px] overflow-y-auto">
+                          {formData.updates.map(update => (
+                            <div key={update.id} className="bg-[#F9FAFB] p-3 rounded-md border border-[#E2E4E9]">
+                              <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                    style={{ backgroundColor: teamMembers.find(member => member.name === (update.author || 'User'))?.color || getAvatarColor(update.author) }}
+                                  >
+                                    {teamMembers.find(member => member.name === (update.author || 'User'))?.initials || getInitials(update.author || 'User')}
+                                  </div>
+                                  <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author || 'User'}</span>
+                                </div>
+                                <span className="text-[10px] text-[#8E9299]">
+                                  {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.createdAt))}
+                                </span>
+                              </div>
+                              <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
+                            </div>
                           ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Phone</label>
-                        <input type="tel" value={formData.phone || ''} onChange={e => updateForm('phone', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Email</label>
-                        <input type="email" value={formData.email || ''} onChange={e => updateForm('email', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Location */}
-                  <div>
-                    <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Location</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2">
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Street</label>
-                        <input type="text" value={formData.street || ''} onChange={e => updateForm('street', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">City</label>
-                        <input type="text" value={formData.city || ''} onChange={e => updateForm('city', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">State</label>
-                          <input type="text" value={formData.state || ''} onChange={e => updateForm('state', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
                         </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Zipcode</label>
-                          <input type="text" value={formData.zipcode || ''} onChange={e => updateForm('zipcode', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                        </div>
-                      </div>
+                      ) : (
+                        <p className="text-sm text-[#8E9299] mb-4">No updates yet.</p>
+                      )}
+                      <textarea
+                        value={newUpdateText}
+                        onChange={e => setNewUpdateText(e.target.value)}
+                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[100px] resize-y"
+                        placeholder="Write an update or comment..."
+                      />
                     </div>
-                  </div>
+                  )}
 
-                  {/* Details */}
-                  <div>
-                    <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Company Details</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Industry</label>
-                        <input type="text" value={formData.industry || ''} onChange={e => updateForm('industry', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Founded</label>
-                        <input type="text" value={formData.founded || ''} onChange={e => updateForm('founded', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. 2010" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Services Offered</label>
-                        <input type="text" value={formData.servicesOffered || ''} onChange={e => updateForm('servicesOffered', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Products Offered</label>
-                        <input type="text" value={formData.productsOffered || ''} onChange={e => updateForm('productsOffered', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Hours of Operation</label>
-                        <input type="text" value={formData.hoursOfOperation || ''} onChange={e => updateForm('hoursOfOperation', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Services Needed</label>
-                        <input type="text" value={formData.servicesNeeded || ''} onChange={e => updateForm('servicesNeeded', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Facebook URL</label>
-                        <input type="text" value={formData.facebookUrl || ''} onChange={e => updateForm('facebookUrl', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Referral Source</label>
-                        <input type="text" value={formData.referralSource || ''} onChange={e => updateForm('referralSource', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
-                      </div>
+                  {activeTab === 'proposals' && (
+                    <div>
+                      <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Proposals</h4>
+                      {companyProposals.length === 0 ? (
+                        <div className="border border-dashed border-[#D0D5DD] rounded-lg p-8 text-center text-sm text-[#8E9299]">
+                          No proposals are attached to this company.
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {companyProposals.map(proposal => (
+                            <div key={proposal.id} className="rounded-lg border border-[#E2E4E9] bg-[#F9FAFB] p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <FileText className="w-4 h-4 text-[#8E9299]" />
+                                    <h5 className="text-sm font-semibold text-[#1C1F23] truncate">{proposal.title}</h5>
+                                  </div>
+                                  <p className="text-xs text-[#8E9299]">
+                                    Created {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.date))}
+                                  </p>
+                                  <p className="text-xs text-[#8E9299] mt-1">
+                                    Valid until {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.validUntil))}
+                                  </p>
+                                </div>
+                                <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase whitespace-nowrap ${
+                                  proposal.status === 'Draft' ? 'bg-gray-100 text-gray-700' :
+                                  proposal.status === 'Sent' ? 'bg-blue-100 text-blue-700' :
+                                  proposal.status === 'Accepted' ? 'bg-green-100 text-green-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {proposal.status}
+                                </span>
+                              </div>
+                              <div className="mt-3 flex items-center justify-between text-sm">
+                                <span className="text-[#4A4D53]">{proposal.items.length} item{proposal.items.length === 1 ? '' : 's'}</span>
+                                <span className="font-semibold text-[#1C1F23]">
+                                  ${calculateProposalTotal(proposal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              {proposal.notes && (
+                                <p className="mt-3 text-sm text-[#4A4D53] whitespace-pre-wrap">{proposal.notes}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
 
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
