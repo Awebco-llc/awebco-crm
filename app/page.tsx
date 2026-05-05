@@ -584,19 +584,7 @@ export default function Page() {
 
   const activeDragContact = activeDragId ? contacts.find(c => c.id === activeDragId) : null;
 
-  if (!currentTeamMember) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA] text-[#1C1F23]">
-        <form onSubmit={login} className="bg-white p-8 rounded-lg border border-[#E2E4E9] shadow-sm max-w-sm w-full">
-          <div className="w-12 h-12 bg-[#003366] text-white rounded-md flex items-center justify-center text-xl font-bold mx-auto mb-4">A</div>
-          <h1 className="text-xl font-bold mb-2 text-center">Welcome to Awebco</h1>
-          <p className="text-sm text-[#8E9299] mb-6 text-center">Log in with your team account.</p>
-          {authError && (
-            <div className="mb-4 rounded-md border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-sm text-[#B91C1C]">
-              {authError}
-            </div>
-          )}
-          <div className="mb-4">
+
   if (authLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA]">

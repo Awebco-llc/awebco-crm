@@ -19,7 +19,7 @@ export function subscribeUsers(onChange: (users: TeamMember[]) => void, onError?
   return onSnapshot(
     q,
     (snap) => {
-      onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as TeamMember) })));
+      onChange(snap.docs.map((d) => ({ ...(d.data() as TeamMember), id: d.id })));
     },
     (e) => onError?.(e),
   );
