@@ -217,47 +217,7 @@ export interface Company {
   }>;
 }
 
-export const INITIAL_COMPANIES: Company[] = [
-  {
-    id: '1',
-    name: 'Acme Corp',
-    domain: 'acme.com',
-    phone: '555-0199',
-    email: 'contact@acme.com',
-    street: '123 Main St',
-    city: 'Metropolis',
-    state: 'NY',
-    zipcode: '10001',
-    industry: 'Manufacturing',
-    founded: '1985',
-    servicesOffered: 'B2B Manufacturing',
-    productsOffered: 'Widgets, Gizmos',
-    hoursOfOperation: '9AM - 5PM EST',
-    servicesNeeded: 'Website Redesign',
-    facebookUrl: 'facebook.com/acmecorp',
-    referralSource: 'Organic Search',
-    assignedToId: '1',
-    deadline: '2026-05-10',
-    description: 'Primary website and paid ads client with ongoing digital marketing needs.',
-    updates: [
-      {
-        id: 'company-update-1',
-        author: 'Aaron Webb',
-        text: 'Kickoff completed and waiting on remaining assets.',
-        createdAt: new Date().toISOString(),
-      }
-    ],
-    web: true,
-    seo: false,
-    ll: false,
-    ppc: true,
-    smm: false,
-    sma: false,
-    em: true,
-    dp: false,
-    primaryContactId: '1',
-  }
-];
+export const INITIAL_COMPANIES: Company[] = [];
 
 export const INITIAL_TEAM_MEMBERS: TeamMember[] = [
   { id: '1', name: 'Aaron Webb', initials: 'AW', color: '#1061E3', role: 'master_admin', email: 'awebbco@gmail.com', password: 'changeme' },

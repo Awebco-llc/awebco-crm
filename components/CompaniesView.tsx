@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Plus, X, Check, GripVertical, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
+import { createCompany, updateCompany } from '@/lib/crmStore';
 import {
   DndContext,
   closestCenter,
@@ -176,7 +177,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
   };
 
-  const handleSaveCompany = (e: React.FormEvent) => {
+  const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
 
     let updatedUpdates = formData.updates || [];
@@ -194,15 +195,15 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     }
     
     if (editingCompanyId) {
-      setCompanies(companies.map(c => {
-        if (c.id === editingCompanyId) {
-          return { ...c, ...formData, updates: updatedUpdates } as Company;
-        }
-        return c;
-      }));
+      try {
+        await updateCompany(editingCompanyId, { ...(formData as Partial<Omit<Company, 'id'>>), updates: updatedUpdates });
+      } catch (err) {
+        console.error('Failed to update company', err);
+        alert('Failed to save company to Firestore. Check console for details (often Security Rules).');
+        return;
+      }
     } else {
-      const newCompany: Company = {
-        id: Date.now().toString(),
+      const newCompany: Omit<Company, 'id'> = {
         name: formData.name || '',
         domain: formData.domain || '',
         phone: formData.phone || '',
@@ -232,7 +233,13 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         em: formData.em || false,
         dp: formData.dp || false,
       };
-      setCompanies([...companies, newCompany]);
+      try {
+        await createCompany(newCompany);
+      } catch (err) {
+        console.error('Failed to create company', err);
+        alert('Failed to create company in Firestore. Check console for details (often Security Rules).');
+        return;
+      }
     }
     
     setNewUpdateText('');

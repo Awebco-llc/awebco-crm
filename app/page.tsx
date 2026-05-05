@@ -21,6 +21,7 @@ import MyTasksView from '@/components/MyTasksView';
 import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
 import { EditableStatus, AssigneeDropdown, TeamMember, INITIAL_TEAM_MEMBERS, Company, INITIAL_COMPANIES, CompanyDropdown, Contact, Status, ProductService, INITIAL_PRODUCTS, Proposal, INITIAL_PROPOSALS, Deal, INITIAL_DEALS } from '@/components/Shared';
+import { createContact, subscribeCompanies, subscribeContacts, updateContact } from '@/lib/crmStore';
 import {
   DndContext,
   closestCenter,
@@ -50,13 +51,7 @@ const DEFAULT_CONTACT_GROUPS = [
 
 type ContactGroup = typeof DEFAULT_CONTACT_GROUPS[number];
 
-const INITIAL_CONTACTS: Contact[] = [
-  { id: '1', firstName: 'Sarah', lastName: 'Jenkins', title: 'CEO', phone: '555-0101', companyId: '1', assignedToId: '1', email: 'sarah.j@apex.com', status: 'Lead', deadline: '2026-04-25', groupId: 'leads' },
-  { id: '2', firstName: 'Michael', lastName: 'Thorne', title: 'Marketing Director', phone: '555-0102', companyId: '1', assignedToId: '2', email: 'm.thorne@horizon.co', status: 'Lead', deadline: '2026-04-28', groupId: 'leads' },
-  { id: '3', firstName: 'Laura', lastName: 'Bennett', title: 'Founder', phone: '555-0103', companyId: '1', assignedToId: '1', email: 'contact@blaw.com', status: 'Lead', deadline: '2026-05-02', groupId: 'leads' },
-  { id: '4', firstName: 'David', lastName: 'Chen', title: 'CTO', phone: '555-0104', companyId: '1', assignedToId: '3', email: 'dchen@cloudnine.io', status: 'Active', deadline: '2026-05-08', groupId: 'website-clients' },
-  { id: '5', firstName: 'Emma', lastName: 'Wright', title: 'Operations Manager', phone: '555-0105', companyId: '1', assignedToId: '1', email: 'emma@greenspace.com', status: 'Active', deadline: '2026-05-12', groupId: 'website-clients' },
-];
+const INITIAL_CONTACTS: Contact[] = [];
 
 const NAV_ITEMS_MAIN = [
   { name: 'My Tasks', icon: LayoutList },
@@ -250,6 +245,43 @@ export default function Page() {
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [emailingContact, setEmailingContact] = useState<Contact | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [dataError, setDataError] = useState<string>('');
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('awebco.authenticatedMemberId');
+      if (stored) setAuthenticatedMemberId(stored);
+    } catch {
+      // ignore storage errors (private mode, etc.)
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (authenticatedMemberId) {
+        window.localStorage.setItem('awebco.authenticatedMemberId', authenticatedMemberId);
+      } else {
+        window.localStorage.removeItem('awebco.authenticatedMemberId');
+      }
+    } catch {
+      // ignore storage errors (private mode, etc.)
+    }
+  }, [authenticatedMemberId]);
+
+  useEffect(() => {
+    const unsubCompanies = subscribeCompanies(setCompanies, (e) => {
+      console.error('Firestore companies subscribe failed', e);
+      setDataError('Could not load companies from Firestore (check Security Rules / permissions).');
+    });
+    const unsubContacts = subscribeContacts(setContacts, (e) => {
+      console.error('Firestore contacts subscribe failed', e);
+      setDataError('Could not load contacts from Firestore (check Security Rules / permissions).');
+    });
+    return () => {
+      unsubCompanies();
+      unsubContacts();
+    };
+  }, []);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [workspaceOpenRequest, setWorkspaceOpenRequest] = useState<WorkspaceOpenRequest | null>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -451,33 +483,32 @@ export default function Page() {
     setIsAddModalOpen(true);
   };
 
-  const handleSaveContact = (e: React.FormEvent) => {
+  const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (editingContactId) {
-      setContacts(contacts.map(c => {
-        if (c.id === editingContactId) {
-          return {
-            ...c,
-            firstName: newFirstName,
-            lastName: newLastName,
-            title: newTitle,
-            phone: newPhone,
-            companyId: newCompanyId,
-            email: newEmail,
-            status: newStatus,
-            groupId: newContactGroupId,
-          };
-        }
-        return c;
-      }));
+      try {
+        await updateContact(editingContactId, {
+          firstName: newFirstName,
+          lastName: newLastName,
+          title: newTitle,
+          phone: newPhone,
+          companyId: newCompanyId,
+          email: newEmail,
+          status: newStatus,
+          groupId: newContactGroupId,
+        });
+      } catch (err) {
+        console.error('Failed to update contact', err);
+        alert('Failed to save contact to Firestore. Check console for details (often Security Rules).');
+        return;
+      }
     } else {
       const initials = (newFirstName[0] || '') + (newLastName[0] || '').toUpperCase() || 'NA';
       const colors = ['#1061E3', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444'];
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
       
-      const newContact: Contact = {
-        id: Date.now().toString(),
+      const newContact: Omit<Contact, 'id'> = {
         firstName: newFirstName,
         lastName: newLastName,
         title: newTitle,
@@ -489,7 +520,13 @@ export default function Page() {
         assignedToId: teamMembers[0]?.id || '1'
       };
 
-      setContacts([...contacts, newContact]);
+      try {
+        await createContact(newContact);
+      } catch (err) {
+        console.error('Failed to create contact', err);
+        alert('Failed to create contact in Firestore. Check console for details (often Security Rules).');
+        return;
+      }
     }
     
     setIsAddModalOpen(false);
@@ -608,6 +645,11 @@ export default function Page() {
 
   return (
     <div className="flex h-screen w-full bg-[#F7F8FA] text-[#1C1F23] font-sans overflow-hidden">
+      {dataError ? (
+        <div className="fixed top-4 right-4 z-[100] max-w-md rounded-md border border-[#FEE2E2] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] shadow-sm">
+          {dataError}
+        </div>
+      ) : null}
       {/* Sidebar */}
       <aside className="w-[220px] bg-[#003366] border-r border-[#002244] flex flex-col shrink-0 overflow-y-auto">
         <div className="p-6 flex items-center gap-2.5">
