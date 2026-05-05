@@ -9,10 +9,21 @@ import {
   setDoc,
 } from 'firebase/firestore';
 
-import type { Contact, Company } from '@/components/Shared';
+import type { Contact, Company, TeamMember } from '@/components/Shared';
 import { db } from '@/lib/firebase';
 
 type Unsubscribe = () => void;
+
+export function subscribeUsers(onChange: (users: TeamMember[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const q = query(collection(db, 'users'), orderBy('name'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as TeamMember) })));
+    },
+    (e) => onError?.(e),
+  );
+}
 
 type CompanyDoc = Omit<Company, 'id'> & {
   createdAt?: unknown;

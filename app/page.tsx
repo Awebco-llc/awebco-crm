@@ -20,8 +20,11 @@ import EmailModal from '@/components/EmailModal';
 import MyTasksView from '@/components/MyTasksView';
 import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
-import { EditableStatus, AssigneeDropdown, TeamMember, INITIAL_TEAM_MEMBERS, Company, INITIAL_COMPANIES, CompanyDropdown, Contact, Status, ProductService, INITIAL_PRODUCTS, Proposal, INITIAL_PROPOSALS, Deal, INITIAL_DEALS } from '@/components/Shared';
-import { createContact, subscribeCompanies, subscribeContacts, updateContact } from '@/lib/crmStore';
+import { EditableStatus, AssigneeDropdown, TeamMember, Company, INITIAL_COMPANIES, CompanyDropdown, Contact, Status, ProductService, INITIAL_PRODUCTS, Proposal, INITIAL_PROPOSALS, Deal, INITIAL_DEALS } from '@/components/Shared';
+import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact } from '@/lib/crmStore';
+import { useAuth } from '@/hooks/AuthContext';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth as firebaseAuth } from '@/lib/firebase';
 import {
   DndContext,
   closestCenter,
@@ -225,13 +228,13 @@ function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers
 }
 
 export default function Page() {
+  const { user, profile, loading: authLoading, logout: firebaseLogout } = useAuth();
   const [authError, setAuthError] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [authenticatedMemberId, setAuthenticatedMemberId] = useState<string | null>(null);
 
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_TEAM_MEMBERS);
-  const [boardMemberships, setBoardMemberships] = useState<WorkspaceBoardMemberships>(() => createInitialBoardMemberships(INITIAL_TEAM_MEMBERS));
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [boardMemberships, setBoardMemberships] = useState<WorkspaceBoardMemberships>({});
   const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
   const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
   const [contactGroups, setContactGroups] = useState<ContactGroup[]>(DEFAULT_CONTACT_GROUPS);
@@ -248,38 +251,28 @@ export default function Page() {
   const [dataError, setDataError] = useState<string>('');
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem('awebco.authenticatedMemberId');
-      if (stored) setAuthenticatedMemberId(stored);
-    } catch {
-      // ignore storage errors (private mode, etc.)
+    if (teamMembers.length > 0) {
+      setBoardMemberships(createInitialBoardMemberships(teamMembers));
     }
-  }, []);
-
-  useEffect(() => {
-    try {
-      if (authenticatedMemberId) {
-        window.localStorage.setItem('awebco.authenticatedMemberId', authenticatedMemberId);
-      } else {
-        window.localStorage.removeItem('awebco.authenticatedMemberId');
-      }
-    } catch {
-      // ignore storage errors (private mode, etc.)
-    }
-  }, [authenticatedMemberId]);
+  }, [teamMembers]);
 
   useEffect(() => {
     const unsubCompanies = subscribeCompanies(setCompanies, (e) => {
       console.error('Firestore companies subscribe failed', e);
-      setDataError('Could not load companies from Firestore (check Security Rules / permissions).');
+      setDataError('Could not load companies from Firestore.');
     });
     const unsubContacts = subscribeContacts(setContacts, (e) => {
       console.error('Firestore contacts subscribe failed', e);
-      setDataError('Could not load contacts from Firestore (check Security Rules / permissions).');
+      setDataError('Could not load contacts from Firestore.');
+    });
+    const unsubUsers = subscribeUsers(setTeamMembers, (e) => {
+      console.error('Firestore users subscribe failed', e);
+      setDataError('Could not load team members from Firestore.');
     });
     return () => {
       unsubCompanies();
       unsubContacts();
+      unsubUsers();
     };
   }, []);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -297,31 +290,25 @@ export default function Page() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const login = (e: React.FormEvent) => {
+  const login = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
 
-    const matchingMember = teamMembers.find(member =>
-      member.email?.toLowerCase() === loginEmail.trim().toLowerCase() &&
-      member.password === loginPassword
-    );
-
-    if (!matchingMember) {
+    try {
+      await signInWithEmailAndPassword(firebaseAuth, loginEmail.trim(), loginPassword);
+      setLoginPassword('');
+    } catch (err: any) {
+      console.error('Login failed', err);
       setAuthError('Invalid email or password.');
-      return;
     }
-
-    setAuthenticatedMemberId(matchingMember.id);
-    setLoginPassword('');
   };
 
   const logout = () => {
-    setAuthenticatedMemberId(null);
-    setAuthError('');
+    firebaseLogout();
   };
 
-  const currentTeamMember = authenticatedMemberId ? teamMembers.find(m => m.id === authenticatedMemberId) : undefined;
-  const currentUserName = currentTeamMember?.name || teamMembers[0]?.name || 'You';
+  const currentTeamMember = profile;
+  const currentUserName = currentTeamMember?.name || 'You';
   const isFreelancer = currentTeamMember?.role === 'freelancer';
   const hasAllWorkspaceAccess = currentTeamMember?.role === 'master_admin' || currentTeamMember?.role === 'admin';
   const canManageBoardMembers = hasAllWorkspaceAccess;
@@ -610,6 +597,30 @@ export default function Page() {
             </div>
           )}
           <div className="mb-4">
+  if (authLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-[#1061E3] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-[#8E9299] font-medium">Loading Awebco...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !currentTeamMember) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA] text-[#1C1F23]">
+        <form onSubmit={login} className="bg-white p-8 rounded-lg border border-[#E2E4E9] shadow-sm max-w-sm w-full">
+          <div className="w-12 h-12 bg-[#003366] text-white rounded-md flex items-center justify-center text-xl font-bold mx-auto mb-4">A</div>
+          <h1 className="text-xl font-bold mb-2 text-center">Welcome to Awebco</h1>
+          <p className="text-sm text-[#8E9299] mb-6 text-center">Log in with your team account.</p>
+          {authError && (
+            <div className="mb-4 rounded-md border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-sm text-[#B91C1C]">
+              {authError}
+            </div>
+          )}
+          <div className="mb-4">
             <label className="block text-xs font-semibold text-[#8E9299] mb-1.5 uppercase tracking-wider">Email</label>
             <input
               type="email"
@@ -635,9 +646,6 @@ export default function Page() {
           >
             Log in
           </button>
-          <p className="text-xs text-[#8E9299] mt-4 text-center">
-            Default seeded passwords are <span className="font-semibold">changeme</span>. Change them in Settings.
-          </p>
         </form>
       </div>
     );
