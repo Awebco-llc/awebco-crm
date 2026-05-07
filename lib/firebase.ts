@@ -1,44 +1,76 @@
+import type { FirebaseApp } from 'firebase/app';
 import { initializeApp, getApps } from 'firebase/app';
+import type { Auth } from 'firebase/auth';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 
-// Important: Next/Webpack only inlines env vars when accessed as
-// `process.env.MY_VAR` (dot access). Bracket access (`process.env[name]`)
-// will be `undefined` in the browser bundle.
-const PUBLIC_ENV = {
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  NEXT_PUBLIC_FIRESTORE_DATABASE_ID: process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID,
-} as const;
-
-type RequiredPublicEnvKey = keyof typeof PUBLIC_ENV;
-
-function requiredEnv(name: RequiredPublicEnvKey): string {
-  const value = PUBLIC_ENV[name];
+// Next/Webpack only inlines env vars in client bundles when accessed with dot
+// access (`process.env.NEXT_PUBLIC_*`). Avoid bracket access.
+function requiredPublicEnv(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(`Missing required env var: ${name}. Set it in \`.env.local\` (see \`.env.example\`).`);
   }
   return value;
 }
 
-const firebaseConfig = {
-  projectId: requiredEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID'),
-  appId: requiredEnv('NEXT_PUBLIC_FIREBASE_APP_ID'),
-  apiKey: requiredEnv('NEXT_PUBLIC_FIREBASE_API_KEY'),
-  authDomain: requiredEnv('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN'),
-  storageBucket: requiredEnv('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: requiredEnv('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-};
+let cached:
+  | {
+      app: FirebaseApp;
+      db: Firestore;
+      auth: Auth;
+      googleProvider: GoogleAuthProvider;
+    }
+  | undefined;
 
-const firestoreDatabaseId = requiredEnv('NEXT_PUBLIC_FIRESTORE_DATABASE_ID');
+function initFirebaseClient() {
+  if (cached) return cached;
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+  // Prevent Next build/SSR from executing Firebase init when env vars may be absent.
+  if (typeof window === 'undefined') {
+    throw new Error('Firebase client SDK was initialized on the server. This is a bug.');
+  }
 
-export const db = getFirestore(app, firestoreDatabaseId);
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+  const firebaseConfig = {
+    projectId: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
+    appId: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_APP_ID', process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
+    apiKey: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_API_KEY', process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
+    authDomain: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN),
+    storageBucket: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET', process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET),
+    messagingSenderId: requiredPublicEnv(
+      'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+      process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    ),
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  };
+
+  const firestoreDatabaseId = requiredPublicEnv(
+    'NEXT_PUBLIC_FIRESTORE_DATABASE_ID',
+    process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID,
+  );
+
+  const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+  cached = {
+    app,
+    db: getFirestore(app, firestoreDatabaseId),
+    auth: getAuth(app),
+    googleProvider: new GoogleAuthProvider(),
+  };
+  return cached;
+}
+
+export function getFirebaseApp(): FirebaseApp {
+  return initFirebaseClient().app;
+}
+
+export function getDb(): Firestore {
+  return initFirebaseClient().db;
+}
+
+export function getAuthClient(): Auth {
+  return initFirebaseClient().auth;
+}
+
+export function getGoogleProvider(): GoogleAuthProvider {
+  return initFirebaseClient().googleProvider;
+}

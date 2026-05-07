@@ -24,7 +24,7 @@ import { EditableStatus, AssigneeDropdown, TeamMember, Company, INITIAL_COMPANIE
 import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth as firebaseAuth } from '@/lib/firebase';
+import { getAuthClient } from '@/lib/firebase';
 import {
   DndContext,
   closestCenter,
@@ -295,7 +295,7 @@ export default function Page() {
     setAuthError('');
 
     try {
-      await signInWithEmailAndPassword(firebaseAuth, loginEmail.trim(), loginPassword);
+      await signInWithEmailAndPassword(getAuthClient(), loginEmail.trim(), loginPassword);
       setLoginPassword('');
     } catch (err: any) {
       console.error('Login failed', err);
@@ -596,7 +596,7 @@ export default function Page() {
     );
   }
 
-  if (!user || !currentTeamMember) {
+  if (!currentTeamMember) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA] text-[#1C1F23]">
         <form onSubmit={login} className="bg-white p-8 rounded-lg border border-[#E2E4E9] shadow-sm max-w-sm w-full">
