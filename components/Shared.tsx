@@ -17,6 +17,28 @@ export interface Contact {
   groupId?: string;
 }
 
+export interface ContactGroup {
+  id: string;
+  name: string;
+  color: string;
+  order?: number;
+}
+
+export interface StorageFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  storagePath: string;
+  downloadUrl: string;
+  uploadedBy: string;
+}
+
+export interface TeamMemberPermissions {
+  canViewCRM?: boolean;
+  allowedWorkspaces?: string[];
+}
+
 export interface TeamMember {
   id: string;
   name: string;
@@ -27,6 +49,7 @@ export interface TeamMember {
   password?: string;
   photoUrl?: string;
   uid?: string;
+  permissions?: TeamMemberPermissions;
 }
 
 export interface ProductService {
@@ -34,6 +57,7 @@ export interface ProductService {
   name: string;
   description: string;
   price: string;
+  order?: number;
 }
 
 export interface ProposalItem {
@@ -63,6 +87,7 @@ export interface Proposal {
   cardExpiry?: string;
   cardCvv?: string;
   billingZip?: string;
+  order?: number;
 }
 
 export interface DealNote {
@@ -83,100 +108,10 @@ export interface Deal {
   companyId: string;
   contactId: string;
   notes: DealNote[];
+  order?: number;
 }
 
-export const INITIAL_PRODUCTS: ProductService[] = [
-  {
-    id: '1',
-    name: 'Website Redesign',
-    description: 'Complete overhaul of existing website with modern design and responsive layout.',
-    price: '5000',
-  },
-  {
-    id: '2',
-    name: 'SEO Monthly Retainer',
-    description: 'Ongoing search engine optimization, keyword tracking, and content strategy.',
-    price: '1500',
-  },
-  {
-    id: '3',
-    name: 'Logo Design',
-    description: 'Custom logo design with 3 revisions and brand guidelines.',
-    price: '800',
-  }
-];
 
-export const INITIAL_PROPOSALS: Proposal[] = [
-  {
-    id: '1',
-    title: 'Website Redesign Proposal',
-    companyId: '1',
-    contactId: '1',
-    date: new Date().toISOString().split('T')[0],
-    validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    items: [
-      { id: 'i1', name: 'Web Design', description: 'Custom responsive design', quantity: 1, price: 3500 },
-      { id: 'i2', name: 'Web Development', description: 'Next.js frontend development', quantity: 1, price: 4500 },
-    ],
-    status: 'Draft',
-    notes: 'Thank you for your business. Please let us know if you have any questions about this proposal.',
-    clientPrintedName: '',
-    signatureName: '',
-    signatureDate: new Date().toISOString().split('T')[0],
-    cardholderName: '',
-    cardNumber: '',
-    cardExpiry: '',
-    cardCvv: '',
-    billingZip: '',
-  }
-];
-
-export const INITIAL_DEALS: Deal[] = [
-  {
-    id: '1',
-    name: 'Website Redesign',
-    currentStep: 'Step 4: Plan & Proposal',
-    status: 'In Progress',
-    assignedToId: '1',
-    value: '$5,000',
-    companyId: '1',
-    contactId: '1',
-    notes: [{ id: 'n1', text: 'Follow up next Tuesday', createdAt: new Date().toISOString() }],
-  },
-  {
-    id: '2',
-    name: 'SEO Campaign',
-    currentStep: 'Step 1: Discovery Call',
-    status: 'Need to Call / Email',
-    assignedToId: '2',
-    value: '$1,500/mo',
-    companyId: '1',
-    contactId: '2',
-    notes: [{ id: 'n2', text: 'Interested in local SEO', createdAt: new Date().toISOString() }],
-  },
-  {
-    id: '3',
-    name: 'Logo Design',
-    currentStep: 'Step 6: Deposit Payment',
-    status: 'WON',
-    assignedToId: '1',
-    value: '$800',
-    companyId: '1',
-    contactId: '3',
-    notes: [{ id: 'n3', text: 'Paid via Stripe', createdAt: new Date().toISOString() }],
-  },
-  {
-    id: '4',
-    name: 'Social Media Management',
-    currentStep: 'Step 5: Proposal Signing',
-    status: 'LOST',
-    assignedToId: '3',
-    value: '$2,000/mo',
-    companyId: '1',
-    contactId: '4',
-    notes: [{ id: 'n4', text: 'Went with another agency', createdAt: new Date().toISOString() }],
-  }
-];
 
 export interface Company {
   id: string;
@@ -217,12 +152,7 @@ export interface Company {
   }>;
 }
 
-export const INITIAL_COMPANIES: Company[] = [];
 
-export const INITIAL_TEAM_MEMBERS: TeamMember[] = [
-  { id: '1', name: 'Aaron Webb', initials: 'AW', color: '#1061E3', role: 'master_admin', email: 'awebbco@gmail.com', password: 'changeme' },
-  { id: '2', name: 'Tyler Taylor', initials: 'TT', color: '#8B5CF6', role: 'admin', email: 'tyler@awebco.com', password: 'changeme' },
-];
 
 export function EditablePriority({ value }: { value: string }) {
   if (!value) return <span>-</span>;

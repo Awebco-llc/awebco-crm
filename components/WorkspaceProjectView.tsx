@@ -318,8 +318,6 @@ export default function WorkspaceProjectView({
   currentUserId,
   openRowId,
   onMention,
-  boardMemberships,
-  setBoardMemberships,
   canManageBoardMembers,
 }: {
   teamMembers: TeamMember[],
@@ -330,8 +328,6 @@ export default function WorkspaceProjectView({
   currentUserId?: string,
   openRowId?: string,
   onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void,
-  boardMemberships: Record<string, string[]>,
-  setBoardMemberships: React.Dispatch<React.SetStateAction<Record<string, string[]>>>,
   canManageBoardMembers: boolean,
 }) {
   type EditTab = 'details' | 'description' | 'updates' | 'files';
@@ -754,24 +750,13 @@ export default function WorkspaceProjectView({
     }
   };
 
-  const toggleBoardMember = (memberId: string) => {
-    setBoardMemberships(prev => {
-      const currentMemberIds = prev[projectType] || [];
-      const isMember = currentMemberIds.includes(memberId);
-
-      return {
-        ...prev,
-        [projectType]: isMember
-          ? currentMemberIds.filter(id => id !== memberId)
-          : [...currentMemberIds, memberId],
-      };
-    });
-  };
-
-  const boardMemberIds = boardMemberships[projectType] || [];
-  const visibleBoardMembers = teamMembers.filter(member =>
-    member.role === 'master_admin' || member.role === 'admin' || boardMemberIds.includes(member.id)
-  );
+  const visibleBoardMembers = teamMembers.filter(member => {
+    if (member.role === 'master_admin' || member.role === 'admin') return true;
+    if (member.permissions?.allowedWorkspaces) {
+      return member.permissions.allowedWorkspaces.includes(projectType);
+    }
+    return member.role === 'staff';
+  });
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
@@ -830,12 +815,15 @@ export default function WorkspaceProjectView({
                 <div className="absolute right-0 top-11 z-30 w-[320px] rounded-xl border border-[#E2E4E9] bg-white shadow-xl p-4">
                   <h3 className="text-sm font-bold text-[#1C1F23] mb-1">{projectType} Members</h3>
                   <p className="text-xs text-[#8E9299] mb-3">
-                    Choose who can see and access this workspace board. Admins always have access.
+                    These members have access to {projectType}. Go to Settings {'>'} Team Members to change access.
                   </p>
                   <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
                     {teamMembers.map(member => {
                       const hasGlobalAccess = member.role === 'master_admin' || member.role === 'admin';
-                      const isChecked = hasGlobalAccess || boardMemberIds.includes(member.id);
+                      let hasAccess = false;
+                      if (hasGlobalAccess) hasAccess = true;
+                      else if (member.permissions?.allowedWorkspaces) hasAccess = member.permissions.allowedWorkspaces.includes(projectType);
+                      else hasAccess = member.role === 'staff';
 
                       return (
                         <label key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-[#E2E4E9] bg-[#F9FAFB] px-3 py-2">
@@ -843,13 +831,9 @@ export default function WorkspaceProjectView({
                             <div className="text-sm font-semibold text-[#1C1F23] truncate">{member.name}</div>
                             <div className="text-[11px] text-[#8E9299] uppercase tracking-wider">{member.role === 'master_admin' ? 'Master Admin' : member.role || 'staff'}</div>
                           </div>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            disabled={hasGlobalAccess}
-                            onChange={() => toggleBoardMember(member.id)}
-                            className="h-4 w-4 rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3] disabled:opacity-50"
-                          />
+                          <div className={`text-xs font-semibold ${hasAccess ? 'text-[#10B981]' : 'text-[#8E9299]'}`}>
+                            {hasAccess ? 'Access Granted' : 'No Access'}
+                          </div>
                         </label>
                       );
                     })}

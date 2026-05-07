@@ -4,6 +4,8 @@ import type { Auth } from 'firebase/auth';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
+import type { FirebaseStorage } from 'firebase/storage';
+import { getStorage } from 'firebase/storage';
 
 // Next/Webpack only inlines env vars in client bundles when accessed with dot
 // access (`process.env.NEXT_PUBLIC_*`). Avoid bracket access.
@@ -20,18 +22,12 @@ let cached:
       db: Firestore;
       auth: Auth;
       googleProvider: GoogleAuthProvider;
+      storage: FirebaseStorage;
     }
   | undefined;
 
-function initFirebaseClient() {
-  if (cached) return cached;
-
-  // Prevent Next build/SSR from executing Firebase init when env vars may be absent.
-  if (typeof window === 'undefined') {
-    throw new Error('Firebase client SDK was initialized on the server. This is a bug.');
-  }
-
-  const firebaseConfig = {
+export function getFirebaseConfig() {
+  return {
     projectId: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
     appId: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_APP_ID', process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
     apiKey: requiredPublicEnv('NEXT_PUBLIC_FIREBASE_API_KEY', process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
@@ -43,6 +39,17 @@ function initFirebaseClient() {
     ),
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
   };
+}
+
+function initFirebaseClient() {
+  if (cached) return cached;
+
+  // Prevent Next build/SSR from executing Firebase init when env vars may be absent.
+  if (typeof window === 'undefined') {
+    throw new Error('Firebase client SDK was initialized on the server. This is a bug.');
+  }
+
+  const firebaseConfig = getFirebaseConfig();
 
   const firestoreDatabaseId = requiredPublicEnv(
     'NEXT_PUBLIC_FIRESTORE_DATABASE_ID',
@@ -55,6 +62,7 @@ function initFirebaseClient() {
     db: getFirestore(app, firestoreDatabaseId),
     auth: getAuth(app),
     googleProvider: new GoogleAuthProvider(),
+    storage: getStorage(app),
   };
   return cached;
 }
@@ -73,4 +81,8 @@ export function getAuthClient(): Auth {
 
 export function getGoogleProvider(): GoogleAuthProvider {
   return initFirebaseClient().googleProvider;
+}
+
+export function getStorageClient(): FirebaseStorage {
+  return initFirebaseClient().storage;
 }

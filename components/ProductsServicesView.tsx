@@ -22,6 +22,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { ProductService } from './Shared';
+import { createProduct, updateProduct } from '@/lib/crmStore';
 
 function formatCatalogPrice(value: string) {
   const trimmedValue = value.trim();
@@ -128,11 +129,16 @@ export default function ProductsServicesView({ products, setProducts }: { produc
     setIsAddModalOpen(true);
   };
 
-  const handleUpdateItem = (id: string, field: keyof ProductService, value: any) => {
+  const handleUpdateItem = async (id: string, field: keyof ProductService, value: any) => {
     setProducts(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
+    try {
+      await updateProduct(id, { [field]: value });
+    } catch (e) {
+      console.error('Failed to update product in Firebase', e);
+    }
   };
 
-  const handleSaveItem = (e: React.FormEvent) => {
+  const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanedFormData = {
       ...formData,
@@ -140,20 +146,22 @@ export default function ProductsServicesView({ products, setProducts }: { produc
     };
     
     if (editingItemId) {
-      setProducts(products.map(i => {
-        if (i.id === editingItemId) {
-          return { ...i, ...cleanedFormData } as ProductService;
-        }
-        return i;
-      }));
+      try {
+        await updateProduct(editingItemId, cleanedFormData);
+      } catch (e) {
+        console.error('Failed to update product in Firebase', e);
+      }
     } else {
-      const newItem: ProductService = {
-        id: Date.now().toString(),
-        name: cleanedFormData.name || '',
-        description: cleanedFormData.description || '',
-        price: cleanedFormData.price || '',
-      };
-      setProducts([...products, newItem]);
+      try {
+        await createProduct({
+          name: cleanedFormData.name || '',
+          description: cleanedFormData.description || '',
+          price: cleanedFormData.price || '',
+          order: products.length,
+        });
+      } catch (e) {
+        console.error('Failed to create product in Firebase', e);
+      }
     }
     
     setIsAddModalOpen(false);

@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
+import { createDeal, updateDeal } from '@/lib/crmStore';
 import {
   DndContext,
   closestCenter,
@@ -243,8 +244,13 @@ export default function DealsView({
     setIsAddModalOpen(true);
   };
 
-  const handleUpdateDeal = (id: string, field: keyof Deal, value: any) => {
+  const handleUpdateDeal = async (id: string, field: keyof Deal, value: any) => {
     setDeals(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d));
+    try {
+      await updateDeal(id, { [field]: value });
+    } catch (e) {
+      console.error('Failed to update deal in Firebase', e);
+    }
   };
 
   const handleAddNote = () => {
@@ -268,7 +274,7 @@ export default function DealsView({
     setAttachedFile(null);
   };
 
-  const handleSaveDeal = (e: React.FormEvent) => {
+  const handleSaveDeal = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const existingDeal = editingDealId ? deals.find(d => d.id === editingDealId) : undefined;
@@ -295,15 +301,13 @@ export default function DealsView({
     });
 
     if (editingDealId) {
-      setDeals(deals.map(d => {
-        if (d.id === editingDealId) {
-          return { ...d, ...formData, notes: updatedNotes } as Deal;
-        }
-        return d;
-      }));
+      try {
+        await updateDeal(editingDealId, { ...formData, notes: updatedNotes });
+      } catch (err) {
+        console.error('Failed to update deal', err);
+      }
     } else {
-      const newDeal: Deal = {
-        id: Date.now().toString(),
+      const newDealData = {
         name: formData.name || '',
         currentStep: formData.currentStep || '',
         status: formData.status || 'Not started',
@@ -312,8 +316,13 @@ export default function DealsView({
         companyId: formData.companyId || '',
         contactId: formData.contactId || '',
         notes: updatedNotes,
+        order: deals.length,
       };
-      setDeals([...deals, newDeal]);
+      try {
+        await createDeal(newDealData);
+      } catch (err) {
+        console.error('Failed to create deal', err);
+      }
     }
     
     setIsAddModalOpen(false);

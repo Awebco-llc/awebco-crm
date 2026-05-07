@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft } from 'lucide-react';
 import { Company, Contact, TeamMember, ProductService, Proposal, ProposalItem, Deal } from './Shared';
+import { createProposal, updateProposal, deleteProposal } from '@/lib/crmStore';
 
 function formatCatalogPrice(value: string) {
   const trimmedValue = value.trim();
@@ -71,7 +72,7 @@ export default function ProposalsView({
     setActiveView('edit');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (currentDoc) {
       setProposals(prev => {
         const index = prev.findIndex(p => p.id === currentDoc.id);
@@ -83,6 +84,19 @@ export default function ProposalsView({
           return [...prev, currentDoc];
         }
       });
+      
+      try {
+        const isExisting = proposals.some(p => p.id === currentDoc.id);
+        if (isExisting) {
+          await updateProposal(currentDoc.id, currentDoc);
+        } else {
+          const { id, ...docWithoutId } = currentDoc;
+          await createProposal(docWithoutId);
+        }
+      } catch (e) {
+        console.error('Failed to save proposal to Firebase', e);
+      }
+      
       setActiveView('list');
     }
   };
@@ -554,10 +568,15 @@ export default function ProposalsView({
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button 
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
                             if(confirm('Are you sure you want to delete this proposal?')) {
                               setProposals(prev => prev.filter(p => p.id !== proposal.id));
+                              try {
+                                await deleteProposal(proposal.id);
+                              } catch (err) {
+                                console.error('Failed to delete proposal', err);
+                              }
                             }
                           }}
                           className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"

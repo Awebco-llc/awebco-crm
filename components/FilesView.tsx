@@ -1,19 +1,23 @@
-import React, { useState, useRef } from 'react';
-import { UploadCloud, File, Image as ImageIcon, X, FolderOpen, Search } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { UploadCloud, File, Image as ImageIcon, X, FolderOpen, Search, Loader2 } from 'lucide-react';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorageClient } from '@/lib/firebase';
+import { subscribeFiles, saveFileMetadata, deleteFileMetadata } from '@/lib/crmStore';
+import { StorageFile } from '@/components/Shared';
 
-interface UploadedFile {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-}
-
-export default function FilesView() {
-  const [files, setFiles] = useState<UploadedFile[]>([]);
+export default function FilesView({ currentUserId }: { currentUserId?: string }) {
+  const [files, setFiles] = useState<StorageFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ [filename: string]: number }>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const unsub = subscribeFiles(setFiles, (err) => {
+      console.error('Failed to subscribe to files', err);
+    });
+    return () => unsub();
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -28,19 +32,48 @@ export default function FilesView() {
   const processFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
     
-    const uploadedFiles: UploadedFile[] = Array.from(newFiles).map(file => {
-      // In a real app, you would upload to Firebase Storage here and get the download URL.
-      // For this prototype, we'll create a local object URL to render immediately.
-      return {
-        id: Math.random().toString(36).substring(7),
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        url: URL.createObjectURL(file)
-      };
-    });
+    Array.from(newFiles).forEach(file => {
+      const storage = getStorageClient();
+      const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const userPath = currentUserId || 'anonymous';
+      const storageRef = ref(storage, `uploads/${userPath}/${uniqueName}`);
 
-    setFiles(prev => [...uploadedFiles, ...prev]);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(prev => ({ ...prev, [file.name]: progress }));
+        },
+        (error) => {
+          console.error('Upload failed:', error);
+          setUploadProgress(prev => {
+            const next = { ...prev };
+            delete next[file.name];
+            return next;
+          });
+        },
+        async () => {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          await saveFileMetadata({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            storagePath: uploadTask.snapshot.ref.fullPath,
+            downloadUrl,
+            uploadedBy: currentUserId || 'anonymous',
+          });
+          setUploadProgress(prev => {
+            const next = { ...prev };
+            delete next[file.name];
+            return next;
+          });
+        }
+      );
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -56,9 +89,20 @@ export default function FilesView() {
     }
   };
 
-  const removeFile = (id: string, e: React.MouseEvent) => {
+  const removeFile = async (id: string, storagePath: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Optimistic UI delete
     setFiles(prev => prev.filter(f => f.id !== id));
+    
+    try {
+      const storage = getStorageClient();
+      const storageRef = ref(storage, storagePath);
+      await deleteObject(storageRef);
+      await deleteFileMetadata(id);
+    } catch (err) {
+      console.error('Failed to delete file', err);
+    }
   };
 
   const formatSize = (bytes: number) => {
@@ -139,19 +183,19 @@ export default function FilesView() {
               <div 
                 key={file.id} 
                 className="group relative bg-white border border-[#E2E4E9] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer aspect-square flex flex-col"
-                onClick={() => window.open(file.url, '_blank')}
+                onClick={() => window.open(file.downloadUrl, '_blank')}
               >
                 <div className="h-2/3 bg-gray-50 border-b border-[#E2E4E9] flex items-center justify-center p-2 relative overflow-hidden">
                   {isImage(file.type) ? (
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+                      <img src={file.downloadUrl} alt={file.name} className="w-full h-full object-cover" />
                     </>
                   ) : (
                     <File className="w-12 h-12 text-[#8E9299]" />
                   )}
                   <button 
-                    onClick={(e) => removeFile(file.id, e)}
+                    onClick={(e) => removeFile(file.id, file.storagePath, e)}
                     className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -163,6 +207,26 @@ export default function FilesView() {
                   </div>
                   <div className="text-xs text-[#8E9299]">
                     {formatSize(file.size)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {Object.entries(uploadProgress).length > 0 && (
+          <div className="mt-6 flex flex-col gap-3">
+            <h3 className="text-sm font-bold text-[#1C1F23]">Uploading...</h3>
+            {Object.entries(uploadProgress).map(([name, progress]) => (
+              <div key={name} className="bg-white border border-[#E2E4E9] rounded-lg p-3 flex items-center gap-3">
+                <Loader2 className="w-5 h-5 text-[#1061E3] animate-spin shrink-0" />
+                <div className="flex-grow min-w-0">
+                  <div className="text-sm font-medium text-[#1C1F23] truncate mb-1">{name}</div>
+                  <div className="h-1.5 w-full bg-[#E3F2FD] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#1061E3] transition-all duration-300 ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
                   </div>
                 </div>
               </div>

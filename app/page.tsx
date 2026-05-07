@@ -5,7 +5,7 @@ import {
   Search, Plus, ChevronDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
-  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare
+  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import WorkspaceProjectView from '@/components/WorkspaceProjectView';
@@ -20,8 +20,8 @@ import EmailModal from '@/components/EmailModal';
 import MyTasksView from '@/components/MyTasksView';
 import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
-import { EditableStatus, AssigneeDropdown, TeamMember, Company, INITIAL_COMPANIES, CompanyDropdown, Contact, Status, ProductService, INITIAL_PRODUCTS, Proposal, INITIAL_PROPOSALS, Deal, INITIAL_DEALS } from '@/components/Shared';
-import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact } from '@/lib/crmStore';
+import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup } from '@/components/Shared';
+import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getAuthClient } from '@/lib/firebase';
@@ -46,13 +46,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
-
-const DEFAULT_CONTACT_GROUPS = [
-  { id: 'leads', name: 'Leads', color: '#D32F2F' },
-  { id: 'website-clients', name: 'Website Clients', color: '#10B981' },
-];
-
-type ContactGroup = typeof DEFAULT_CONTACT_GROUPS[number];
 
 const INITIAL_CONTACTS: Contact[] = [];
 
@@ -235,12 +228,12 @@ export default function Page() {
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [boardMemberships, setBoardMemberships] = useState<WorkspaceBoardMemberships>({});
-  const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
-  const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
-  const [contactGroups, setContactGroups] = useState<ContactGroup[]>(DEFAULT_CONTACT_GROUPS);
-  const [products, setProducts] = useState<ProductService[]>(INITIAL_PRODUCTS);
-  const [proposals, setProposals] = useState<Proposal[]>(INITIAL_PROPOSALS);
-  const [deals, setDeals] = useState<Deal[]>(INITIAL_DEALS);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactGroups, setContactGroups] = useState<ContactGroup[]>([]);
+  const [products, setProducts] = useState<ProductService[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNav, setActiveNav] = useState('My Tasks');
   const [navFilter, setNavFilter] = useState<'All' | 'CRM' | 'Workspace'>('All');
@@ -249,12 +242,6 @@ export default function Page() {
   const [emailingContact, setEmailingContact] = useState<Contact | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dataError, setDataError] = useState<string>('');
-
-  useEffect(() => {
-    if (teamMembers.length > 0) {
-      setBoardMemberships(createInitialBoardMemberships(teamMembers));
-    }
-  }, [teamMembers]);
 
   useEffect(() => {
     const unsubCompanies = subscribeCompanies(setCompanies, (e) => {
@@ -269,10 +256,30 @@ export default function Page() {
       console.error('Firestore users subscribe failed', e);
       setDataError('Could not load team members from Firestore.');
     });
+    const unsubProducts = subscribeProducts(setProducts, (e) => {
+      console.error('Firestore products subscribe failed', e);
+      setDataError('Could not load products from Firestore.');
+    });
+    const unsubProposals = subscribeProposals(setProposals, (e) => {
+      console.error('Firestore proposals subscribe failed', e);
+      setDataError('Could not load proposals from Firestore.');
+    });
+    const unsubDeals = subscribeDeals(setDeals, (e) => {
+      console.error('Firestore deals subscribe failed', e);
+      setDataError('Could not load deals from Firestore.');
+    });
+    const unsubContactGroups = subscribeContactGroups(setContactGroups, (e) => {
+      console.error('Firestore contact groups subscribe failed', e);
+      setDataError('Could not load contact groups from Firestore.');
+    });
     return () => {
       unsubCompanies();
       unsubContacts();
       unsubUsers();
+      unsubProducts();
+      unsubProposals();
+      unsubDeals();
+      unsubContactGroups();
     };
   }, []);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -309,18 +316,30 @@ export default function Page() {
 
   const currentTeamMember = profile;
   const currentUserName = currentTeamMember?.name || 'You';
-  const isFreelancer = currentTeamMember?.role === 'freelancer';
   const hasAllWorkspaceAccess = currentTeamMember?.role === 'master_admin' || currentTeamMember?.role === 'admin';
   const canManageBoardMembers = hasAllWorkspaceAccess;
+  
   const hasWorkspaceBoardAccess = (boardName: string) => {
     if (!currentTeamMember) return false;
     if (hasAllWorkspaceAccess) return true;
-    return boardMemberships[boardName]?.includes(currentTeamMember.id) ?? false;
+    const allowed = currentTeamMember.permissions?.allowedWorkspaces;
+    if (allowed) return allowed.includes(boardName);
+    return currentTeamMember.role === 'staff';
   };
+
+  const canViewCRM = () => {
+    if (!currentTeamMember) return false;
+    if (hasAllWorkspaceAccess) return true;
+    if (currentTeamMember.permissions?.canViewCRM !== undefined) return currentTeamMember.permissions.canViewCRM;
+    return currentTeamMember.role === 'staff';
+  };
+  
+  const canAccessCRM = canViewCRM();
+
   const visibleWorkspaceItems = NAV_ITEMS_WORKSPACE.filter(item => hasWorkspaceBoardAccess(item.name));
   const requestedWorkspaceBoardIsHidden = WORKSPACE_NAV_NAMES.includes(activeNav) && !hasWorkspaceBoardAccess(activeNav);
-  const visibleNavFilter = isFreelancer && navFilter === 'CRM' ? 'Workspace' : navFilter;
-  const activeContentNav = (isFreelancer && CRM_NAV_NAMES.includes(activeNav)) || requestedWorkspaceBoardIsHidden ? 'My Tasks' : activeNav;
+  const visibleNavFilter = !canAccessCRM && navFilter === 'CRM' ? 'Workspace' : navFilter;
+  const activeContentNav = (!canAccessCRM && CRM_NAV_NAMES.includes(activeNav)) || requestedWorkspaceBoardIsHidden ? 'My Tasks' : activeNav;
 
   const userNotifications = currentTeamMember
     ? notifications.filter(notification => notification.recipientId === currentTeamMember.id)
@@ -395,7 +414,10 @@ export default function Page() {
   const [newCompanyId, setNewCompanyId] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newStatus, setNewStatus] = useState<Status>('Lead');
-  const [newContactGroupId, setNewContactGroupId] = useState(DEFAULT_CONTACT_GROUPS[0].id);
+  const [newContactGroupId, setNewContactGroupId] = useState('');
+  
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState('');
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
@@ -433,15 +455,32 @@ export default function Page() {
     }));
   }, [contactGroups, filteredContacts]);
 
-  const handleCreateContactGroup = () => {
+  const handleCreateContactGroup = async () => {
     const colors = ['#D32F2F', '#10B981', '#1061E3', '#8B5CF6', '#F59E0B', '#0D9488'];
-    const newGroup: ContactGroup = {
-      id: `group-${Date.now()}`,
-      name: 'New Group',
-      color: colors[contactGroups.length % colors.length],
-    };
-
-    setContactGroups(prev => [...prev, newGroup]);
+    try {
+      const newId = await createContactGroup({
+        name: 'New Group',
+        color: colors[contactGroups.length % colors.length],
+        order: contactGroups.length,
+      });
+      setEditingGroupId(newId);
+      setEditingGroupName('New Group');
+    } catch (e) {
+      console.error('Failed to create contact group', e);
+      alert('Failed to create group. Check console.');
+    }
+  };
+  
+  const handleSaveContactGroup = async (id: string) => {
+    if (editingGroupName.trim()) {
+      try {
+        await updateContactGroup(id, { name: editingGroupName.trim() });
+      } catch (e) {
+        console.error('Failed to update contact group', e);
+      }
+    }
+    setEditingGroupId(null);
+    setEditingGroupName('');
   };
 
   const openAddModal = () => {
@@ -453,7 +492,7 @@ export default function Page() {
     setNewCompanyId('');
     setNewEmail('');
     setNewStatus('Lead');
-    setNewContactGroupId(contactGroups[0]?.id || DEFAULT_CONTACT_GROUPS[0].id);
+    setNewContactGroupId(contactGroups[0]?.id || '');
     setIsAddModalOpen(true);
   };
 
@@ -466,7 +505,7 @@ export default function Page() {
     setNewCompanyId(contact.companyId || '');
     setNewEmail(contact.email || '');
     setNewStatus(contact.status || 'Lead');
-    setNewContactGroupId(contact.groupId || contactGroups[0]?.id || DEFAULT_CONTACT_GROUPS[0].id);
+    setNewContactGroupId(contact.groupId || contactGroups[0]?.id || '');
     setIsAddModalOpen(true);
   };
 
@@ -560,7 +599,7 @@ export default function Page() {
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveDragId(null);
 
@@ -579,6 +618,16 @@ export default function Page() {
         }
         return prev;
       });
+    }
+
+    // Persist the moved contact's groupId to Firebase
+    const movedContact = contacts.find(c => c.id === activeId);
+    if (movedContact && movedContact.groupId) {
+      try {
+        await updateContact(movedContact.id, { groupId: movedContact.groupId });
+      } catch (e) {
+        console.error('Failed to update contact group in Firebase', e);
+      }
     }
   };
 
@@ -663,7 +712,7 @@ export default function Page() {
               className="w-full bg-[#002244] border border-[#004080] text-white rounded-md px-3 py-2 text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-[#66B2FF] cursor-pointer hover:bg-[#002a55] transition-colors"
             >
               <option value="All">All Apps</option>
-              {!isFreelancer && <option value="CRM">CRM</option>}
+              {canAccessCRM && <option value="CRM">CRM</option>}
               <option value="Workspace">Workspace</option>
             </select>
             <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
@@ -689,7 +738,7 @@ export default function Page() {
           ))}
         </nav>
 
-        {!isFreelancer && (visibleNavFilter === 'All' || visibleNavFilter === 'CRM') && (
+        {canAccessCRM && (visibleNavFilter === 'All' || visibleNavFilter === 'CRM') && (
           <nav className="py-2.5">
             <div className="text-[11px] font-bold uppercase text-[#88AADD] px-5 pb-2 tracking-wide">
               CRM
@@ -830,7 +879,7 @@ export default function Page() {
         </header>
 
         <div className="flex-grow relative overflow-hidden">
-          {!isFreelancer && activeContentNav === 'Contacts' ? (
+          {canAccessCRM && activeContentNav === 'Contacts' ? (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
             {/* Top Bar */}
             <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
@@ -883,10 +932,45 @@ export default function Page() {
               >
                 {contactsByGroup.map(group => (
                   <div key={group.id}>
-                    <div className="flex items-center gap-2 py-3 mt-2">
+                    <div className="flex items-center gap-2 py-3 mt-2 group">
                       <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-[#666]"></div>
-                      <span className="font-bold text-[15px] uppercase tracking-wide" style={{ color: group.color }}>{group.name}</span>
-                      <span className="text-[#8E9299] text-[13px]">({group.contacts.length})</span>
+                      {editingGroupId === group.id ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editingGroupName}
+                          onChange={(e) => setEditingGroupName(e.target.value)}
+                          onBlur={() => handleSaveContactGroup(group.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveContactGroup(group.id);
+                            if (e.key === 'Escape') setEditingGroupId(null);
+                          }}
+                          className="font-bold text-[15px] uppercase tracking-wide px-1 py-0.5 border border-[#1061E3] rounded outline-none focus:ring-1 focus:ring-[#1061E3] w-48 bg-white text-[#1C1F23]"
+                        />
+                      ) : (
+                        <>
+                          <span 
+                            className="font-bold text-[15px] uppercase tracking-wide cursor-pointer hover:opacity-80" 
+                            style={{ color: group.color }}
+                            onClick={() => {
+                              setEditingGroupId(group.id);
+                              setEditingGroupName(group.name);
+                            }}
+                          >
+                            {group.name}
+                          </span>
+                          <span className="text-[#8E9299] text-[13px]">({group.contacts.length})</span>
+                          <button 
+                            className="opacity-0 group-hover:opacity-100 p-1 text-[#8E9299] hover:text-[#1061E3] transition-colors ml-1"
+                            onClick={() => {
+                              setEditingGroupId(group.id);
+                              setEditingGroupName(group.name);
+                            }}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                     <DroppableTable id={group.id} contacts={group.contacts} onRowClick={openEditModal} onUpdateContact={handleUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={setEmailingContact} />
                   </div>
@@ -936,36 +1020,35 @@ export default function Page() {
         ) : activeContentNav === 'Inbox' ? (
           <InboxView teamMembers={teamMembers} currentUserId={currentTeamMember?.id} />
         ) : activeContentNav === 'Websites' ? (
-          <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
         ) : activeContentNav === 'Design & Print' ? (
-          <WorkspaceProjectView key={`dp-${workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`dp-${workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
         ) : activeContentNav === 'Google Ads' ? (
-          <WorkspaceProjectView key={`ppc-${workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`ppc-${workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
         ) : activeContentNav === 'Local Listings' ? (
-          <WorkspaceProjectView key={`ll-${workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`ll-${workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
         ) : activeContentNav === 'SEO' ? (
-          <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
         ) : activeContentNav === 'Social Media' ? (
-          <SocialMediaProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
+          <SocialMediaProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} canManageBoardMembers={canManageBoardMembers} />
         ) : activeContentNav === 'Support Tickets' ? (
-          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} boardMemberships={boardMemberships} setBoardMemberships={setBoardMemberships} canManageBoardMembers={canManageBoardMembers} />
-        ) : !isFreelancer && activeContentNav === 'Companies' ? (
+          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
+        ) : canAccessCRM && activeContentNav === 'Companies' ? (
           <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} />
-        ) : !isFreelancer && activeContentNav === 'Deals / Sales' ? (
+        ) : canAccessCRM && activeContentNav === 'Deals / Sales' ? (
           <DealsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} setDeals={setDeals} proposals={proposals} setProposals={setProposals} currentUserName={currentUserName} currentUserId={currentTeamMember?.id} onMention={createMentionNotifications} />
-        ) : !isFreelancer && activeContentNav === 'Proposals' ? (
+        ) : canAccessCRM && activeContentNav === 'Proposals' ? (
           <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} products={products} proposals={proposals} setProposals={setProposals} />
-        ) : !isFreelancer && activeContentNav === 'Price Catalog' ? (
+        ) : canAccessCRM && activeContentNav === 'Price Catalog' ? (
           <ProductsServicesView products={products} setProducts={setProducts} />
-        ) : !isFreelancer && activeContentNav === 'Files' ? (
-          <FilesView />
+        ) : canAccessCRM && activeContentNav === 'Files' ? (
+          <FilesView currentUserId={currentTeamMember?.id} />
         ) : activeContentNav === 'Profile' ? (
           <ProfileView teamMembers={teamMembers} setTeamMembers={setTeamMembers} currentUserId={currentTeamMember?.id} />
         ) : activeContentNav === 'Settings' ? (
           <SettingsView
             teamMembers={teamMembers}
             setTeamMembers={setTeamMembers}
-            setBoardMemberships={setBoardMemberships}
             currentUserRole={currentTeamMember?.role}
           />
         ) : (

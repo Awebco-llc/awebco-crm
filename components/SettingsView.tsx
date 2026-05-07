@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { TeamMember } from '@/components/Shared';
+import { createTeamMember, updateTeamMember, deleteTeamMember } from '@/lib/crmStore';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { getAuthClient } from '@/lib/firebase';
 
 const formatRole = (role?: TeamMember['role']) => {
   if (role === 'master_admin') return 'Master Admin';
@@ -9,17 +12,23 @@ const formatRole = (role?: TeamMember['role']) => {
   return 'Staff';
 };
 
-type WorkspaceBoardMemberships = Record<string, string[]>;
+const ALL_WORKSPACES = [
+  'Support Tickets',
+  'Websites',
+  'Design & Print',
+  'SEO',
+  'Local Listings',
+  'Google Ads',
+  'Social Media'
+];
 
 export default function SettingsView({
   teamMembers,
   setTeamMembers,
-  setBoardMemberships,
   currentUserRole,
 }: {
   teamMembers: TeamMember[],
   setTeamMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>,
-  setBoardMemberships: React.Dispatch<React.SetStateAction<WorkspaceBoardMemberships>>,
   currentUserRole?: TeamMember['role'],
 }) {
   const [newMemberName, setNewMemberName] = useState('');
@@ -32,11 +41,12 @@ export default function SettingsView({
   const [editMemberName, setEditMemberName] = useState('');
   const [editMemberEmail, setEditMemberEmail] = useState('');
   const [editMemberRole, setEditMemberRole] = useState<TeamMember['role']>('staff');
-  const [editMemberPassword, setEditMemberPassword] = useState('');
   const [editMemberColor, setEditMemberColor] = useState('#1061E3');
+  const [editMemberCanViewCRM, setEditMemberCanViewCRM] = useState(true);
+  const [editMemberWorkspaces, setEditMemberWorkspaces] = useState<string[]>(ALL_WORKSPACES);
   const canEditProfiles = currentUserRole === 'master_admin';
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMemberName.trim()) return;
 
@@ -58,6 +68,13 @@ export default function SettingsView({
     setNewMemberRole('staff');
     setNewMemberPassword('');
     setNewMemberPhotoUrl('');
+
+    try {
+      await createTeamMember(newMember);
+    } catch (err: any) {
+      console.error('Failed to create team member:', err);
+      alert(`Failed to create user. Ensure email is unique. Error: ${err.message}`);
+    }
   };
 
   const handlePhotoChange = (file?: File) => {
@@ -70,7 +87,7 @@ export default function SettingsView({
     reader.readAsDataURL(file);
   };
 
-  const handleRemoveMember = (id: string) => {
+  const handleRemoveMember = async (id: string) => {
     const member = teamMembers.find(m => m.id === id);
     if (member?.role === 'master_admin') {
       window.alert('The master admin cannot be deleted.');
@@ -81,13 +98,13 @@ export default function SettingsView({
     if (!confirmed) return;
 
     setTeamMembers(teamMembers.filter(m => m.id !== id));
-    setBoardMemberships(prev => {
-      const next = { ...prev };
-      Object.keys(next).forEach(board => {
-        next[board] = next[board].filter(memberId => memberId !== id);
-      });
-      return next;
-    });
+
+
+    try {
+      await deleteTeamMember(id);
+    } catch (err) {
+      console.error('Failed to delete team member:', err);
+    }
   };
 
   const startEditMember = (member: TeamMember) => {
@@ -95,12 +112,15 @@ export default function SettingsView({
     setEditMemberName(member.name);
     setEditMemberEmail(member.email || '');
     setEditMemberRole(member.role || 'staff');
-    setEditMemberPassword(member.password || '');
-    setEditMemberColor(member.color);
+    setEditMemberColor(member.color || '#1061E3');
+    setEditMemberCanViewCRM(member.permissions?.canViewCRM ?? true);
+    setEditMemberWorkspaces(member.permissions?.allowedWorkspaces ?? ALL_WORKSPACES);
   };
 
-  const saveEditMember = () => {
+  const saveEditMember = async () => {
     if (!editingMemberId || !editMemberName.trim()) return;
+
+    let updatedMember: TeamMember | undefined;
 
     setTeamMembers(prev => prev.map(member => {
       if (member.id !== editingMemberId) return member;
@@ -108,17 +128,29 @@ export default function SettingsView({
       const role = member.role === 'master_admin' ? 'master_admin' : editMemberRole;
       const initials = editMemberName.split(' ').map(namePart => namePart[0]).join('').substring(0, 2).toUpperCase();
 
-      return {
+      updatedMember = {
         ...member,
         name: editMemberName,
         initials,
         email: editMemberEmail.trim() || undefined,
-        role,
-        password: editMemberPassword,
+        role: editMemberRole,
         color: editMemberColor,
+        permissions: {
+          canViewCRM: editMemberCanViewCRM,
+          allowedWorkspaces: editMemberWorkspaces,
+        }
       };
+      return updatedMember;
     }));
     setEditingMemberId(null);
+
+    if (updatedMember) {
+      try {
+        await updateTeamMember(editingMemberId, updatedMember);
+      } catch (err) {
+        console.error('Failed to update team member:', err);
+      }
+    }
   };
 
   return (
@@ -151,13 +183,6 @@ export default function SettingsView({
                         className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]"
                         placeholder="Email"
                       />
-                      <input
-                        type="text"
-                        value={editMemberPassword}
-                        onChange={e => setEditMemberPassword(e.target.value)}
-                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]"
-                        placeholder="Password"
-                      />
                       <div className="flex items-center gap-2">
                         <select
                           value={editMemberRole}
@@ -182,6 +207,55 @@ export default function SettingsView({
                           <X className="w-4 h-4" />
                         </button>
                       </div>
+                      {member.role !== 'master_admin' && editMemberRole !== 'master_admin' && (
+                        <div className="flex flex-col gap-2 mt-1 p-3 bg-white border border-[#E2E4E9] rounded-md">
+                          <h4 className="text-xs font-bold text-[#4A4D53] uppercase">Access Permissions</h4>
+                          <label className="flex items-center gap-2 text-sm font-semibold text-[#1C1F23]">
+                            <input 
+                              type="checkbox"
+                              checked={editMemberCanViewCRM}
+                              onChange={e => setEditMemberCanViewCRM(e.target.checked)}
+                              className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3]"
+                            />
+                            Can View CRM
+                          </label>
+                          <div className="text-xs font-semibold text-[#8E9299] mt-1 mb-0.5">Allowed Workspaces</div>
+                          <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto pr-1">
+                            {ALL_WORKSPACES.map(ws => (
+                              <label key={ws} className="flex items-center gap-2 text-[13px] text-[#4A4D53] cursor-pointer hover:text-[#1C1F23]">
+                                <input
+                                  type="checkbox"
+                                  checked={editMemberWorkspaces.includes(ws)}
+                                  onChange={e => {
+                                    if (e.target.checked) setEditMemberWorkspaces([...editMemberWorkspaces, ws]);
+                                    else setEditMemberWorkspaces(editMemberWorkspaces.filter(w => w !== ws));
+                                  }}
+                                  className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3]"
+                                />
+                                {ws}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {editMemberEmail && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const auth = getAuthClient();
+                              await sendPasswordResetEmail(auth, editMemberEmail);
+                              window.alert(`Password reset email sent to ${editMemberEmail}`);
+                            } catch (e) {
+                              console.error(e);
+                              window.alert('Failed to send password reset email.');
+                            }
+                          }}
+                          className="w-full mt-2 px-3 py-2 border border-[#E2E4E9] rounded-md text-sm font-semibold bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors"
+                        >
+                          Send Password Reset Email
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <>
