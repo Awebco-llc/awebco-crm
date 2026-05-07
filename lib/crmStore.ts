@@ -10,16 +10,22 @@ import {
 } from 'firebase/firestore';
 
 import type { Contact, Company, TeamMember } from '@/components/Shared';
-import { db } from '@/lib/firebase';
+import { getDb } from '@/lib/firebase';
 
 type Unsubscribe = () => void;
 
 export function subscribeUsers(onChange: (users: TeamMember[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const db = getDb();
   const q = query(collection(db, 'users'), orderBy('name'));
   return onSnapshot(
     q,
     (snap) => {
-      onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as TeamMember) })));
+      onChange(
+        snap.docs.map((d) => {
+          const data = d.data() as Omit<TeamMember, 'id'>;
+          return { ...data, id: d.id };
+        }),
+      );
     },
     (e) => onError?.(e),
   );
@@ -36,6 +42,7 @@ type ContactDoc = Omit<Contact, 'id'> & {
 };
 
 export function subscribeCompanies(onChange: (companies: Company[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const db = getDb();
   const q = query(collection(db, 'companies'), orderBy('name'));
   return onSnapshot(
     q,
@@ -47,6 +54,7 @@ export function subscribeCompanies(onChange: (companies: Company[]) => void, onE
 }
 
 export function subscribeContacts(onChange: (contacts: Contact[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const db = getDb();
   const q = query(collection(db, 'contacts'), orderBy('lastName'));
   return onSnapshot(
     q,
@@ -58,6 +66,7 @@ export function subscribeContacts(onChange: (contacts: Contact[]) => void, onErr
 }
 
 export async function createCompany(input: Omit<Company, 'id'>): Promise<string> {
+  const db = getDb();
   const ref = await addDoc(collection(db, 'companies'), {
     ...input,
     createdAt: serverTimestamp(),
@@ -67,6 +76,7 @@ export async function createCompany(input: Omit<Company, 'id'>): Promise<string>
 }
 
 export async function updateCompany(id: string, patch: Partial<Omit<Company, 'id'>>): Promise<void> {
+  const db = getDb();
   await setDoc(
     doc(db, 'companies', id),
     {
@@ -78,6 +88,7 @@ export async function updateCompany(id: string, patch: Partial<Omit<Company, 'id
 }
 
 export async function createContact(input: Omit<Contact, 'id'>): Promise<string> {
+  const db = getDb();
   const ref = await addDoc(collection(db, 'contacts'), {
     ...input,
     createdAt: serverTimestamp(),
@@ -87,6 +98,7 @@ export async function createContact(input: Omit<Contact, 'id'>): Promise<string>
 }
 
 export async function updateContact(id: string, patch: Partial<Omit<Contact, 'id'>>): Promise<void> {
+  const db = getDb();
   await setDoc(
     doc(db, 'contacts', id),
     {
