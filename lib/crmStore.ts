@@ -190,9 +190,11 @@ export async function deleteDeal(id: string): Promise<void> {
 type ContactGroupDoc = Omit<ContactGroup, 'id'> & { createdAt?: unknown; updatedAt?: unknown; };
 
 export function subscribeContactGroups(onChange: (groups: ContactGroup[]) => void, onError?: (e: unknown) => void): Unsubscribe {
-  const q = query(collection(getDb(), 'contactGroups'), orderBy('name'));
+  const q = query(collection(getDb(), 'contactGroups'));
   return onSnapshot(q, (snap) => {
-    onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as ContactGroupDoc) })));
+    const groups = snap.docs.map((d) => ({ id: d.id, ...(d.data() as ContactGroupDoc) }));
+    groups.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    onChange(groups);
   }, (e) => onError?.(e));
 }
 
@@ -255,6 +257,14 @@ export async function updateTeamMember(id: string, patch: Partial<Omit<TeamMembe
     },
     { merge: true },
   );
+}
+
+export async function deleteContact(id: string): Promise<void> {
+  await deleteDoc(doc(getDb(), 'contacts', id));
+}
+
+export async function deleteCompany(id: string): Promise<void> {
+  await deleteDoc(doc(getDb(), 'companies', id));
 }
 
 export async function deleteTeamMember(id: string): Promise<void> {

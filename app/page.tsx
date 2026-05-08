@@ -5,7 +5,7 @@ import {
   Search, Plus, ChevronDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
-  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil
+  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import WorkspaceProjectView from '@/components/WorkspaceProjectView';
@@ -20,8 +20,9 @@ import EmailModal from '@/components/EmailModal';
 import MyTasksView from '@/components/MyTasksView';
 import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
+import ImportModal from '@/components/ImportModal';
 import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup } from '@/components/Shared';
-import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup } from '@/lib/crmStore';
+import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getAuthClient } from '@/lib/firebase';
@@ -120,7 +121,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ contact, onClick, onUpdate, teamMembers, companies, onEmailClick }: { contact: Contact; onClick: () => void; onUpdate: (id: string, field: keyof Contact, value: any) => void; teamMembers: TeamMember[], companies: Company[], onEmailClick: (contact: Contact) => void }) {
+function SortableRow({ contact, onClick, onUpdate, teamMembers, companies, onEmailClick, onDelete }: { contact: Contact; onClick: () => void; onUpdate: (id: string, field: keyof Contact, value: any) => void; teamMembers: TeamMember[], companies: Company[], onEmailClick: (contact: Contact) => void; onDelete: (id: string) => void }) {
   const {
     attributes,
     listeners,
@@ -128,7 +129,7 @@ function SortableRow({ contact, onClick, onUpdate, teamMembers, companies, onEma
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: contact.id, data: { contact } });
+  } = useSortable({ id: contact.id, data: { type: 'contact', contact } });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -183,16 +184,174 @@ function SortableRow({ contact, onClick, onUpdate, teamMembers, companies, onEma
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <EditableStatus value={contact.status} onSave={v => onUpdate(contact.id, 'status', v)} />
       </td>
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(contact.id); }}
+          className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          title="Delete Contact"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </td>
     </tr>
   );
 }
 
-function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers, companies, onEmailClick }: { id: string; contacts: Contact[]; onRowClick: (c: Contact) => void; onUpdateContact: (id: string, field: keyof Contact, value: any) => void; teamMembers: TeamMember[], companies: Company[], onEmailClick: (contact: Contact) => void }) {
+function SortableGroupSection({ 
+  group, 
+  onImport, 
+  onEdit, 
+  onDelete, 
+  onRowClick, 
+  onUpdateContact, 
+  onEmailClick, 
+  onDeleteContact,
+  teamMembers,
+  companies,
+  editingGroupId,
+  editingGroupName,
+  editingGroupColor,
+  setEditingGroupName,
+  setEditingGroupColor,
+  handleSaveContactGroup,
+  isCollapsed,
+  onToggleCollapse
+}: { 
+  group: ContactGroup & { contacts: Contact[] }; 
+  onImport: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRowClick: (c: Contact) => void;
+  onUpdateContact: (id: string, field: keyof Contact, value: any) => void;
+  onEmailClick: (contact: Contact) => void;
+  onDeleteContact: (id: string) => void;
+  teamMembers: TeamMember[];
+  companies: Company[];
+  editingGroupId: string | null;
+  editingGroupName: string;
+  editingGroupColor: string;
+  setEditingGroupName: (v: string) => void;
+  setEditingGroupColor: (v: string) => void;
+  handleSaveContactGroup: (id: string) => void;
+  isCollapsed: boolean;
+  onToggleCollapse: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ 
+    id: group.id,
+    data: { type: 'group', group }
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  const colors = ['#D32F2F', '#10B981', '#1061E3', '#8B5CF6', '#F59E0B', '#0D9488', '#1C1F23', '#D1D5DB'];
+
+  return (
+    <div ref={setNodeRef} style={style} className="mb-8">
+      <div className="flex items-center gap-2 py-3 mt-2 group relative">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 text-[#8E9299] hover:text-[#1C1F23] opacity-0 group-hover:opacity-100 transition-opacity">
+          <GripVertical className="w-4 h-4" />
+        </div>
+        <button 
+          onClick={() => onToggleCollapse(group.id)}
+          className="p-1 hover:bg-gray-100 rounded transition-colors"
+        >
+          <ChevronDown className={`w-4 h-4 text-[#666] transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+        </button>
+        {editingGroupId === group.id ? (
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              autoFocus
+              type="text"
+              value={editingGroupName}
+              onChange={(e) => setEditingGroupName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveContactGroup(group.id);
+                if (e.key === 'Escape') onEdit();
+              }}
+              className="font-bold text-[15px] uppercase tracking-wide px-2 py-1 border border-[#1061E3] rounded outline-none focus:ring-1 focus:ring-[#1061E3] w-48 bg-white text-[#1C1F23]"
+            />
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-[#E2E4E9] rounded-md shadow-sm">
+              {colors.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setEditingGroupColor(c)}
+                  className={`w-5 h-5 rounded-full border-2 transition-all ${editingGroupColor === c ? 'border-[#1C1F23] scale-110 shadow-sm' : 'border-transparent hover:scale-105'}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+            <button 
+              onClick={() => handleSaveContactGroup(group.id)}
+              className="px-3 py-1 bg-[#1061E3] text-white text-xs font-bold rounded hover:bg-blue-700 transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        ) : (
+          <>
+            <span 
+              className="font-bold text-[15px] uppercase tracking-wide cursor-pointer hover:opacity-80" 
+              style={{ color: group.color }}
+              onClick={onEdit}
+            >
+              {group.name}
+            </span>
+            <span className="text-[#8E9299] text-[13px]">({group.contacts.length})</span>
+            <button 
+              className="opacity-0 group-hover:opacity-100 p-1 text-[#8E9299] hover:text-[#1061E3] transition-colors ml-1"
+              onClick={onImport}
+              title="Import to this group"
+            >
+              <Upload className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              className="opacity-0 group-hover:opacity-100 p-1 text-[#8E9299] hover:text-[#1061E3] transition-colors ml-1"
+              onClick={onEdit}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              className="opacity-0 group-hover:opacity-100 p-1 text-[#8E9299] hover:text-[#D32F2F] transition-colors ml-1"
+              onClick={onDelete}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+      {!isCollapsed && (
+        <DroppableTable 
+          id={group.id} 
+          contacts={group.contacts} 
+          onRowClick={onRowClick} 
+          onUpdateContact={onUpdateContact} 
+          teamMembers={teamMembers} 
+          companies={companies} 
+          onEmailClick={onEmailClick} 
+          onDeleteContact={onDeleteContact} 
+        />
+      )}
+    </div>
+  );
+}
+
+function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers, companies, onEmailClick, onDeleteContact }: { id: string; contacts: Contact[]; onRowClick: (c: Contact) => void; onUpdateContact: (id: string, field: keyof Contact, value: any) => void; teamMembers: TeamMember[], companies: Company[], onEmailClick: (contact: Contact) => void; onDeleteContact: (id: string) => void }) {
   const { setNodeRef } = useDroppable({ id });
 
   return (
     <SortableContext id={id} items={contacts.map(c => c.id)} strategy={verticalListSortingStrategy}>
-      <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden text-left mb-8">
+      <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden text-left">
         <thead>
           <tr>
             <th className="w-10 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
@@ -204,15 +363,16 @@ function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers
             <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
             <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">EMAIL</th>
             <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
+            <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
           </tr>
         </thead>
         <tbody ref={setNodeRef} className="min-h-[50px]">
           {contacts.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
+              <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
             </tr>
           ) : contacts.map(contact => (
-            <SortableRow key={contact.id} contact={contact} onClick={() => onRowClick(contact)} onUpdate={onUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={onEmailClick} />
+            <SortableRow key={contact.id} contact={contact} onClick={() => onRowClick(contact)} onUpdate={onUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={onEmailClick} onDelete={onDeleteContact} />
           ))}
         </tbody>
       </table>
@@ -238,6 +398,8 @@ export default function Page() {
   const [activeNav, setActiveNav] = useState('My Tasks');
   const [navFilter, setNavFilter] = useState<'All' | 'CRM' | 'Workspace'>('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importTargetGroupId, setImportTargetGroupId] = useState('');
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [emailingContact, setEmailingContact] = useState<Contact | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -268,7 +430,19 @@ export default function Page() {
       console.error('Firestore deals subscribe failed', e);
       setDataError('Could not load deals from Firestore.');
     });
-    const unsubContactGroups = subscribeContactGroups(setContactGroups, (e) => {
+    const unsubContactGroups = subscribeContactGroups((groups) => {
+      setContactGroups(groups);
+      // Auto-initialize order for groups that don't have it
+      groups.forEach(async (group, index) => {
+        if (group.order === undefined) {
+          try {
+            await updateContactGroup(group.id, { order: index });
+          } catch (e) {
+            console.error('Failed to initialize group order', e);
+          }
+        }
+      });
+    }, (e) => {
       console.error('Firestore contact groups subscribe failed', e);
       setDataError('Could not load contact groups from Firestore.');
     });
@@ -418,6 +592,8 @@ export default function Page() {
   
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState('');
+  const [editingGroupColor, setEditingGroupColor] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
@@ -465,6 +641,7 @@ export default function Page() {
       });
       setEditingGroupId(newId);
       setEditingGroupName('New Group');
+      setEditingGroupColor(colors[contactGroups.length % colors.length]);
     } catch (e) {
       console.error('Failed to create contact group', e);
       alert('Failed to create group. Check console.');
@@ -474,13 +651,55 @@ export default function Page() {
   const handleSaveContactGroup = async (id: string) => {
     if (editingGroupName.trim()) {
       try {
-        await updateContactGroup(id, { name: editingGroupName.trim() });
+        await updateContactGroup(id, { 
+          name: editingGroupName.trim(),
+          color: editingGroupColor 
+        });
       } catch (e) {
         console.error('Failed to update contact group', e);
       }
     }
     setEditingGroupId(null);
     setEditingGroupName('');
+    setEditingGroupColor('');
+  };
+
+  const handleToggleWorkspaceAccess = async (memberId: string, workspaceName: string, hasAccess: boolean) => {
+    const member = teamMembers.find(m => m.id === memberId);
+    if (!member) return;
+
+    const currentAllowed = member.permissions?.allowedWorkspaces || [];
+    let newAllowed: string[];
+
+    if (hasAccess) {
+      if (!currentAllowed.includes(workspaceName)) {
+        newAllowed = [...currentAllowed, workspaceName];
+      } else {
+        newAllowed = currentAllowed;
+      }
+    } else {
+      newAllowed = currentAllowed.filter(w => w !== workspaceName);
+    }
+
+    try {
+      await updateTeamMember(memberId, {
+        permissions: {
+          ...member.permissions,
+          allowedWorkspaces: newAllowed
+        }
+      });
+    } catch (e) {
+      console.error('Failed to update workspace access', e);
+    }
+  };
+
+  const toggleGroupCollapse = (id: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const openAddModal = () => {
@@ -599,6 +818,28 @@ export default function Page() {
     }
   };
 
+  const handleDeleteContact = async (id: string) => {
+    if (confirm('Are you sure you want to delete this contact?')) {
+      try {
+        await deleteContact(id);
+      } catch (e) {
+        console.error('Failed to delete contact', e);
+        alert('Failed to delete contact. Check console.');
+      }
+    }
+  };
+
+  const handleDeleteContactGroup = async (id: string) => {
+    if (confirm('Are you sure you want to delete this group? All contacts in this group will remain, but they will lose their group association.')) {
+      try {
+        await deleteContactGroup(id);
+      } catch (e) {
+        console.error('Failed to delete contact group', e);
+        alert('Failed to delete group. Check console.');
+      }
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveDragId(null);
@@ -607,6 +848,27 @@ export default function Page() {
 
     const activeId = active.id;
     const overId = over.id;
+    const activeType = active.data.current?.type;
+
+    if (activeType === 'group') {
+      const activeIndex = contactGroups.findIndex(g => g.id === activeId);
+      const overIndex = contactGroups.findIndex(g => g.id === overId);
+
+      if (activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
+        const newGroups = arrayMove(contactGroups, activeIndex, overIndex);
+        // Update local state immediately for smooth UI
+        setContactGroups(newGroups);
+        // Persist all group orders
+        newGroups.forEach(async (group, index) => {
+          try {
+            await updateContactGroup(group.id, { order: index });
+          } catch (e) {
+            console.error('Failed to update group order', e);
+          }
+        });
+      }
+      return;
+    }
 
     if (activeId !== overId) {
       setContacts((prev) => {
@@ -895,6 +1157,16 @@ export default function Page() {
               </div>
               <div className="flex gap-3">
                 <button 
+                  onClick={() => {
+                    setImportTargetGroupId(contactGroups[0]?.id || '');
+                    setIsImportModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-100 transition-colors flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import
+                </button>
+                <button 
                   onClick={openAddModal}
                   className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
                 >
@@ -930,51 +1202,38 @@ export default function Page() {
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
               >
-                {contactsByGroup.map(group => (
-                  <div key={group.id}>
-                    <div className="flex items-center gap-2 py-3 mt-2 group">
-                      <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-[#666]"></div>
-                      {editingGroupId === group.id ? (
-                        <input
-                          autoFocus
-                          type="text"
-                          value={editingGroupName}
-                          onChange={(e) => setEditingGroupName(e.target.value)}
-                          onBlur={() => handleSaveContactGroup(group.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveContactGroup(group.id);
-                            if (e.key === 'Escape') setEditingGroupId(null);
-                          }}
-                          className="font-bold text-[15px] uppercase tracking-wide px-1 py-0.5 border border-[#1061E3] rounded outline-none focus:ring-1 focus:ring-[#1061E3] w-48 bg-white text-[#1C1F23]"
-                        />
-                      ) : (
-                        <>
-                          <span 
-                            className="font-bold text-[15px] uppercase tracking-wide cursor-pointer hover:opacity-80" 
-                            style={{ color: group.color }}
-                            onClick={() => {
-                              setEditingGroupId(group.id);
-                              setEditingGroupName(group.name);
-                            }}
-                          >
-                            {group.name}
-                          </span>
-                          <span className="text-[#8E9299] text-[13px]">({group.contacts.length})</span>
-                          <button 
-                            className="opacity-0 group-hover:opacity-100 p-1 text-[#8E9299] hover:text-[#1061E3] transition-colors ml-1"
-                            onClick={() => {
-                              setEditingGroupId(group.id);
-                              setEditingGroupName(group.name);
-                            }}
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    <DroppableTable id={group.id} contacts={group.contacts} onRowClick={openEditModal} onUpdateContact={handleUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={setEmailingContact} />
-                  </div>
-                ))}
+                <SortableContext items={contactGroups.map(g => g.id)} strategy={verticalListSortingStrategy}>
+                  {contactsByGroup.map(group => (
+                    <SortableGroupSection 
+                      key={group.id} 
+                      group={group} 
+                      onImport={() => {
+                        setImportTargetGroupId(group.id);
+                        setIsImportModalOpen(true);
+                      }}
+                      onEdit={() => {
+                        setEditingGroupId(group.id);
+                        setEditingGroupName(group.name);
+                        setEditingGroupColor(group.color);
+                      }}
+                      onDelete={() => handleDeleteContactGroup(group.id)}
+                      onRowClick={openEditModal}
+                      onUpdateContact={handleUpdateContact}
+                      onEmailClick={setEmailingContact}
+                      onDeleteContact={handleDeleteContact}
+                      teamMembers={teamMembers}
+                      companies={companies}
+                      editingGroupId={editingGroupId}
+                      editingGroupName={editingGroupName}
+                      editingGroupColor={editingGroupColor}
+                      setEditingGroupName={setEditingGroupName}
+                      setEditingGroupColor={setEditingGroupColor}
+                      handleSaveContactGroup={handleSaveContactGroup}
+                      isCollapsed={collapsedGroups.has(group.id)}
+                      onToggleCollapse={toggleGroupCollapse}
+                    />
+                  ))}
+                </SortableContext>
 
                 <DragOverlay>
                   {activeDragContact ? (
@@ -1020,19 +1279,19 @@ export default function Page() {
         ) : activeContentNav === 'Inbox' ? (
           <InboxView teamMembers={teamMembers} currentUserId={currentTeamMember?.id} />
         ) : activeContentNav === 'Websites' ? (
-          <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : activeContentNav === 'Design & Print' ? (
-          <WorkspaceProjectView key={`dp-${workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`dp-${workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : activeContentNav === 'Google Ads' ? (
-          <WorkspaceProjectView key={`ppc-${workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`ppc-${workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : activeContentNav === 'Local Listings' ? (
-          <WorkspaceProjectView key={`ll-${workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`ll-${workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : activeContentNav === 'SEO' ? (
-          <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : activeContentNav === 'Social Media' ? (
-          <SocialMediaProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} canManageBoardMembers={canManageBoardMembers} />
+          <SocialMediaProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : activeContentNav === 'Support Tickets' ? (
-          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} />
+          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : canAccessCRM && activeContentNav === 'Companies' ? (
           <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} />
         ) : canAccessCRM && activeContentNav === 'Deals / Sales' ? (
@@ -1087,6 +1346,15 @@ export default function Page() {
         {emailingContact && (
           <EmailModal contact={emailingContact} onClose={() => setEmailingContact(null)} />
         )}
+
+        <ImportModal 
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          teamMembers={teamMembers}
+          companies={companies}
+          contactGroups={contactGroups}
+          defaultGroupId={importTargetGroupId}
+        />
 
         {/* Add/Edit Contact Panel */}
         <AnimatePresence>
@@ -1213,6 +1481,19 @@ export default function Page() {
                     </div>
                   </div>
                   <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
+                    {editingContactId && (
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          handleDeleteContact(editingContactId);
+                          setIsAddModalOpen(false);
+                        }}
+                        className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 mr-auto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Contact
+                      </button>
+                    )}
                     <button 
                       type="button"
                       onClick={() => setIsAddModalOpen(false)}

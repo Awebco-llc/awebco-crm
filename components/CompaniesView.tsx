@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, Check, GripVertical, FileText } from 'lucide-react';
+import { Search, Plus, X, Check, GripVertical, FileText, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
-import { createCompany, updateCompany } from '@/lib/crmStore';
+import { createCompany, updateCompany, deleteCompany } from '@/lib/crmStore';
 import {
   DndContext,
   closestCenter,
@@ -47,7 +47,7 @@ function getAvatarColor(name?: string) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, contacts }: { company: Company; onClick: () => void; onUpdate: (id: string, field: keyof Company, value: any) => void; toggleService: (e: React.MouseEvent, id: string, field: keyof Company) => void; teamMembers: TeamMember[]; contacts: Contact[] }) {
+function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, contacts, onDelete }: { company: Company; onClick: () => void; onUpdate: (id: string, field: keyof Company, value: any) => void; toggleService: (e: React.MouseEvent, id: string, field: keyof Company) => void; teamMembers: TeamMember[]; contacts: Contact[]; onDelete: (id: string) => void }) {
   const {
     attributes,
     listeners,
@@ -112,6 +112,15 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <AssigneeDropdown value={company.assignedToId} onSave={v => onUpdate(company.id, 'assignedToId', v)} teamMembers={teamMembers} />
       </td>
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(company.id); }}
+          className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          title="Delete Company"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </td>
     </tr>
   );
 }
@@ -175,6 +184,17 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
 
   const handleUpdateCompany = (id: string, field: keyof Company, value: any) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const handleDeleteCompany = async (id: string) => {
+    if (confirm('Are you sure you want to delete this company? This action cannot be undone.')) {
+      try {
+        await deleteCompany(id);
+      } catch (err) {
+        console.error('Failed to delete company', err);
+        alert('Failed to delete company. Check console.');
+      }
+    }
   };
 
   const handleSaveCompany = async (e: React.FormEvent) => {
@@ -322,6 +342,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">EM</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">DP</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
+                <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
@@ -331,7 +352,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               >
                 {filteredCompanies.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
+                    <td colSpan={16} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
                   </tr>
                 ) : filteredCompanies.map(company => (
                   <SortableRow 
@@ -342,6 +363,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     toggleService={toggleService}
                     teamMembers={teamMembers}
                     contacts={contacts}
+                    onDelete={handleDeleteCompany}
                   />
                 ))}
               </SortableContext>
@@ -598,19 +620,34 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
 
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
-                  <button 
-                    type="button"
-                    onClick={() => setIsAddModalOpen(false)}
-                    className="px-4 py-2 rounded-md text-sm font-semibold text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
-                  >
-                    {editingCompanyId ? 'Save Changes' : 'Save Company'}
-                  </button>
+                  <div className="flex gap-3">
+                    {editingCompanyId && (
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          handleDeleteCompany(editingCompanyId);
+                          setIsAddModalOpen(false);
+                        }}
+                        className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 mr-auto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Company
+                      </button>
+                    )}
+                    <button 
+                      type="button"
+                      onClick={() => setIsAddModalOpen(false)}
+                      className="px-4 py-2 rounded-md text-sm font-semibold text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
+                    >
+                      {editingCompanyId ? 'Save Changes' : 'Save Company'}
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>

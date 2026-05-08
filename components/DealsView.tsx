@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText } from 'lucide-react';
+import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
-import { createDeal, updateDeal } from '@/lib/crmStore';
+import { createDeal, updateDeal, deleteDeal } from '@/lib/crmStore';
 import {
   DndContext,
   closestCenter,
@@ -92,7 +92,7 @@ function EditableStatus({ value, onSave }: { value: string, onSave: (val: string
   );
 }
 
-function SortableRow({ deal, onClick, onUpdate, teamMembers, companies, contacts, isFaded = false }: { deal: Deal; onClick: () => void; onUpdate: (id: string, field: keyof Deal, value: any) => void; teamMembers: TeamMember[]; companies: Company[]; contacts: Contact[]; isFaded?: boolean }) {
+function SortableRow({ deal, onClick, onUpdate, teamMembers, companies, contacts, onDelete, isFaded = false }: { deal: Deal; onClick: () => void; onUpdate: (id: string, field: keyof Deal, value: any) => void; teamMembers: TeamMember[]; companies: Company[]; contacts: Contact[]; onDelete: (id: string) => void; isFaded?: boolean }) {
   const {
     attributes,
     listeners,
@@ -147,6 +147,15 @@ function SortableRow({ deal, onClick, onUpdate, teamMembers, companies, contacts
         <div className="truncate max-w-[150px]" title={deal.notes && deal.notes.length > 0 ? deal.notes[deal.notes.length - 1].text : ''}>
           {deal.notes && deal.notes.length > 0 ? deal.notes[deal.notes.length - 1].text : '-'}
         </div>
+      </td>
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(deal.id); }}
+          className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          title="Delete Deal"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </td>
     </tr>
   );
@@ -250,6 +259,17 @@ export default function DealsView({
       await updateDeal(id, { [field]: value });
     } catch (e) {
       console.error('Failed to update deal in Firebase', e);
+    }
+  };
+
+  const handleDeleteDeal = async (id: string) => {
+    if (confirm('Are you sure you want to delete this deal? This action cannot be undone.')) {
+      try {
+        await deleteDeal(id);
+      } catch (err) {
+        console.error('Failed to delete deal', err);
+        alert('Failed to delete deal. Check console.');
+      }
     }
   };
 
@@ -415,6 +435,7 @@ export default function DealsView({
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CONTACT</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NOTES</th>
+                <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
@@ -424,7 +445,7 @@ export default function DealsView({
               >
                 {activeDeals.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No active deals found.</td>
+                    <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No active deals found.</td>
                   </tr>
                 ) : activeDeals.map(deal => (
                   <SortableRow 
@@ -435,6 +456,7 @@ export default function DealsView({
                     teamMembers={teamMembers}
                     companies={companies}
                     contacts={contacts}
+                    onDelete={handleDeleteDeal}
                   />
                 ))}
               </SortableContext>
@@ -459,6 +481,7 @@ export default function DealsView({
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CONTACT</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NOTES</th>
+                <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
@@ -468,7 +491,7 @@ export default function DealsView({
               >
                 {wonDeals.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No won deals found.</td>
+                    <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No won deals found.</td>
                   </tr>
                 ) : wonDeals.map(deal => (
                   <SortableRow 
@@ -479,6 +502,7 @@ export default function DealsView({
                     teamMembers={teamMembers}
                     companies={companies}
                     contacts={contacts}
+                    onDelete={handleDeleteDeal}
                   />
                 ))}
               </SortableContext>
@@ -503,6 +527,7 @@ export default function DealsView({
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CONTACT</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NOTES</th>
+                <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
@@ -512,7 +537,7 @@ export default function DealsView({
               >
                 {lostDeals.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No lost deals found.</td>
+                    <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No lost deals found.</td>
                   </tr>
                 ) : lostDeals.map(deal => (
                   <SortableRow 
@@ -523,6 +548,7 @@ export default function DealsView({
                     teamMembers={teamMembers}
                     companies={companies}
                     contacts={contacts}
+                    onDelete={handleDeleteDeal}
                     isFaded={true}
                   />
                 ))}
@@ -907,6 +933,19 @@ export default function DealsView({
                   )}
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
+                  {editingDealId && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        handleDeleteDeal(editingDealId);
+                        setIsAddModalOpen(false);
+                      }}
+                      className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 mr-auto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Deal
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={() => setIsAddModalOpen(false)}

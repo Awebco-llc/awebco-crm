@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, GripVertical } from 'lucide-react';
+import { Search, Plus, X, GripVertical, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -22,7 +22,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { ProductService } from './Shared';
-import { createProduct, updateProduct } from '@/lib/crmStore';
+import { createProduct, updateProduct, deleteProduct } from '@/lib/crmStore';
 
 function formatCatalogPrice(value: string) {
   const trimmedValue = value.trim();
@@ -47,7 +47,7 @@ function EditableCell({ value, onSave }: { value: string, onSave: (val: string) 
   );
 }
 
-function SortableRow({ item, onClick, onUpdate }: { item: ProductService; onClick: () => void; onUpdate: (id: string, field: keyof ProductService, value: any) => void }) {
+function SortableRow({ item, onClick, onUpdate, onDelete }: { item: ProductService; onClick: () => void; onUpdate: (id: string, field: keyof ProductService, value: any) => void; onDelete: (id: string) => void }) {
   const {
     attributes,
     listeners,
@@ -78,6 +78,15 @@ function SortableRow({ item, onClick, onUpdate }: { item: ProductService; onClic
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <EditableCell value={formatCatalogPrice(item.price)} onSave={v => onUpdate(item.id, 'price', v)} />
+      </td>
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+          className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          title="Delete Product"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </td>
     </tr>
   );
@@ -135,6 +144,17 @@ export default function ProductsServicesView({ products, setProducts }: { produc
       await updateProduct(id, { [field]: value });
     } catch (e) {
       console.error('Failed to update product in Firebase', e);
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    if (confirm('Are you sure you want to delete this item?')) {
+      try {
+        await deleteProduct(id);
+      } catch (err) {
+        console.error('Failed to delete product', err);
+        alert('Failed to delete product. Check console.');
+      }
     }
   };
 
@@ -217,6 +237,7 @@ export default function ProductsServicesView({ products, setProducts }: { produc
                 <th className="w-[250px] bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NAME</th>
                 <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DESCRIPTION</th>
                 <th className="w-[150px] bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRICE</th>
+                <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
@@ -226,7 +247,7 @@ export default function ProductsServicesView({ products, setProducts }: { produc
               >
                 {filteredItems.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-[#8E9299] text-sm">No items found.</td>
+                    <td colSpan={5} className="px-4 py-8 text-center text-[#8E9299] text-sm">No items found.</td>
                   </tr>
                 ) : filteredItems.map(item => (
                   <SortableRow 
@@ -234,6 +255,7 @@ export default function ProductsServicesView({ products, setProducts }: { produc
                     item={item} 
                     onClick={() => openEditModal(item)} 
                     onUpdate={handleUpdateItem} 
+                    onDelete={handleDeleteItem}
                   />
                 ))}
               </SortableContext>
@@ -284,6 +306,19 @@ export default function ProductsServicesView({ products, setProducts }: { produc
                   </div>
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
+                  {editingItemId && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        handleDeleteItem(editingItemId);
+                        setIsAddModalOpen(false);
+                      }}
+                      className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 mr-auto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Item
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={() => setIsAddModalOpen(false)}

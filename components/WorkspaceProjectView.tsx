@@ -22,7 +22,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company } from '@/components/Shared';
+import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle } from '@/components/Shared';
 
 interface Column {
   id: string;
@@ -319,6 +319,7 @@ export default function WorkspaceProjectView({
   openRowId,
   onMention,
   canManageBoardMembers,
+  onUpdateMemberPermissions
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -329,6 +330,7 @@ export default function WorkspaceProjectView({
   openRowId?: string,
   onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void,
   canManageBoardMembers: boolean,
+  onUpdateMemberPermissions?: (memberId: string, workspaceName: string, hasAccess: boolean) => void,
 }) {
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
@@ -815,7 +817,9 @@ export default function WorkspaceProjectView({
                 <div className="absolute right-0 top-11 z-30 w-[320px] rounded-xl border border-[#E2E4E9] bg-white shadow-xl p-4">
                   <h3 className="text-sm font-bold text-[#1C1F23] mb-1">{projectType} Members</h3>
                   <p className="text-xs text-[#8E9299] mb-3">
-                    These members have access to {projectType}. Go to Settings {'>'} Team Members to change access.
+                    {canManageBoardMembers 
+                      ? 'Toggle switches to grant or remove access for staff and freelancers.'
+                      : `These members have access to ${projectType}. Go to Settings > Team Members to change access.`}
                   </p>
                   <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
                     {teamMembers.map(member => {
@@ -826,15 +830,28 @@ export default function WorkspaceProjectView({
                       else hasAccess = member.role === 'staff';
 
                       return (
-                        <label key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-[#E2E4E9] bg-[#F9FAFB] px-3 py-2">
+                        <div key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-[#E2E4E9] bg-[#F9FAFB] px-3 py-2">
                           <div className="min-w-0">
                             <div className="text-sm font-semibold text-[#1C1F23] truncate">{member.name}</div>
                             <div className="text-[11px] text-[#8E9299] uppercase tracking-wider">{member.role === 'master_admin' ? 'Master Admin' : member.role || 'staff'}</div>
                           </div>
-                          <div className={`text-xs font-semibold ${hasAccess ? 'text-[#10B981]' : 'text-[#8E9299]'}`}>
-                            {hasAccess ? 'Access Granted' : 'No Access'}
-                          </div>
-                        </label>
+                          {canManageBoardMembers ? (
+                            <div className="flex items-center gap-2">
+                              {hasGlobalAccess && (
+                                <span className="text-[10px] font-bold text-[#1061E3] bg-[#EBF5FF] px-1.5 py-0.5 rounded uppercase tracking-tighter">Global</span>
+                              )}
+                              <Toggle 
+                                checked={hasAccess} 
+                                onChange={(val) => onUpdateMemberPermissions?.(member.id, projectType, val)} 
+                                disabled={hasGlobalAccess}
+                              />
+                            </div>
+                          ) : (
+                            <div className={`text-xs font-semibold ${hasAccess ? 'text-[#10B981]' : 'text-[#8E9299]'}`}>
+                              {hasAccess ? 'Access Granted' : 'No Access'}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
