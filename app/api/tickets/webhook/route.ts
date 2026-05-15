@@ -10,6 +10,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
+    console.log('Incoming Ticket Webhook Payload:', JSON.stringify(payload, null, 2));
     
     // Map common email webhook fields
     // This is a generic implementation. You may need to adjust field names

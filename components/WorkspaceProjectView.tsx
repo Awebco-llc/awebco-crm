@@ -685,13 +685,16 @@ export default function WorkspaceProjectView({
   };
 
   const handleAddWebsite = async () => {
+    // Find the current max order to put the new item at the end
+    const maxOrder = data.length > 0 ? Math.max(...data.map(r => r.order || 0)) : 0;
+    
     const newTicket = {
       projectName: 'New Manual Project',
-      assignee: teamMembers[0]?.id || '',
+      assignee: currentUserId || teamMembers[0]?.id || '',
       status: defaultStatus,
       deadline: '',
       url: '',
-      description: '',
+      description: 'Manually created ticket.',
       notes: '',
       files: [],
       planType: projectType === 'Local Listings' ? 'Basic Plan' : undefined,
@@ -699,12 +702,16 @@ export default function WorkspaceProjectView({
       isManual: true,
       groupId: projectType === 'Local Listings' ? 'group-setup' : 'group-active',
       workspace: projectType,
-      order: data.length,
+      order: maxOrder + 1,
     };
+    
     try {
-      await createTicket(newTicket);
+      console.log('Attempting to create manual ticket...', newTicket);
+      const id = await createTicket(newTicket);
+      console.log('Successfully created ticket with ID:', id);
     } catch (err) {
       console.error('Failed to create manual project', err);
+      alert('Failed to create ticket. Please check the console for details.');
     }
   };
 
