@@ -478,6 +478,11 @@ export default function WorkspaceProjectView({
   React.useEffect(() => {
     const unsub = subscribeTickets(projectType, (tickets) => {
       setData(tickets);
+    }, (err: any) => {
+      console.error('Subscription error:', err);
+      if (err.message?.includes('index')) {
+        alert('This board needs a Firestore index. Check the browser console for the setup link!');
+      }
     });
     return () => unsub();
   }, [projectType]);
