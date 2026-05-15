@@ -9,11 +9,11 @@ import {
   setDoc,
 } from 'firebase/firestore';
 
-import type { Contact, Company, TeamMember, ProductService, Proposal, Deal, ContactGroup, StorageFile } from '@/components/Shared';
+import type { Contact, Company, TeamMember, ProductService, Proposal, Deal, ContactGroup, StorageFile, Ticket } from '@/components/Shared';
 import { getDb, getFirebaseConfig } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
 import { initializeApp, getApps } from 'firebase/app';
-import { deleteDoc } from 'firebase/firestore';
+import { deleteDoc, where } from 'firebase/firestore';
 type Unsubscribe = () => void;
 
 export function subscribeUsers(onChange: (users: TeamMember[]) => void, onError?: (e: unknown) => void): Unsubscribe {
@@ -299,4 +299,33 @@ export async function saveFileMetadata(input: Omit<StorageFile, 'id'>): Promise<
 export async function deleteFileMetadata(id: string): Promise<void> {
   const db = getDb();
   await deleteDoc(doc(db, 'files', id));
+}
+
+// Tickets
+type TicketDoc = Omit<Ticket, 'id'> & { createdAt?: unknown; updatedAt?: unknown; };
+
+export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const q = query(
+    collection(getDb(), 'tickets'), 
+    where('workspace', '==', workspace),
+    orderBy('order', 'asc')
+  );
+  return onSnapshot(q, (snap) => {
+    onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketDoc) })));
+  }, (e) => onError?.(e));
+}
+
+export async function createTicket(input: Omit<Ticket, 'id'>): Promise<string> {
+  const ref = await addDoc(collection(getDb(), 'tickets'), {
+    ...input, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  } satisfies TicketDoc);
+  return ref.id;
+}
+
+export async function updateTicket(id: string, patch: Partial<Omit<Ticket, 'id'>>): Promise<void> {
+  await setDoc(doc(getDb(), 'tickets', id), { ...patch, updatedAt: serverTimestamp() } satisfies Partial<TicketDoc>, { merge: true });
+}
+
+export async function deleteTicket(id: string): Promise<void> {
+  await deleteDoc(doc(getDb(), 'tickets', id));
 }

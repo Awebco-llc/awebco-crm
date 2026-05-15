@@ -111,7 +111,45 @@ export interface Deal {
   order?: number;
 }
 
+export interface TicketUpdate {
+  id: string;
+  author: string;
+  text: string;
+  timestamp: string;
+  attachment?: string;
+}
 
+export interface TicketFile {
+  id: string;
+  name: string;
+  uploadedAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  parentId?: string;
+  projectName: string;
+  assignee: string;
+  status: string;
+  deadline: string;
+  url: string;
+  description: string;
+  pastelUrl?: string;
+  googleDriveUrl?: string;
+  notes?: string;
+  updates?: TicketUpdate[];
+  files?: TicketFile[];
+  planType?: string;
+  priority?: string;
+  billableHours?: string;
+  companyId?: string;
+  isManual?: boolean;
+  groupId?: string;
+  workspace: string;
+  order?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface Company {
   id: string;

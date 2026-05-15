@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -22,7 +22,9 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle } from '@/components/Shared';
+import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket } from '@/components/Shared';
+import { subscribeTickets, createTicket, updateTicket, deleteTicket } from '@/lib/crmStore';
+import TicketImportModal from './TicketImportModal';
 
 interface Column {
   id: string;
@@ -116,7 +118,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -128,7 +130,6 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
   };
 
   const isExpanded = expandedIds?.has(row.id);
-  const subtaskCount = data.filter((item: any) => item.parentId === row.id).length;
 
   return (
     <tr 
@@ -156,22 +157,19 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
                     : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
                   : (statusOptions || [])}
               onSave={(newVal) => {
-                const newData = [...data];
-                const rowIndex = newData.findIndex((r: any) => r.id === row.id);
-                const updatedRow = { ...newData[rowIndex], [col.id]: newVal };
+                const patch: any = { [col.id]: newVal };
                 if (projectType === 'Google Ads') {
-                  updatedRow.groupId = newVal === 'Running' ? 'group-running' : 'group-active';
+                  patch.groupId = newVal === 'Running' ? 'group-running' : 'group-active';
                 } else if (newVal === 'Running') {
-                  updatedRow.groupId = 'group-running';
+                  patch.groupId = 'group-running';
                 } else if (newVal === 'Needs Invoiced') {
-                  updatedRow.groupId = 'group-needs-invoiced';
+                  patch.groupId = 'group-needs-invoiced';
                 } else if (newVal === 'S14: Launched' || newVal === 'Launched' || newVal === 'Done') {
-                  updatedRow.groupId = 'group-completed';
-                } else if (newData[rowIndex].groupId === 'group-needs-invoiced' || newData[rowIndex].groupId === 'group-completed' || newData[rowIndex].groupId === 'group-running') {
-                  updatedRow.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
+                  patch.groupId = 'group-completed';
+                } else if (row.groupId === 'group-needs-invoiced' || row.groupId === 'group-completed' || row.groupId === 'group-running') {
+                  patch.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
                 }
-                newData[rowIndex] = updatedRow;
-                setData(newData);
+                onUpdate(row.id, patch);
               }} 
             />
           ) : col.id === 'priority' ? (
@@ -181,10 +179,7 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
               <select
                 value={row[col.id] || 'Basic Plan'}
                 onChange={(e) => {
-                  const newData = [...data];
-                  const rowIndex = newData.findIndex((r: any) => r.id === row.id);
-                  newData[rowIndex] = { ...newData[rowIndex], [col.id]: e.target.value };
-                  setData(newData);
+                  onUpdate(row.id, { [col.id]: e.target.value });
                 }}
                 className="bg-transparent text-sm border-none focus:ring-0 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1"
               >
@@ -196,10 +191,7 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
             <AssigneeDropdown 
               value={row[col.id]} 
               onSave={(newVal) => {
-                const newData = [...data];
-                const rowIndex = newData.findIndex((r: any) => r.id === row.id);
-                newData[rowIndex] = { ...newData[rowIndex], [col.id]: newVal };
-                setData(newData);
+                onUpdate(row.id, { [col.id]: newVal });
               }} 
               teamMembers={teamMembers} 
             />
@@ -219,10 +211,7 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
               <EditableCell
                 value={row[col.id]}
                 onSave={(newVal) => {
-                  const newData = [...data];
-                  const rowIndex = newData.findIndex((r: any) => r.id === row.id);
-                  newData[rowIndex] = { ...newData[rowIndex], [col.id]: newVal };
-                  setData(newData);
+                  onUpdate(row.id, { [col.id]: newVal });
                 }}
                 renderValue={
                   col.id === 'projectName' ? (v) => (
@@ -262,6 +251,7 @@ function SortableRow({ row, columns, data, setData, setEditingRowId, teamMembers
     </tr>
   );
 }
+
 
 function GroupDroppableBody({ groupId, children }: { groupId: string, children: React.ReactNode }) {
   const { setNodeRef } = useDroppable({ id: `group-container-${groupId}` });
@@ -400,6 +390,7 @@ export default function WorkspaceProjectView({
   const [isBoardEmailOpen, setIsBoardEmailOpen] = useState(false);
   const [copiedBoardEmail, setCopiedBoardEmail] = useState(false);
   const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   React.useEffect(() => {
     const handleGlobalClick = () => {
@@ -485,117 +476,94 @@ export default function WorkspaceProjectView({
   const defaultStatus = statusOptions[0];
 
   React.useEffect(() => {
-    setData((prev) => {
-      const requiredIds = new Set(companies.filter(c => c[flagKey] && !deletedIds.has(c.id)).map(c => c.id));
-      const newRows = companies
-        .filter(c => c[flagKey] && !deletedIds.has(c.id) && !prev.some(r => r.id === c.id))
-        .map(c => ({
-          id: c.id,
-          projectName: c.name + ' Project',
-          assignee: c.assignedToId || teamMembers[0]?.id || '',
-          status: defaultStatus,
-          deadline: '',
-          url: c.domain || '',
-          description: '',
-          pastelUrl: '',
-          googleDriveUrl: '',
-          notes: '',
-          files: [],
-          planType: projectType === 'Local Listings' ? 'Basic Plan' : undefined,
-          priority: projectType === 'Support Tickets' || projectType === 'Design & Print' ? 'Medium' : undefined,
-          groupId: projectType === 'Local Listings' ? 'group-setup' : 'group-active'
-        }));
-        
-      const keptRows = prev.filter(r => r.isManual || requiredIds.has(r.id) || (r.parentId && prev.some(parent => parent.id === r.parentId && (parent.isManual || requiredIds.has(parent.id)))));
-      return [...keptRows, ...newRows];
+    const unsub = subscribeTickets(projectType, (tickets) => {
+      setData(tickets);
     });
-  }, [companies, flagKey, teamMembers, deletedIds, defaultStatus, projectType]);
+    return () => unsub();
+  }, [projectType]);
 
-  const handleAddUpdate = (rowId: string) => {
+  const handleUpdateRow = async (id: string, patch: any) => {
+    try {
+      await updateTicket(id, patch);
+    } catch (err) {
+      console.error('Failed to update ticket', err);
+    }
+  };
+
+  const handleAddUpdate = async (rowId: string) => {
     if (!newUpdateText.trim() && !attachedFile) return;
 
     const row = data.find(item => item.id === rowId);
+    if (!row) return;
+
     const author = currentUserName || teamMembers?.[0]?.name || 'You';
     const trimmedText = newUpdateText.trim();
 
-    if (row && trimmedText) {
+    if (trimmedText) {
       onMention?.(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId);
     }
     
-    setData(prev => {
-      const idx = prev.findIndex(r => r.id === rowId);
-      if (idx === -1) return prev;
-      
-      const newUpdate = {
-        id: `update-${Date.now()}`,
-        author,
-        text: trimmedText,
-        timestamp: new Date().toISOString(),
-        attachment: attachedFile ? attachedFile.name : undefined
-      };
-      
-      const next = [...prev];
-      const updates = prev[idx].updates ? [...prev[idx].updates, newUpdate] : [newUpdate];
-      next[idx] = { ...prev[idx], updates };
-      return next;
-    });
+    const newUpdate = {
+      id: `update-${Date.now()}`,
+      author,
+      text: trimmedText,
+      timestamp: new Date().toISOString(),
+      attachment: attachedFile ? attachedFile.name : undefined
+    };
+    
+    const updates = row.updates ? [...row.updates, newUpdate] : [newUpdate];
+    await handleUpdateRow(rowId, { updates });
     
     setNewUpdateText('');
     setAttachedFile(null);
   };
 
-  const handleAddProjectFile = (rowId: string, file: File) => {
-    setData(prev => {
-      const idx = prev.findIndex(r => r.id === rowId);
-      if (idx === -1) return prev;
+  const handleAddProjectFile = async (rowId: string, file: File) => {
+    const row = data.find(item => item.id === rowId);
+    if (!row) return;
 
-      const next = [...prev];
-      const files = next[idx].files ? [...next[idx].files] : [];
-      files.push({
-        id: `file-${Date.now()}`,
-        name: file.name,
-        uploadedAt: new Date().toISOString(),
-      });
-      next[idx] = { ...next[idx], files };
-      return next;
+    const files = row.files ? [...row.files] : [];
+    files.push({
+      id: `file-${Date.now()}`,
+      name: file.name,
+      uploadedAt: new Date().toISOString(),
     });
+    await handleUpdateRow(rowId, { files });
   };
 
-  const handleRemoveProjectFile = (rowId: string, fileId: string) => {
-    setData(prev => prev.map(row => {
-      if (row.id !== rowId) return row;
-      return {
-        ...row,
-        files: (row.files || []).filter((file: any) => file.id !== fileId)
-      };
-    }));
+  const handleRemoveProjectFile = async (rowId: string, fileId: string) => {
+    const row = data.find(item => item.id === rowId);
+    if (!row) return;
+
+    const files = (row.files || []).filter((file: any) => file.id !== fileId);
+    await handleUpdateRow(rowId, { files });
   };
 
-  const deleteRow = (id: string) => {
-    setData(prev => prev.filter(r => r.id !== id && r.parentId !== id));
-    if (!String(id).startsWith('manual-')) {
-      setDeletedIds(prev => new Set(prev).add(id));
+  const deleteRow = async (id: string) => {
+    try {
+      await deleteTicket(id);
+    } catch (err) {
+      console.error('Failed to delete ticket', err);
     }
   };
 
-  const duplicateRow = (id: string) => {
-    setData(prev => {
-      const rowToDuplicate = prev.find(r => r.id === id);
-      if (!rowToDuplicate) return prev;
+  const duplicateRow = async (id: string) => {
+    const rowToDuplicate = data.find(r => r.id === id);
+    if (!rowToDuplicate) return;
 
-      const newRow = {
-        ...rowToDuplicate,
-        id: `dup-${Date.now()}`,
-        projectName: `${rowToDuplicate.projectName} (Copy)`,
-        isManual: true, // Duplicates are essentially manual items
-      };
+    const { id: _, createdAt: __, updatedAt: ___, ...rest } = rowToDuplicate;
+    const newRow = {
+      ...rest,
+      projectName: `${rowToDuplicate.projectName} (Copy)`,
+      isManual: true,
+      order: (rowToDuplicate.order || 0) + 0.5, // Simple way to insert after
+    };
 
-      const idx = prev.findIndex(r => r.id === id);
-      const next = [...prev];
-      // For groups/lists, inserting right after the original row
-      next.splice(idx + 1, 0, newRow);
-      return next;
-    });
+    try {
+      await createTicket(newRow);
+    } catch (err) {
+      console.error('Failed to duplicate ticket', err);
+    }
   };
 
   const toggleExpand = (id: string) => {
@@ -607,14 +575,11 @@ export default function WorkspaceProjectView({
     });
   };
 
-  const addSubRow = (parentId: string) => {
+  const addSubRow = async (parentId: string) => {
     setExpandedIds(prev => new Set(prev).add(parentId));
-    
-    // Find parent to inherit some properties
     const parent = data.find(r => r.id === parentId);
 
     const newSubRow = {
-      id: `sub-${Date.now()}`,
       parentId,
       projectName: 'New Sub-Task',
       assignee: parent?.assignee || teamMembers[0]?.id || '',
@@ -626,23 +591,16 @@ export default function WorkspaceProjectView({
       files: [],
       planType: projectType === 'Local Listings' ? 'Basic Plan' : undefined,
       priority: projectType === 'Support Tickets' || projectType === 'Design & Print' ? 'Medium' : undefined,
-      groupId: parent?.groupId || (projectType === 'Local Listings' ? 'group-setup' : 'group-active')
+      groupId: parent?.groupId || (projectType === 'Local Listings' ? 'group-setup' : 'group-active'),
+      workspace: projectType,
+      order: data.filter(r => r.parentId === parentId).length,
     };
     
-    setData(prev => {
-      // Insert immediately after parent's last subrow or just after parent
-      const parentIndex = prev.findIndex(r => r.id === parentId);
-      if (parentIndex === -1) return prev;
-      
-      let insertIndex = parentIndex + 1;
-      while (insertIndex < prev.length && prev[insertIndex].parentId === parentId) {
-        insertIndex++;
-      }
-      
-      const nextData = [...prev];
-      nextData.splice(insertIndex, 0, newSubRow);
-      return nextData;
-    });
+    try {
+      await createTicket(newSubRow);
+    } catch (err) {
+      console.error('Failed to create sub-task', err);
+    }
   };
 
   const sensors = useSensors(
@@ -650,7 +608,7 @@ export default function WorkspaceProjectView({
     useSensor(KeyboardSensor)
   );
 
-  const handleDragOver = (event: DragOverEvent) => {
+  const handleDragOver = async (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
     
@@ -668,29 +626,34 @@ export default function WorkspaceProjectView({
           const activeIdStr = String(active.id).replace('row-', '');
           const activeData = data.find(r => r.id === activeIdStr);
           if (activeData && getRowGroupId(activeData) !== targetGroupId) {
-            setData(prev => {
-              const next = [...prev];
-              const activeIndex = next.findIndex(r => r.id === activeIdStr);
-              if (activeIndex !== -1) {
-                next[activeIndex] = { ...next[activeIndex], groupId: targetGroupId };
-              }
-              return next;
-            });
+            await handleUpdateRow(activeIdStr, { groupId: targetGroupId });
           }
        }
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
     if (String(active.id).startsWith('row-')) {
-      setData((items) => {
-        const oldIndex = items.findIndex((r) => `row-${r.id}` === active.id);
-        const newIndex = items.findIndex((r) => `row-${r.id}` === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+      const activeId = String(active.id).replace('row-', '');
+      const overId = String(over.id).replace('row-', '');
+      
+      const oldIndex = data.findIndex((r) => r.id === activeId);
+      const newIndex = data.findIndex((r) => r.id === overId);
+      
+      const newItems = arrayMove(data, oldIndex, newIndex);
+      // Update orders in Firestore
+      // For simplicity, we'll just update the moved item's order to be between neighbors
+      const prevItem = newItems[newIndex - 1];
+      const nextItem = newItems[newIndex + 1];
+      let newOrder = 0;
+      if (!prevItem && nextItem) newOrder = (nextItem.order || 0) - 1;
+      else if (prevItem && !nextItem) newOrder = (prevItem.order || 0) + 1;
+      else if (prevItem && nextItem) newOrder = ((prevItem.order || 0) + (nextItem.order || 0)) / 2;
+      
+      await handleUpdateRow(activeId, { order: newOrder });
     } else {
       setColumns((items) => {
         const oldIndex = items.findIndex((col) => col.id === active.id);
@@ -704,13 +667,11 @@ export default function WorkspaceProjectView({
     e.preventDefault();
     if (!newColName.trim()) return;
     
-    // Generate a simple camelCase ID from the column name
     const newColId = newColName
       .toLowerCase()
       .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase())
       .replace(/[^a-zA-Z0-9]/g, '');
       
-    // Ensure unique ID
     let finalId = newColId;
     let counter = 1;
     while (columns.some(c => c.id === finalId)) {
@@ -723,9 +684,8 @@ export default function WorkspaceProjectView({
     setIsAddColOpen(false);
   };
 
-  const handleAddWebsite = () => {
-    const manualProject = {
-      id: `manual-${Date.now()}`,
+  const handleAddWebsite = async () => {
+    const newTicket = {
       projectName: 'New Manual Project',
       assignee: teamMembers[0]?.id || '',
       status: defaultStatus,
@@ -737,9 +697,15 @@ export default function WorkspaceProjectView({
       planType: projectType === 'Local Listings' ? 'Basic Plan' : undefined,
       priority: projectType === 'Support Tickets' || projectType === 'Design & Print' ? 'Medium' : undefined,
       isManual: true,
-      groupId: projectType === 'Local Listings' ? 'group-setup' : 'group-active'
+      groupId: projectType === 'Local Listings' ? 'group-setup' : 'group-active',
+      workspace: projectType,
+      order: data.length,
     };
-    setData(prev => [manualProject, ...prev]);
+    try {
+      await createTicket(newTicket);
+    } catch (err) {
+      console.error('Failed to create manual project', err);
+    }
   };
 
   const handleCopyBoardEmail = async () => {
@@ -908,6 +874,13 @@ export default function WorkspaceProjectView({
             ))}
           </select>
           <button 
+            onClick={() => setIsImportModalOpen(true)}
+            className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Import
+          </button>
+          <button 
             onClick={handleAddWebsite}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
@@ -981,8 +954,7 @@ export default function WorkspaceProjectView({
                             <SortableRow 
                               row={row} 
                               columns={columns} 
-                              data={data} 
-                              setData={setData} 
+                              onUpdate={handleUpdateRow}
                               setEditingRowId={setEditingRowId} 
                               teamMembers={teamMembers}
                               statusOptions={statusOptions}
@@ -996,14 +968,14 @@ export default function WorkspaceProjectView({
                                 e.preventDefault();
                                 setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
                               }}
+                              subtaskCount={visibleData.filter(r => r.parentId === row.id).length}
                             />
                             {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
                               <SortableRow 
                                 key={subRow.id} 
                                 row={subRow} 
                                 columns={columns} 
-                                data={data} 
-                                setData={setData} 
+                                onUpdate={handleUpdateRow}
                                 setEditingRowId={setEditingRowId} 
                                 teamMembers={teamMembers}
                                 statusOptions={statusOptions}
@@ -1240,22 +1212,19 @@ export default function WorkspaceProjectView({
                         <select 
                           value={editingRow?.[col.id] ?? ''}
                           onChange={e => {
-                            const newData = [...data];
-                            const rowIndex = newData.findIndex(r => r.id === editingRowId);
-                            const updatedRow = { ...newData[rowIndex], [col.id]: e.target.value };
+                            const patch: any = { [col.id]: e.target.value };
                             if (projectType === 'Google Ads') {
-                              updatedRow.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
+                              patch.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
                             } else if (e.target.value === 'Running') {
-                              updatedRow.groupId = 'group-running';
+                              patch.groupId = 'group-running';
                             } else if (e.target.value === 'Needs Invoiced') {
-                              updatedRow.groupId = 'group-needs-invoiced';
+                              patch.groupId = 'group-needs-invoiced';
                             } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
-                              updatedRow.groupId = 'group-completed';
-                            } else if (newData[rowIndex].groupId === 'group-needs-invoiced' || newData[rowIndex].groupId === 'group-completed' || newData[rowIndex].groupId === 'group-running') {
-                              updatedRow.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
+                              patch.groupId = 'group-completed';
+                            } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
+                              patch.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
                             }
-                            newData[rowIndex] = updatedRow;
-                            setData(newData);
+                            handleUpdateRow(editingRowId, patch);
                           }}
                           className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                         >
@@ -1265,10 +1234,7 @@ export default function WorkspaceProjectView({
                         <select
                           value={editingRow?.[col.id] ?? ''}
                           onChange={e => {
-                            const newData = [...data];
-                            const rowIndex = newData.findIndex(r => r.id === editingRowId);
-                            newData[rowIndex] = { ...newData[rowIndex], [col.id]: e.target.value };
-                            setData(newData);
+                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
                           }}
                           className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                         >
@@ -1281,10 +1247,7 @@ export default function WorkspaceProjectView({
                         <select
                           value={editingRow?.[col.id] ?? 'Basic Plan'}
                           onChange={e => {
-                            const newData = [...data];
-                            const rowIndex = newData.findIndex(r => r.id === editingRowId);
-                            newData[rowIndex] = { ...newData[rowIndex], [col.id]: e.target.value };
-                            setData(newData);
+                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
                           }}
                           className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                         >
@@ -1295,10 +1258,7 @@ export default function WorkspaceProjectView({
                         <select
                           value={editingRow?.[col.id] ?? ''}
                           onChange={e => {
-                            const newData = [...data];
-                            const rowIndex = newData.findIndex(r => r.id === editingRowId);
-                            newData[rowIndex] = { ...newData[rowIndex], [col.id]: e.target.value };
-                            setData(newData);
+                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
                           }}
                           className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                         >
@@ -1312,10 +1272,7 @@ export default function WorkspaceProjectView({
                           <AssigneeDropdown 
                             value={editingRow?.[col.id] || ''} 
                             onSave={(newVal) => {
-                              const newData = [...data];
-                              const rowIndex = newData.findIndex(r => r.id === editingRowId);
-                              newData[rowIndex] = { ...newData[rowIndex], [col.id]: newVal };
-                              setData(newData);
+                              handleUpdateRow(editingRowId, { [col.id]: newVal });
                             }} 
                             teamMembers={teamMembers} 
                           />
@@ -1325,10 +1282,7 @@ export default function WorkspaceProjectView({
                           type={col.id === 'deadline' ? 'date' : 'text'}
                           value={editingRow?.[col.id] ?? ''}
                           onChange={e => {
-                            const newData = [...data];
-                            const rowIndex = newData.findIndex(r => r.id === editingRowId);
-                            newData[rowIndex] = { ...newData[rowIndex], [col.id]: e.target.value };
-                            setData(newData);
+                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
                           }}
                           className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
                         />
@@ -1346,10 +1300,7 @@ export default function WorkspaceProjectView({
                       <textarea
                         value={editingRow?.description ?? ''}
                         onChange={e => {
-                          const newData = [...data];
-                          const rowIndex = newData.findIndex(r => r.id === editingRowId);
-                          newData[rowIndex] = { ...newData[rowIndex], description: e.target.value };
-                          setData(newData);
+                          handleUpdateRow(editingRowId, { description: e.target.value });
                         }}
                         placeholder={`Add a description for this ${projectType.toLowerCase()} project...`}
                         className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[280px] resize-y"
@@ -1619,6 +1570,14 @@ export default function WorkspaceProjectView({
           </div>
         )}
       </AnimatePresence>
+
+      <TicketImportModal 
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        teamMembers={teamMembers}
+        companies={companies}
+        workspace={projectType}
+      />
     </div>
   );
 }
