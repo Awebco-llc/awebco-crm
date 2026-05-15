@@ -69,12 +69,24 @@ export function getFirebaseApp(): FirebaseApp {
   return initFirebaseClient().app;
 }
 
-export function getDb(): Firestore {
-  return initFirebaseClient().db;
+export function getAuthClient() {
+  const app = getFirebaseApp();
+  // On the server, we initialize Auth without any persistence (since there is no localStorage)
+  if (typeof window === 'undefined') {
+    const { getAuth, inMemoryPersistence } = require('firebase/auth');
+    const auth = getAuth(app);
+    auth.setPersistence(inMemoryPersistence);
+    return auth;
+  }
+  const { getAuth } = require('firebase/auth');
+  return getAuth(app);
 }
 
-export function getAuthClient(): Auth {
-  return initFirebaseClient().auth;
+export function getDb() {
+  const app = getFirebaseApp();
+  const firestoreDatabaseId = process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID || '(default)';
+  const { getFirestore } = require('firebase/firestore');
+  return getFirestore(app, firestoreDatabaseId);
 }
 
 export function getGoogleProvider(): GoogleAuthProvider {

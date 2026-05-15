@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import * as admin from 'firebase-admin';
 
 /**
  * Inbound Email Webhook
  * Receives POST requests from email providers or form webhooks (like Gravity Forms)
- * and automatically creates a support ticket.
+ * and automatically creates a support ticket using Admin privileges.
  */
 export async function POST(req: Request) {
   try {
@@ -16,35 +16,35 @@ export async function POST(req: Request) {
     const subject = payload.subject || 'No Subject';
     const textBody = payload.text || payload.body || payload.message || '';
     const fromEmail = payload.from || payload.sender || payload.email || 'Unknown';
-    const toEmail = payload.to || '';
 
     // Create the ticket in the 'Support Tickets' workspace
-    const ticketData: any = {
+    const ticketData = {
       projectName: subject,
       description: textBody || 'No content',
       status: 'Not Started',
       priority: 'Medium',
       assignee: '', 
       workspace: 'Support Tickets',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       order: Date.now(),
       isManual: false,
       notes: `Received via webhook from ${fromEmail}`,
     };
 
-    const docRef = await addDoc(collection(getDb(), 'tickets'), ticketData);
+    const db = getAdminDb();
+    const docRef = await db.collection('tickets').add(ticketData);
 
     return NextResponse.json({ 
       success: true, 
       ticketId: docRef.id,
       message: 'Ticket created successfully' 
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error in ticket webhook:', err);
     return NextResponse.json({ 
       success: false, 
-      error: 'Failed to process webhook' 
+      error: err.message || 'Failed to process webhook' 
     }, { status: 500 });
   }
 }
