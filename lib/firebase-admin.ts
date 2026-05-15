@@ -15,7 +15,6 @@ export function getAdminDb() {
         // Handle newline characters in the private key
         privateKey: privateKey ? privateKey.replace(/\\n/g, '\n') : undefined,
       }),
-      databaseId: process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID || '(default)'
     });
   }
   return admin.firestore();
