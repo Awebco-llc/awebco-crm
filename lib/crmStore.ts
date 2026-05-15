@@ -302,7 +302,7 @@ export async function deleteFileMetadata(id: string): Promise<void> {
 }
 
 // Tickets
-type TicketDoc = Omit<Ticket, 'id'> & { createdAt?: unknown; updatedAt?: unknown; };
+type TicketDoc = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: unknown; updatedAt?: unknown; };
 
 export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]) => void, onError?: (e: unknown) => void): Unsubscribe {
   const q = query(
