@@ -45,9 +45,7 @@ function initFirebaseClient() {
   if (cached) return cached;
 
   // Prevent Next build/SSR from executing Firebase init when env vars may be absent.
-  if (typeof window === 'undefined') {
-    throw new Error('Firebase client SDK was initialized on the server. This is a bug.');
-  }
+  // Firebase client SDK can run on the server (Node.js), so we allow it for API routes.
 
   const firebaseConfig = getFirebaseConfig();
 

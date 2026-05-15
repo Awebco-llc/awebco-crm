@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { getDb } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 /**
  * Inbound Email Webhook
- * Receives POST requests from email providers (SendGrid, Postmark, etc.)
+ * Receives POST requests from email providers or form webhooks (like Gravity Forms)
  * and automatically creates a support ticket.
  */
 export async function POST(req: Request) {
@@ -12,38 +12,28 @@ export async function POST(req: Request) {
     const payload = await req.json();
     console.log('Incoming Ticket Webhook Payload:', JSON.stringify(payload, null, 2));
     
-    // Map common email webhook fields
-    // This is a generic implementation. You may need to adjust field names
-    // based on your specific email provider's webhook payload structure.
+    // Map common email/form webhook fields
     const subject = payload.subject || 'No Subject';
-    const textBody = payload.text || payload.body || '';
-    const htmlBody = payload.html || '';
-    const fromEmail = payload.from || payload.sender || 'Unknown';
+    const textBody = payload.text || payload.body || payload.message || '';
+    const fromEmail = payload.from || payload.sender || payload.email || 'Unknown';
     const toEmail = payload.to || '';
 
     // Create the ticket in the 'Support Tickets' workspace
-    const ticketData = {
+    const ticketData: any = {
       projectName: subject,
-      description: textBody || htmlBody.replace(/<[^>]*>?/gm, '') || 'No content',
+      description: textBody || 'No content',
       status: 'Not Started',
       priority: 'Medium',
-      assignee: '', // Unassigned by default
+      assignee: '', 
       workspace: 'Support Tickets',
-      companyId: '', // We could potentially look up company by email domain here
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      order: Date.now(), // High timestamp to put at bottom
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      order: Date.now(),
       isManual: false,
-      notes: `Received via email from ${fromEmail}`,
-      originalEmail: {
-        from: fromEmail,
-        to: toEmail,
-        subject: subject,
-        receivedAt: new Date().toISOString()
-      }
+      notes: `Received via webhook from ${fromEmail}`,
     };
 
-    const docRef = await db.collection('tickets').add(ticketData);
+    const docRef = await addDoc(collection(getDb(), 'tickets'), ticketData);
 
     return NextResponse.json({ 
       success: true, 
