@@ -395,7 +395,16 @@ export default function Page() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeNav, setActiveNav] = useState('My Tasks');
+  const [activeNav, setActiveNav] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('activeNav') || 'My Tasks';
+    }
+    return 'My Tasks';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('activeNav', activeNav);
+  }, [activeNav]);
   const [navFilter, setNavFilter] = useState<'All' | 'CRM' | 'Workspace'>('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
