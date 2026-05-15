@@ -311,7 +311,15 @@ export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]
     orderBy('order', 'asc')
   );
   return onSnapshot(q, (snap) => {
-    onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketDoc) })));
+    onChange(snap.docs.map((d) => {
+      const data = d.data() as any;
+      return {
+        id: d.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+      } as Ticket;
+    }));
   }, (e) => onError?.(e));
 }
 
