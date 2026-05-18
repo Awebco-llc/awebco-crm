@@ -27,6 +27,38 @@ export interface TicketImportResult {
   parentName?: string;
 }
 
+function parseDateValue(val: any): string {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (!str || str === '-') return '';
+
+  // 1. Check if it's a numeric Excel serial number
+  const num = Number(str);
+  if (!Number.isNaN(num) && num > 30000 && num < 60000) {
+    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+    const yyyy = date.getUTCFullYear();
+    const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(date.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // 2. Check if it is already in YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  // 3. Try parsing with standard Date
+  const parsed = new Date(str);
+  if (!Number.isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return str;
+}
+
 function isNextRowHeader(rows: string[][], startIndex: number): boolean {
   for (let i = startIndex; i < rows.length; i++) {
     const nextRow = rows[i].map(c => (c === undefined || c === null) ? '' : String(c).trim());
@@ -124,7 +156,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
           priority: 'Medium',
           assigneeName: row[ownerIdx] || '',
           companyName: '',
-          deadline: row[dateIdx] || '',
+          deadline: parseDateValue(row[dateIdx]),
           url: row[linkIdx] || row[docIdx] || '',
           groupName: currentGroup,
           isSubRow: true,
@@ -153,7 +185,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
           priority: 'Medium',
           assigneeName: row[personIdx] || '',
           companyName: '',
-          deadline: row[dateIdx] || '',
+          deadline: parseDateValue(row[dateIdx]),
           url: row[linkIdx] || '',
           groupName: currentGroup,
           isSubRow: false
@@ -170,7 +202,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
           priority: 'Medium',
           assigneeName: row[2] || '',
           companyName: '',
-          deadline: row[4] || '',
+          deadline: parseDateValue(row[4]),
           url: row[6] || '',
           groupName: currentGroup,
           isSubRow: false
@@ -300,7 +332,7 @@ export function mapTicketImportData(rawData: any[]): TicketImportResult[] {
     priority: row['Priority'] || 'Medium',
     assigneeName: row['Assignee'] || row['Owner'] || row['People'] || '',
     companyName: row['Company'] || row['Account'] || '',
-    deadline: row['Deadline'] || row['Due Date'] || '',
+    deadline: parseDateValue(row['Deadline'] || row['Due Date']),
     url: row['URL'] || row['Link'] || '',
   })).filter(item => item.projectName);
 }
@@ -366,7 +398,7 @@ export async function processImport(
       phone: item.phone,
       title: item.title,
       companyId: companyId,
-      assignedToId: assignedTo?.id || teamMembers[0]?.id || '',
+      assignedToId: assignedTo?.id || '',
       status: 'Lead' as Status,
       groupId: defaultGroupId,
     });
@@ -464,7 +496,7 @@ export async function processTicketImport(
       description: item.description,
       status: item.status,
       priority: item.priority,
-      assignee: assignedTo?.id || teamMembers[0]?.id || '',
+      assignee: assignedTo?.id || '',
       companyId: companyId,
       groupId: groupId || undefined,
       parentId: parentId || undefined,

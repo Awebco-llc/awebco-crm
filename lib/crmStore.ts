@@ -342,14 +342,20 @@ export function subscribeAllTickets(onChange: (tickets: Ticket[]) => void, onErr
 }
 
 export async function createTicket(input: Omit<Ticket, 'id'>): Promise<string> {
+  const cleanInput = Object.fromEntries(
+    Object.entries(input).filter(([_, v]) => v !== undefined)
+  );
   const ref = await addDoc(collection(getDb(), 'tickets'), {
-    ...input, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-  } satisfies TicketDoc);
+    ...cleanInput, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
   return ref.id;
 }
 
 export async function updateTicket(id: string, patch: Partial<Omit<Ticket, 'id'>>): Promise<void> {
-  await setDoc(doc(getDb(), 'tickets', id), { ...patch, updatedAt: serverTimestamp() } satisfies Partial<TicketDoc>, { merge: true });
+  const cleanPatch = Object.fromEntries(
+    Object.entries(patch).filter(([_, v]) => v !== undefined)
+  );
+  await setDoc(doc(getDb(), 'tickets', id), { ...cleanPatch, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 export async function deleteTicket(id: string): Promise<void> {

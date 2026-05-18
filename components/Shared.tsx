@@ -546,3 +546,61 @@ export function Toggle({ checked, onChange, disabled }: { checked: boolean, onCh
     </button>
   );
 }
+
+export function EditableDeadline({ value, onSave }: { value: string; onSave: (val: string) => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      if (typeof inputRef.current.showPicker === 'function') {
+        try {
+          inputRef.current.showPicker();
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  }, [isEditing]);
+
+  const displayValue = () => {
+    if (!value) return '-';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(date);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          type="date"
+          value={value || ''}
+          onChange={(e) => {
+            onSave(e.target.value);
+            setIsEditing(false);
+          }}
+          onBlur={() => setIsEditing(false)}
+          className="px-2 py-1 text-xs border border-[#E2E4E9] rounded-md outline-none bg-white font-medium text-[#1C1F23] focus:ring-2 focus:ring-[#1061E3] focus:border-transparent cursor-pointer"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="relative inline-block hover:bg-gray-100 rounded px-2 py-0.5 -mx-2 cursor-pointer transition-colors"
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsEditing(true);
+      }}
+      title="Click to select deadline"
+    >
+      <span className="text-[#4A4D53] hover:text-[#1C1F23]">
+        {displayValue()}
+      </span>
+    </div>
+  );
+}

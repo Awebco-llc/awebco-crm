@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2 } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -22,7 +22,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket } from '@/components/Shared';
+import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket, EditableDeadline } from '@/components/Shared';
 import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour } from '@/lib/crmStore';
 import TicketImportModal from './TicketImportModal';
 
@@ -304,7 +304,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -323,15 +323,34 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
       style={style}
       onClick={() => setEditingRowId(row.id)}
       onContextMenu={(e) => onContextMenu?.(e, row.id, isSubRow)}
-      className={`hover:bg-gray-50 transition-colors cursor-pointer group ${isSubRow ? 'bg-[#FAFAFA]' : ''}`}
+      className={`hover:bg-gray-50 transition-colors cursor-pointer group ${isSubRow ? 'bg-[#FAFAFA]' : ''} ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : ''}`}
     >
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-10">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
-          <GripVertical className="w-4 h-4" />
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-[70px] select-none" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2">
+          {!isSubRow && (
+            <input 
+              type="checkbox"
+              checked={isSelected || false}
+              onChange={() => onToggleSelect?.()}
+              className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
+            />
+          )}
+          {!isSubRow && (
+            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
+          {isSubRow && <div className="w-9" />}
         </div>
       </td>
       {columns.map((col: any) => (
-        <td key={col.id} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap max-w-[200px] truncate relative">
+        <td key={col.id} className={`px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative ${
+          col.id === 'projectName' 
+            ? 'max-w-[450px] min-w-[250px]' 
+            : col.id === 'notes'
+            ? 'max-w-[350px] min-w-[150px]'
+            : 'max-w-[160px]'
+        }`}>
           {col.id === 'status' ? (
             <EditableStatus 
               value={row[col.id]} 
@@ -384,6 +403,30 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
               }} 
               teamMembers={teamMembers} 
             />
+          ) : col.id === 'deadline' ? (
+            <EditableDeadline 
+              value={row[col.id] || ''} 
+              onSave={(newVal) => {
+                onUpdate(row.id, { [col.id]: newVal });
+              }} 
+            />
+          ) : col.id === 'url' ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              {row[col.id] ? (
+                <a
+                  href={/^https?:\/\//i.test(row[col.id]) ? row[col.id] : `https://${row[col.id]}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={row[col.id]}
+                  className="flex items-center gap-1 text-[#1061E3] hover:text-blue-800 hover:underline font-medium truncate max-w-[180px] transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{row[col.id].replace(/^https?:\/\//i, '')}</span>
+                </a>
+              ) : (
+                <span className="text-[#C8CDD5] text-xs">—</span>
+              )}
+            </div>
           ) : (
             <div className={`flex items-center gap-2 ${col.id === 'projectName' && isSubRow ? 'pl-6' : ''}`}>
               {col.id === 'projectName' && !isSubRow && (
@@ -577,6 +620,48 @@ export default function WorkspaceProjectView({
   const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [customBillableHours, setCustomBillableHours] = useState<string[]>([]);
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const [activeBulkGroupDropdown, setActiveBulkGroupDropdown] = useState(false);
+
+  const handleToggleSelectRow = (id: string) => {
+    setSelectedRowIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedRowIds(new Set());
+  };
+
+  const handleBulkMoveSelected = async (targetGroupId: string) => {
+    try {
+      const ids = Array.from(selectedRowIds);
+      for (const id of ids) {
+        await handleUpdateRow(id, { groupId: targetGroupId });
+      }
+      handleClearSelection();
+    } catch (err) {
+      console.error('Failed to bulk move rows', err);
+    }
+  };
+
+  const handleBulkDeleteSelected = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedRowIds.size} selected rows? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const ids = Array.from(selectedRowIds);
+      for (const id of ids) {
+        await deleteTicket(id);
+      }
+      handleClearSelection();
+    } catch (err) {
+      console.error('Failed to bulk delete rows', err);
+    }
+  };
 
   React.useEffect(() => {
     const unsub = subscribeBillableHours((labels) => {
@@ -1194,11 +1279,32 @@ export default function WorkspaceProjectView({
                     deleteGroup(id);
                   }} 
                 />
-                <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
+                 <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
                   <table className="w-full border-collapse text-left">
                     <thead>
                       <tr>
-                        <th className="w-10 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
+                        <th className="w-[70px] bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]">
+                          <div className="flex items-center pl-1">
+                            <input 
+                              type="checkbox"
+                              checked={groupRows.length > 0 && groupRows.every(r => selectedRowIds.has(r.id))}
+                              onChange={(e) => {
+                                const isChecked = e.target.checked;
+                                const rowIds = groupRows.map(r => r.id);
+                                setSelectedRowIds(prev => {
+                                  const next = new Set(prev);
+                                  if (isChecked) {
+                                    rowIds.forEach(id => next.add(id));
+                                  } else {
+                                    rowIds.forEach(id => next.delete(id));
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4"
+                            />
+                          </div>
+                        </th>
                         <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
                           {columns.map(col => (
                             <SortableHeader key={col.id} column={col} />
@@ -1240,6 +1346,8 @@ export default function WorkspaceProjectView({
                                 setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
                               }}
                               subtaskCount={visibleData.filter(r => r.parentId === row.id).length}
+                              isSelected={selectedRowIds.has(row.id)}
+                              onToggleSelect={() => handleToggleSelectRow(row.id)}
                             />
                             {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
                               <SortableRow 
@@ -1257,6 +1365,8 @@ export default function WorkspaceProjectView({
                                   e.preventDefault();
                                   setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
                                 }}
+                                isSelected={false}
+                                onToggleSelect={undefined}
                               />
                             ))}
                           </React.Fragment>
@@ -1440,13 +1550,26 @@ export default function WorkspaceProjectView({
               >
                 {/* Header bar */}
                 <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
-                  <button 
-                    onClick={() => setEditingRowId(null)}
-                    className="flex items-center gap-2 text-sm font-semibold text-[#4A4D53] hover:text-[#1C1F23] transition-colors bg-[#F0F2F5] hover:bg-[#E2E8F0] px-4 py-2 rounded-lg"
-                  >
-                    <X className="w-4 h-4" />
-                    Back to Tickets
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setEditingRowId(null)}
+                      className="flex items-center gap-2 text-sm font-semibold text-[#4A4D53] hover:text-[#1C1F23] transition-colors bg-[#F0F2F5] hover:bg-[#E2E8F0] px-4 py-2 rounded-lg"
+                    >
+                      <X className="w-4 h-4" />
+                      Back to Tickets
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRowToDeleteId(editingRowId);
+                        setEditingRowId(null);
+                      }}
+                      className="flex items-center gap-2 text-sm font-semibold text-[#D32F2F] hover:text-white border border-[#D32F2F] hover:bg-[#D32F2F] transition-all px-3 py-2 rounded-lg shadow-sm ml-2"
+                      title="Delete Ticket"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Ticket
+                    </button>
+                  </div>
                   <h2 className="text-base font-bold text-[#1C1F23]">Ticket Detail View</h2>
                   <button
                     onClick={() => setEditingRowId(null)}
@@ -2303,7 +2426,17 @@ export default function WorkspaceProjectView({
                     );
                   })()}
                 </div>
-                <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
+                <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-between items-center shrink-0">
+                  <button 
+                    onClick={() => {
+                      setRowToDeleteId(editingRowId);
+                      setEditingRowId(null);
+                    }}
+                    className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 border border-[#D32F2F]/20"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
                   <button 
                     onClick={() => setEditingRowId(null)}
                     className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
@@ -2314,6 +2447,92 @@ export default function WorkspaceProjectView({
               </motion.div>
             </div>
           )
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Multi-Select Floating Bar */}
+      <AnimatePresence>
+        {selectedRowIds.size > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1C1F23]/95 backdrop-blur-md text-white px-6 py-3.5 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.25)] border border-white/10 flex items-center gap-6 select-none"
+          >
+            {/* Selected Count */}
+            <div className="flex items-center gap-3 pr-4 border-r border-white/10">
+              <span className="w-6 h-6 rounded-full bg-[#1061E3] flex items-center justify-center font-bold text-xs">
+                {selectedRowIds.size}
+              </span>
+              <span className="text-sm font-semibold tracking-wide">
+                {selectedRowIds.size === 1 ? 'row selected' : 'rows selected'}
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              {/* Move to Group Button with Dropdown Popover */}
+              <div className="relative">
+                <button 
+                  onClick={() => setActiveBulkGroupDropdown(prev => !prev)}
+                  className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                >
+                  <ArrowRight className="w-4 h-4 text-blue-400" />
+                  Move to
+                </button>
+                
+                {/* Custom Sleek Dropdown */}
+                <AnimatePresence>
+                  {activeBulkGroupDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setActiveBulkGroupDropdown(false)} />
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
+                      >
+                        <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
+                          Select Group
+                        </div>
+                        {groups.map(group => (
+                          <button
+                            key={group.id}
+                            onClick={() => {
+                              handleBulkMoveSelected(group.id);
+                              setActiveBulkGroupDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center justify-between"
+                          >
+                            <span>{group.name}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Delete Button */}
+              <button 
+                onClick={handleBulkDeleteSelected}
+                className="flex items-center gap-2 text-xs font-bold hover:bg-red-500/10 hover:text-red-400 text-red-500 px-4 py-2 rounded-lg transition-all border border-red-500/10 active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            </div>
+
+            {/* Clear / Dismiss Selection */}
+            <button 
+              onClick={handleClearSelection}
+              className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-all active:scale-95"
+              title="Clear Selection"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
 
