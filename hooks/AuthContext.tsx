@@ -37,24 +37,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profileSnap = await getDoc(profileRef);
         
         if (profileSnap.exists()) {
-          setProfile({ id: firebaseUser.uid, ...profileSnap.data() } as TeamMember);
+          const profileData = profileSnap.data();
+          // Enforce role-based access
+          if (['master_admin', 'admin', 'staff', 'freelancer'].includes(profileData.role)) {
+             setProfile({ id: firebaseUser.uid, ...profileData } as TeamMember);
+          } else {
+             console.error("Unauthorized access attempt by user without a valid role.");
+             await auth.signOut();
+             setProfile(null);
+             setUser(null);
+          }
         } else {
-          // If profile doesn't exist, create a basic one from Firebase Auth info
-          const initials = firebaseUser.displayName 
-            ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').toUpperCase()
-            : firebaseUser.email?.split('@')[0].slice(0, 2).toUpperCase() || '??';
-            
-          const newProfile: Omit<TeamMember, 'id'> = {
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            initials,
-            color: '#1061E3',
-            role: 'staff',
-            email: firebaseUser.email || '',
-            uid: firebaseUser.uid
-          };
-          
-          await setDoc(profileRef, newProfile);
-          setProfile({ id: firebaseUser.uid, ...newProfile } as TeamMember);
+          // If profile doesn't exist, they are not authorized. Log them out.
+          console.error("Unauthorized access attempt by unapproved user.");
+          await auth.signOut();
+          setProfile(null);
+          setUser(null);
         }
       } else {
         setProfile(null);

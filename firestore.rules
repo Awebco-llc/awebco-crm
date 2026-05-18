@@ -2,9 +2,29 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Secure access: Only authenticated team members can read/write.
+    // Helper function to check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to get the user's role from their profile document
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Helper function to check if the user has a valid team member role
+    function hasValidRole() {
+      return getUserRole() in ['master_admin', 'admin', 'staff', 'freelancer'];
+    }
+
+    // Secure access: Only authenticated team members with a valid role can read/write.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated() && hasValidRole();
+    }
+    
+    // Exception: Users need to be able to read their own profile to get their role
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

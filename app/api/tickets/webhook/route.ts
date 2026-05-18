@@ -116,6 +116,15 @@ function parseFieldsFromText(text: string) {
  */
 export async function POST(req: Request) {
   try {
+    const url = new URL(req.url);
+    const secret = url.searchParams.get('secret');
+    const expectedSecret = process.env.WEBHOOK_SECRET;
+
+    if (!expectedSecret || secret !== expectedSecret) {
+      console.warn('Unauthorized webhook access attempt.');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const payload = await req.json();
     console.log('Incoming Ticket Webhook Payload:', JSON.stringify(payload, null, 2));
 

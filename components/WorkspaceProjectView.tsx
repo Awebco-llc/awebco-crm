@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -622,6 +622,43 @@ export default function WorkspaceProjectView({
   const [customBillableHours, setCustomBillableHours] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [activeBulkGroupDropdown, setActiveBulkGroupDropdown] = useState(false);
+  const [sheetsSyncStatus, setSheetsSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+
+  // Always-fresh ref so the debounced sync uses latest data
+  const dataRef = React.useRef(data);
+  const groupsRef = React.useRef(groups);
+  React.useEffect(() => { dataRef.current = data; }, [data]);
+  React.useEffect(() => { groupsRef.current = groups; }, [groups]);
+  const sheetsSyncTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerSheetsSync = React.useCallback(() => {
+    if (projectType !== 'SEO') return;
+    if (sheetsSyncTimerRef.current) clearTimeout(sheetsSyncTimerRef.current);
+    sheetsSyncTimerRef.current = setTimeout(async () => {
+      setSheetsSyncStatus('syncing');
+      try {
+        const res = await fetch('/api/sheets/sync', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_SECRET}`
+          },
+          body: JSON.stringify({
+            tickets: dataRef.current,
+            groups: groupsRef.current,
+            teamMembers,
+          }),
+        });
+        if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
+        setSheetsSyncStatus('success');
+        setTimeout(() => setSheetsSyncStatus('idle'), 3000);
+      } catch (err) {
+        console.error('[Sheets Sync]', err);
+        setSheetsSyncStatus('error');
+        setTimeout(() => setSheetsSyncStatus('idle'), 4000);
+      }
+    }, 2000);
+  }, [projectType, teamMembers]);
 
   const handleToggleSelectRow = (id: string) => {
     setSelectedRowIds(prev => {
@@ -803,6 +840,7 @@ export default function WorkspaceProjectView({
   const handleUpdateRow = async (id: string, patch: any) => {
     try {
       await updateTicket(id, patch);
+      triggerSheetsSync();
     } catch (err) {
       console.error('Failed to update ticket', err);
     }
@@ -1080,6 +1118,34 @@ export default function WorkspaceProjectView({
           />
         </div>
         <div className="flex gap-3">
+          {projectType === 'SEO' && (
+            <button
+              onClick={() => triggerSheetsSync()}
+              disabled={sheetsSyncStatus === 'syncing'}
+              title="Sync this board to Google Sheets"
+              className={`h-[38px] px-3 rounded-md border text-sm font-semibold flex items-center gap-2 transition-all ${
+                sheetsSyncStatus === 'success'
+                  ? 'border-green-300 bg-green-50 text-green-700'
+                  : sheetsSyncStatus === 'error'
+                  ? 'border-red-300 bg-red-50 text-red-600'
+                  : 'border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-50 hover:text-[#1061E3]'
+              }`}
+            >
+              {sheetsSyncStatus === 'syncing' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : sheetsSyncStatus === 'success' ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              <span>
+                {sheetsSyncStatus === 'syncing' ? 'Syncing…' :
+                 sheetsSyncStatus === 'success' ? 'Synced!' :
+                 sheetsSyncStatus === 'error' ? 'Sync Failed' :
+                 'Sync to Sheets'}
+              </span>
+            </button>
+          )}
           {canManageBoardMembers && (
             <div className="relative">
               <button
