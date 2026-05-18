@@ -402,6 +402,13 @@ export default function Page() {
     return 'My Tasks';
   });
 
+  const [useFullScreenUnifiedTicketView, setUseFullScreenUnifiedTicketView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('useFullScreenUnifiedTicketView') === 'true';
+    }
+    return false;
+  });
+
   useEffect(() => {
     localStorage.setItem('activeNav', activeNav);
   }, [activeNav]);
@@ -920,7 +927,7 @@ export default function Page() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA] text-[#1C1F23]">
         <form onSubmit={login} className="bg-white p-8 rounded-lg border border-[#E2E4E9] shadow-sm max-w-sm w-full">
-          <div className="w-12 h-12 bg-[#003366] text-white rounded-md flex items-center justify-center text-xl font-bold mx-auto mb-4">A</div>
+          <img src="/logo.png" alt="Awebco Logo" className="w-12 h-12 mx-auto mb-4 object-contain" />
           <h1 className="text-xl font-bold mb-2 text-center">Welcome to Awebco</h1>
           <p className="text-sm text-[#8E9299] mb-6 text-center">Log in with your team account.</p>
           {authError && (
@@ -969,9 +976,7 @@ export default function Page() {
       {/* Sidebar */}
       <aside className="w-[220px] bg-[#003366] border-r border-[#002244] flex flex-col shrink-0 overflow-y-auto">
         <div className="p-6 flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center text-[#003366] font-bold text-lg shadow-sm">
-            A
-          </div>
+          <img src="/logo.png" alt="Awebco Logo" className="w-8 h-8 object-contain rounded bg-white p-0.5 shadow-sm" />
           <span className="font-bold text-lg tracking-tight text-white">Awebco</span>
         </div>
 
@@ -1300,7 +1305,7 @@ export default function Page() {
         ) : activeContentNav === 'Social Media' ? (
           <SocialMediaProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
         ) : activeContentNav === 'Support Tickets' ? (
-          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
+          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} />
         ) : canAccessCRM && activeContentNav === 'Companies' ? (
           <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} />
         ) : canAccessCRM && activeContentNav === 'Deals / Sales' ? (
@@ -1318,6 +1323,8 @@ export default function Page() {
             teamMembers={teamMembers}
             setTeamMembers={setTeamMembers}
             currentUserRole={currentTeamMember?.role}
+            useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView}
+            setUseFullScreenUnifiedTicketView={setUseFullScreenUnifiedTicketView}
           />
         ) : (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">

@@ -12,9 +12,10 @@ interface TicketImportModalProps {
   teamMembers: TeamMember[];
   companies: Company[];
   workspace: string;
+  groups?: any[];
 }
 
-export default function TicketImportModal({ isOpen, onClose, teamMembers, companies, workspace }: TicketImportModalProps) {
+export default function TicketImportModal({ isOpen, onClose, teamMembers, companies, workspace, groups }: TicketImportModalProps) {
   const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'complete'>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<TicketImportResult[]>([]);
@@ -55,7 +56,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
     try {
       await processTicketImport(previewData, workspace, companies, teamMembers, (count) => {
         setImportProgress(count);
-      });
+      }, groups);
       setStep('complete');
     } catch (err) {
       setError('An error occurred during import.');
@@ -79,14 +80,14 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <motion.div 
+      <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
@@ -113,7 +114,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
           )}
 
           {step === 'upload' && (
-            <div 
+            <div
               className="border-2 border-dashed border-[#E2E4E9] rounded-xl p-12 flex flex-col items-center justify-center gap-4 hover:border-[#1061E3] hover:bg-blue-50/50 transition-all cursor-pointer group"
               onClick={() => fileInputRef.current?.click()}
             >
@@ -124,11 +125,11 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
                 <p className="text-base font-semibold text-[#1C1F23]">Click or drag file to upload</p>
                 <p className="text-sm text-[#8E9299]">Supports CSV, XLS, XLSX</p>
               </div>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept=".csv,.xls,.xlsx" 
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".csv,.xls,.xlsx"
                 onChange={handleFileChange}
               />
             </div>
@@ -188,7 +189,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
                 <h4 className="font-bold text-lg text-[#1C1F23]">Importing Tickets...</h4>
                 <p className="text-sm text-[#8E9299]">Creating tickets and linking companies</p>
                 <div className="mt-4 w-64 h-2 bg-[#F0F2F5] rounded-full overflow-hidden">
-                  <motion.div 
+                  <motion.div
                     className="h-full bg-[#1061E3]"
                     initial={{ width: 0 }}
                     animate={{ width: `${(importProgress / previewData.length) * 100}%` }}
@@ -208,7 +209,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
                 <h4 className="font-bold text-xl text-[#1C1F23]">Import Complete!</h4>
                 <p className="text-sm text-[#8E9299]">Successfully imported {previewData.length} tickets.</p>
               </div>
-              <button 
+              <button
                 onClick={onClose}
                 className="mt-4 px-8 py-2 bg-[#1061E3] text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               >
@@ -221,13 +222,13 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
         {/* Footer */}
         {step === 'preview' && (
           <div className="px-6 py-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3">
-            <button 
+            <button
               onClick={reset}
               className="px-4 py-2 text-sm font-semibold text-[#4A4D53] hover:bg-gray-100 rounded-lg transition-colors"
             >
               Cancel
             </button>
-            <button 
+            <button
               onClick={startImport}
               className="px-6 py-2 text-sm font-semibold bg-[#1061E3] text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >

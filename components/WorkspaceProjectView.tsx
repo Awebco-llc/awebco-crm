@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -23,7 +23,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket } from '@/components/Shared';
-import { subscribeTickets, createTicket, updateTicket, deleteTicket } from '@/lib/crmStore';
+import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour } from '@/lib/crmStore';
 import TicketImportModal from './TicketImportModal';
 
 interface Column {
@@ -40,6 +40,10 @@ const INITIAL_COLUMNS: Column[] = [
   { id: 'pastelUrl', header: 'Pastel URL' },
   { id: 'googleDriveUrl', header: 'Google Drive URL' },
   { id: 'notes', header: 'Notes' },
+  { id: 'companyName', header: 'Company Name' },
+  { id: 'contactName', header: 'Contact Name' },
+  { id: 'email', header: 'Contact Email' },
+  { id: 'category', header: 'Category' },
 ];
 
 const INITIAL_DATA = [
@@ -109,6 +113,188 @@ const getInitials = (name?: string) => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
 };
+
+interface BillableHoursDropdownProps {
+  value: string;
+  onChange: (val: string) => void;
+  customLabels: string[];
+  onCreateLabel: (val: string) => void;
+}
+
+function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel }: BillableHoursDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isOpen]);
+
+  const defaultOptions = [
+    'No Fee',
+    '.5/hr',
+    '1/hr',
+    '2/hr',
+    '3/hr',
+    '4/hr',
+    '5/hr',
+    '6/hr',
+    '7/hr',
+    '8/hr',
+    '9/hr',
+    '10/hr',
+    '16/hr',
+    '24/hr',
+    '40/hr'
+  ];
+
+  const combined = Array.from(new Set([...defaultOptions, ...customLabels]));
+  const filtered = combined.filter(opt => opt.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] flex items-center justify-between text-left transition-all hover:border-[#CCCCCC]"
+      >
+        <span className="truncate">{value || 'Select Hours'}</span>
+        <ChevronDown className="w-4 h-4 text-[#8E9299] shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div 
+          className="absolute left-0 mt-1 w-full min-w-[220px] bg-[#1F2235] border border-[#2C314D] rounded-lg shadow-xl z-[999] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+        >
+          {/* Selected Option Tag Header */}
+          {value && (
+            <div className="flex flex-wrap gap-1.5 p-2 bg-[#181A2A] border-b border-[#2C314D]">
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-[#0B3C5D] text-[#38BDF8] font-bold">
+                <span>{value}</span>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onChange('');
+                  }}
+                  className="hover:text-white font-bold ml-1 text-sm leading-none"
+                  title="Clear hours"
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Search Box */}
+          <div className="p-2 border-b border-[#2C314D]">
+            <input
+              type="text"
+              placeholder="Find labels"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const trimmed = searchQuery.trim();
+                  if (trimmed) {
+                    const match = combined.find(o => o.toLowerCase() === trimmed.toLowerCase());
+                    if (match) {
+                      onChange(match);
+                    } else {
+                      let label = trimmed;
+                      if (!label.toLowerCase().endsWith('/hr') && !label.toLowerCase().endsWith('hr') && !isNaN(Number(label))) {
+                        label = `${label}/hr`;
+                      }
+                      onCreateLabel(label);
+                      onChange(label);
+                    }
+                    setSearchQuery('');
+                    setIsOpen(false);
+                  }
+                }
+              }}
+              className="w-full px-2 py-1.5 bg-[#181A2A] text-white text-xs border border-[#2E3456] rounded focus:outline-none focus:border-[#0F83C9] placeholder-[#626C8F]"
+              autoFocus
+            />
+          </div>
+
+          {/* Scrollable Options */}
+          <div className="max-h-[200px] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-slate-700">
+            {/* Create option if query is custom */}
+            {searchQuery.trim() && !combined.some(o => o.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  let label = searchQuery.trim();
+                  if (!label.toLowerCase().endsWith('/hr') && !label.toLowerCase().endsWith('hr') && !isNaN(Number(label))) {
+                    label = `${label}/hr`;
+                  }
+                  onCreateLabel(label);
+                  onChange(label);
+                  setSearchQuery('');
+                  setIsOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 rounded text-xs text-[#38BDF8] hover:bg-[#2C314D] font-semibold transition-colors"
+              >
+                + Create label "{searchQuery.trim()}"
+              </button>
+            )}
+
+            {filtered.map(opt => (
+              <button
+                type="button"
+                key={opt}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(opt);
+                  setSearchQuery('');
+                  setIsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors flex items-center justify-between ${
+                  value === opt
+                    ? 'bg-[#2C314D] text-white font-semibold'
+                    : 'text-gray-300 hover:bg-[#2C314D] hover:text-white'
+                }`}
+              >
+                <span>{opt}</span>
+                {value === opt && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]" />
+                )}
+              </button>
+            ))}
+
+            {filtered.length === 0 && !searchQuery.trim() && (
+              <div className="text-center py-4 text-xs text-[#626C8F]">No options found</div>
+            )}
+          </div>
+
+          {/* Bottom helper */}
+          <div className="p-2 border-t border-[#2C314D] text-center bg-[#181A2A]">
+            <span className="text-[10px] text-[#626C8F]">
+              Press enter or click Create to add custom amount
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
   return (
@@ -189,9 +375,12 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
             </div>
           ) : col.id === 'assignee' ? (
             <AssigneeDropdown 
-              value={row[col.id]} 
-              onSave={(newVal) => {
-                onUpdate(row.id, { [col.id]: newVal });
+              values={row.assignees || (row[col.id] ? [row[col.id]] : [])} 
+              onSaveMultiple={(newVals) => {
+                onUpdate(row.id, { 
+                  assignees: newVals,
+                  assignee: newVals[0] || ''
+                });
               }} 
               teamMembers={teamMembers} 
             />
@@ -270,24 +459,35 @@ function GroupHeader({ group, onUpdate, onRemove }: { group: { id: string, name:
 
   return (
     <div className="flex items-center justify-between mb-3 group/header">
-      {isEditing ? (
-        <input 
-          autoFocus
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onBlur={save}
-          onKeyDown={e => e.key === 'Enter' && save()}
-          className="text-lg font-bold text-[#1C1F23] bg-transparent border-b border-[#1061E3] outline-none px-1 py-0 w-full max-w-sm"
-        />
-      ) : (
-        <h2 
-          onDoubleClick={() => setIsEditing(true)}
-          className="text-lg font-bold text-[#1C1F23] cursor-text hover:bg-gray-100 rounded px-1 -ml-1 inline-block transition-colors"
-          title="Double click to rename"
-        >
-          {group.name}
-        </h2>
-      )}
+      <div className="flex items-center gap-2">
+        {isEditing ? (
+          <input 
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onBlur={save}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            className="text-lg font-bold text-[#1C1F23] bg-transparent border-b border-[#1061E3] outline-none px-1 py-0 w-full max-w-sm"
+          />
+        ) : (
+          <div className="flex items-center gap-2">
+            <h2 
+              onDoubleClick={() => setIsEditing(true)}
+              className="text-lg font-bold text-[#1C1F23] cursor-text hover:bg-gray-100 rounded px-1 -ml-1 inline-block transition-colors"
+              title="Double click to rename"
+            >
+              {group.name}
+            </h2>
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="p-1 opacity-0 group-hover/header:opacity-100 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-all"
+              title="Rename group"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
       <button 
         onClick={() => onRemove(group.id)}
         className="opacity-0 group-hover/header:opacity-100 p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
@@ -309,7 +509,8 @@ export default function WorkspaceProjectView({
   openRowId,
   onMention,
   canManageBoardMembers,
-  onUpdateMemberPermissions
+  onUpdateMemberPermissions,
+  useFullScreenUnifiedTicketView
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -321,6 +522,7 @@ export default function WorkspaceProjectView({
   onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void,
   canManageBoardMembers: boolean,
   onUpdateMemberPermissions?: (memberId: string, workspaceName: string, hasAccess: boolean) => void,
+  useFullScreenUnifiedTicketView?: boolean,
 }) {
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
@@ -333,7 +535,12 @@ export default function WorkspaceProjectView({
       ];
     }
     if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
-      const filtered = INITIAL_COLUMNS.filter(c => c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl');
+      const filtered = INITIAL_COLUMNS.filter(c => {
+        if (projectType !== 'Support Tickets' && ['companyName', 'contactName', 'email', 'category'].includes(c.id)) {
+          return false;
+        }
+        return c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl';
+      });
       filtered.splice(5, 0, { id: 'billableHours', header: 'Billable Hours' });
       if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
         filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
@@ -341,35 +548,13 @@ export default function WorkspaceProjectView({
       return filtered;
     }
     if (projectType === 'SEO' || projectType === 'Google Ads') {
-      return INITIAL_COLUMNS.filter(c => c.id !== 'pastelUrl');
+      return INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
     }
-    return INITIAL_COLUMNS;
+    return INITIAL_COLUMNS.filter(c => !['companyName', 'contactName', 'email', 'category'].includes(c.id));
   });
   const [data, setData] = useState<any[]>([]);
-  const [groups, setGroups] = useState<{id: string, name: string}[]>(() => {
-    if (projectType === 'Local Listings') {
-      return [
-        { id: 'group-setup', name: 'Setup' },
-        { id: 'group-running', name: 'Running' }
-      ];
-    }
-    if (projectType === 'SEO' || projectType === 'Google Ads') {
-      return [
-        { id: 'group-active', name: 'Setup' },
-        { id: 'group-running', name: 'Running' }
-      ];
-    }
-    const defaultGroups = [
-      { id: 'group-active', name: 'Active' }
-    ];
-    if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
-      defaultGroups.push({ id: 'group-needs-invoiced', name: 'Needs Invoiced' });
-      defaultGroups.push({ id: 'group-completed', name: 'Complete' });
-    } else {
-      defaultGroups.push({ id: 'group-completed', name: 'Completed / Launched' });
-    }
-    return defaultGroups;
-  });
+  const [groups, setGroups] = useState<{id: string, name: string}[]>([]);
+  const [isGroupsLoaded, setIsGroupsLoaded] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [isAddColOpen, setIsAddColOpen] = useState(false);
@@ -391,6 +576,22 @@ export default function WorkspaceProjectView({
   const [copiedBoardEmail, setCopiedBoardEmail] = useState(false);
   const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [customBillableHours, setCustomBillableHours] = useState<string[]>([]);
+
+  React.useEffect(() => {
+    const unsub = subscribeBillableHours((labels) => {
+      setCustomBillableHours(labels);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleCreateBillableHour = async (label: string) => {
+    try {
+      await createBillableHour(label);
+    } catch (err) {
+      console.error('Failed to create billable hour label', err);
+    }
+  };
 
   React.useEffect(() => {
     const handleGlobalClick = () => {
@@ -483,6 +684,33 @@ export default function WorkspaceProjectView({
       if (err.message?.includes('index')) {
         alert('This board needs a Firestore index. Check the browser console for the setup link!');
       }
+    });
+    return () => unsub();
+  }, [projectType]);
+
+  React.useEffect(() => {
+    const unsub = subscribeGroups(projectType, (fetchedGroups) => {
+      setIsGroupsLoaded(true);
+      if (fetchedGroups.length === 0) {
+        // Just show the UI defaults for now
+        const defaults = projectType === 'Local Listings' 
+          ? [{ name: 'Setup', id: 'group-setup' }, { name: 'Running', id: 'group-running' }]
+          : projectType === 'SEO' || projectType === 'Google Ads'
+          ? [{ name: 'Setup', id: 'group-active' }, { name: 'Running', id: 'group-running' }]
+          : projectType === 'Design & Print' || projectType === 'Support Tickets'
+          ? [{ name: 'Active', id: 'group-active' }, { name: 'Needs Invoiced', id: 'group-needs-invoiced' }, { name: 'Complete', id: 'group-completed' }]
+          : [{ name: 'Active', id: 'group-active' }, { name: 'Completed / Launched', id: 'group-completed' }];
+        
+        setGroups(defaults);
+      } else {
+        setGroups(fetchedGroups);
+      }
+    }, (err: any) => {
+      console.error('Group subscription error:', err);
+      // Fallback to defaults on error
+      const defaults = [{ id: 'group-active', name: 'Active' }, { id: 'group-completed', name: 'Completed' }];
+      setGroups(defaults);
+      setIsGroupsLoaded(true);
     });
     return () => unsub();
   }, [projectType]);
@@ -587,7 +815,8 @@ export default function WorkspaceProjectView({
     const newSubRow: any = {
       parentId,
       projectName: 'New Sub-Task',
-      assignee: parent?.assignee || teamMembers[0]?.id || '',
+      assignee: '',
+      assignees: [],
       status: 'Not Started',
       deadline: '',
       url: '',
@@ -703,7 +932,8 @@ export default function WorkspaceProjectView({
       
       const newTicket: any = {
         projectName: 'New Manual Project',
-        assignee: currentUserId || (teamMembers && teamMembers.length > 0 ? teamMembers[0].id : ''),
+        assignee: '',
+        assignees: [],
         status: defaultStatus || 'Not Started',
         deadline: '',
         url: '',
@@ -749,6 +979,8 @@ export default function WorkspaceProjectView({
     }
     return member.role === 'staff';
   });
+
+  const [isAddingGroup, setIsAddingGroup] = useState(false);
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
@@ -918,11 +1150,27 @@ export default function WorkspaceProjectView({
         <div className="flex items-center justify-between mb-4">
           <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">{projectType}</h1>
           <button 
-            onClick={() => setGroups([...groups, { id: `group-${Date.now()}`, name: 'New Group' }])}
-            className="flex items-center gap-1.5 text-sm font-semibold text-[#1061E3] hover:text-blue-700 transition-colors"
+            disabled={isAddingGroup}
+            onClick={async () => {
+              setIsAddingGroup(true);
+              try {
+                await createGroup({ 
+                  name: 'New Group', 
+                  workspace: projectType, 
+                  order: groups.length 
+                });
+              } catch (err) {
+                console.error('Failed to create group:', err);
+                // Force a temporary UI update so they can at least use it
+                setGroups(prev => [...prev, { id: `temp-${Date.now()}`, name: 'New Group' }]);
+              } finally {
+                setIsAddingGroup(false);
+              }
+            }}
+            className="flex items-center gap-1.5 text-sm font-semibold text-[#1061E3] hover:text-blue-700 transition-colors disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" />
-            Add Group
+            {isAddingGroup ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {isAddingGroup ? 'Adding...' : 'Add Group'}
           </button>
         </div>
       </div>
@@ -937,14 +1185,13 @@ export default function WorkspaceProjectView({
               <div key={group.id} className="mb-8">
                 <GroupHeader 
                   group={group} 
-                  onUpdate={(id, name) => setGroups(prev => prev.map(g => g.id === id ? { ...g, name } : g))} 
+                  onUpdate={(id, name) => updateGroup(id, { name })} 
                   onRemove={(id) => {
-                    // move items to first available other group, or delete them
                     const fallbackGroup = groups.find(g => g.id !== id)?.id;
                     if (fallbackGroup) {
-                      setData(prev => prev.map(r => getRowGroupId(r) === id ? { ...r, groupId: fallbackGroup } : r));
+                      data.filter(r => getRowGroupId(r) === id).forEach(r => handleUpdateRow(r.id, { groupId: fallbackGroup }));
                     }
-                    setGroups(prev => prev.filter(g => g.id !== id));
+                    deleteGroup(id);
                   }} 
                 />
                 <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
@@ -1182,311 +1429,701 @@ export default function WorkspaceProjectView({
       {/* Edit Row Panel */}
       <AnimatePresence>
         {editingRowId && (
-          <div className="fixed inset-0 z-50 flex justify-end">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
-              onClick={() => setEditingRowId(null)}
-            />
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-md bg-white shadow-2xl flex flex-col h-full border-l border-[#E2E4E9]"
-            >
-              <div className="px-6 py-4 border-b border-[#E2E4E9] flex items-center justify-between bg-[#F9FAFB] shrink-0">
-                <h3 className="font-bold text-lg text-[#1C1F23]">Edit {projectType} Details</h3>
-                <button onClick={() => setEditingRowId(null)} className="text-[#8E9299] hover:text-[#1C1F23] transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
-                <div className="flex gap-2 overflow-x-auto">
-                  {[
-                    { id: 'details', label: 'Details' },
-                    { id: 'description', label: 'Description' },
-                    { id: 'updates', label: 'Updates' },
-                    { id: 'files', label: 'Files' },
-                  ].map(tab => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveEditTab(tab.id as EditTab)}
-                      className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
-                        activeEditTab === tab.id
-                          ? 'bg-[#1061E3] text-white'
-                          : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
-                {activeEditTab === 'details' && (() => {
-                  const editingRow = data.find(r => r.id === editingRowId);
-                  return columns.map(col => (
-                    <div key={col.id}>
-                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
-                      {col.id === 'status' ? (
-                        <select 
-                          value={editingRow?.[col.id] ?? ''}
-                          onChange={e => {
-                            const patch: any = { [col.id]: e.target.value };
-                            if (projectType === 'Google Ads') {
-                              patch.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
-                            } else if (e.target.value === 'Running') {
-                              patch.groupId = 'group-running';
-                            } else if (e.target.value === 'Needs Invoiced') {
-                              patch.groupId = 'group-needs-invoiced';
-                            } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
-                              patch.groupId = 'group-completed';
-                            } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
-                              patch.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
-                            }
-                            handleUpdateRow(editingRowId, patch);
-                          }}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                        >
-                          {(editingRow?.parentId ? (projectType === 'Local Listings' ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'] : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done']) : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                        </select>
-                      ) : col.id === 'priority' ? (
-                        <select
-                          value={editingRow?.[col.id] ?? ''}
-                          onChange={e => {
-                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
-                          }}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                        >
-                          <option value="">Select Priority</option>
-                          {['Low', 'Medium', 'High', 'Urgent'].map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      ) : col.id === 'planType' ? (
-                        <select
-                          value={editingRow?.[col.id] ?? 'Basic Plan'}
-                          onChange={e => {
-                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
-                          }}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                        >
-                          <option value="Basic Plan">Basic Plan</option>
-                          <option value="Plus Plan">Plus Plan</option>
-                        </select>
-                      ) : col.id === 'billableHours' ? (
-                        <select
-                          value={editingRow?.[col.id] ?? ''}
-                          onChange={e => {
-                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
-                          }}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                        >
-                          <option value="">Select Hours</option>
-                          {Array.from({ length: 40 }, (_, i) => i + 1).map(h => (
-                            <option key={h} value={`${h}/hr`}>{h}/hr</option>
-                          ))}
-                        </select>
-                      ) : col.id === 'assignee' ? (
-                        <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md bg-white">
-                          <AssigneeDropdown 
-                            value={editingRow?.[col.id] || ''} 
-                            onSave={(newVal) => {
-                              handleUpdateRow(editingRowId, { [col.id]: newVal });
-                            }} 
-                            teamMembers={teamMembers} 
+          useFullScreenUnifiedTicketView && projectType === 'Support Tickets' ? (
+            <div className="fixed inset-0 z-50 bg-[#F9FAFB] flex flex-col h-screen w-screen overflow-hidden">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 30 }}
+                transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                className="flex flex-col h-full w-full"
+              >
+                {/* Header bar */}
+                <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
+                  <button 
+                    onClick={() => setEditingRowId(null)}
+                    className="flex items-center gap-2 text-sm font-semibold text-[#4A4D53] hover:text-[#1C1F23] transition-colors bg-[#F0F2F5] hover:bg-[#E2E8F0] px-4 py-2 rounded-lg"
+                  >
+                    <X className="w-4 h-4" />
+                    Back to Tickets
+                  </button>
+                  <h2 className="text-base font-bold text-[#1C1F23]">Ticket Detail View</h2>
+                  <button
+                    onClick={() => setEditingRowId(null)}
+                    className="flex items-center gap-2 text-sm font-semibold text-white bg-[#1061E3] hover:bg-blue-700 transition-colors px-4 py-2 rounded-lg shadow-sm"
+                  >
+                    Done
+                  </button>
+                </header>
+
+                {/* Scrollable Content Container */}
+                <div className="flex-grow overflow-y-auto p-6 md:p-10">
+                  {(() => {
+                    const editingRow = data.find(r => r.id === editingRowId);
+                    if (!editingRow) return null;
+
+                    return (
+                      <div className="max-w-4xl mx-auto flex flex-col gap-6 pb-20">
+                        
+                        {/* Card 1: Header / Title & Metadata */}
+                        <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm relative z-20">
+                          <div className="p-6 md:p-8">
+                            <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Ticket Title</label>
+                            <input
+                              type="text"
+                              value={editingRow.projectName ?? ''}
+                              onChange={e => handleUpdateRow(editingRowId, { projectName: e.target.value })}
+                              className="w-full text-2xl md:text-3xl font-extrabold text-[#1C1F23] border-none outline-none focus:bg-[#F4F5F7] px-2 py-1 -mx-2 rounded-md mb-6 transition-colors"
+                              placeholder="Untitled Ticket"
+                            />
+
+                            {/* Metadata Flex Container with Generous Widths */}
+                            <div className="flex flex-wrap items-stretch gap-6 p-6 bg-[#F9FAFB] border border-[#E2E4E9] rounded-xl">
+                              {/* Status */}
+                              <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Status</label>
+                                <select 
+                                  value={editingRow.status ?? ''}
+                                  onChange={e => {
+                                    const patch: any = { status: e.target.value };
+                                    if (e.target.value === 'Running') {
+                                      patch.groupId = 'group-running';
+                                    } else if (e.target.value === 'Needs Invoiced') {
+                                      patch.groupId = 'group-needs-invoiced';
+                                    } else if (e.target.value === 'Done' || e.target.value === 'Launched' || e.target.value === 'S14: Launched') {
+                                      patch.groupId = 'group-completed';
+                                    } else {
+                                      patch.groupId = 'group-active';
+                                    }
+                                    handleUpdateRow(editingRowId, patch);
+                                  }}
+                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23]"
+                                >
+                                  {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                              </div>
+
+                              {/* Priority */}
+                              <div className="flex-grow flex-shrink-0 min-w-[140px] md:min-w-[150px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Priority</label>
+                                <select
+                                  value={editingRow.priority ?? ''}
+                                  onChange={e => handleUpdateRow(editingRowId, { priority: e.target.value })}
+                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23]"
+                                >
+                                  <option value="">Select Priority</option>
+                                  {['Low', 'Medium', 'High', 'Urgent'].map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Assignee */}
+                              <div className="flex-grow flex-shrink-0 min-w-[140px] md:min-w-[150px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Assignee</label>
+                                <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg bg-white h-[38px] flex items-center justify-between">
+                                  <AssigneeDropdown 
+                                    values={editingRow.assignees || (editingRow.assignee ? [editingRow.assignee] : [])} 
+                                    onSaveMultiple={(newVals) => {
+                                      handleUpdateRow(editingRowId, { 
+                                        assignees: newVals,
+                                        assignee: newVals[0] || ''
+                                      });
+                                    }} 
+                                    teamMembers={teamMembers} 
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Deadline */}
+                              <div className="flex-grow flex-shrink-0 min-w-[150px] md:min-w-[160px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Deadline</label>
+                                <input 
+                                  type="date"
+                                  value={editingRow.deadline ?? ''}
+                                  onChange={e => handleUpdateRow(editingRowId, { deadline: e.target.value })}
+                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px]"
+                                />
+                              </div>
+
+                              {/* Billable Hours */}
+                              <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Billable Hours</label>
+                                <BillableHoursDropdown 
+                                  value={editingRow.billableHours || ''}
+                                  onChange={(newVal) => handleUpdateRow(editingRowId, { billableHours: newVal })}
+                                  customLabels={customBillableHours}
+                                  onCreateLabel={handleCreateBillableHour}
+                                />
+                              </div>
+
+                              {/* Company Name */}
+                              <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Company Name</label>
+                                <input 
+                                  type="text"
+                                  value={editingRow.companyName ?? ''}
+                                  onChange={e => handleUpdateRow(editingRowId, { companyName: e.target.value })}
+                                  placeholder="N/A"
+                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
+                                />
+                              </div>
+
+                              {/* Contact Name */}
+                              <div className="flex-grow flex-shrink-0 min-w-[150px] md:min-w-[160px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Contact Name</label>
+                                <input 
+                                  type="text"
+                                  value={editingRow.contactName ?? ''}
+                                  onChange={e => handleUpdateRow(editingRowId, { contactName: e.target.value })}
+                                  placeholder="N/A"
+                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
+                                />
+                              </div>
+
+                              {/* Contact Email */}
+                              <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Contact Email</label>
+                                <input 
+                                  type="email"
+                                  value={editingRow.email ?? ''}
+                                  onChange={e => handleUpdateRow(editingRowId, { email: e.target.value })}
+                                  placeholder="N/A"
+                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
+                                />
+                              </div>
+
+                              {/* Category */}
+                              <div className="flex-grow flex-shrink-0 min-w-[150px] md:min-w-[160px]">
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Category</label>
+                                <input 
+                                  type="text"
+                                  value={editingRow.category ?? ''}
+                                  onChange={e => handleUpdateRow(editingRowId, { category: e.target.value })}
+                                  placeholder="N/A"
+                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card 2: Description */}
+                        <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm overflow-hidden p-6 md:p-8">
+                          <h3 className="text-base font-bold text-[#1C1F23] mb-4">Description</h3>
+                          <textarea
+                            value={editingRow.description ?? ''}
+                            onChange={e => handleUpdateRow(editingRowId, { description: e.target.value })}
+                            placeholder="Add a detailed description for this support ticket..."
+                            className="w-full px-4 py-3 border border-[#E2E4E9] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[160px] resize-y"
                           />
                         </div>
-                      ) : (
-                        <input 
-                          type={col.id === 'deadline' ? 'date' : 'text'}
-                          value={editingRow?.[col.id] ?? ''}
-                          onChange={e => {
-                            handleUpdateRow(editingRowId, { [col.id]: e.target.value });
-                          }}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
-                        />
-                      )}
-                    </div>
-                  ));
-                })()}
 
-                {/* Updates Section */}
-                {activeEditTab === 'description' && (() => {
-                  const editingRow = data.find(r => r.id === editingRowId);
-                  return (
-                    <div>
-                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Description</label>
-                      <textarea
-                        value={editingRow?.description ?? ''}
-                        onChange={e => {
-                          handleUpdateRow(editingRowId, { description: e.target.value });
-                        }}
-                        placeholder={`Add a description for this ${projectType.toLowerCase()} project...`}
-                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[280px] resize-y"
-                      />
-                    </div>
-                  );
-                })()}
-
-                {activeEditTab === 'updates' && (
-                <div>
-                  <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
-                  <div className="flex flex-col gap-4 mb-4">
-                    {(() => {
-                      const editingRow = data.find(r => r.id === editingRowId);
-                      return editingRow?.updates?.map((update: any) => (
-                        <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                                style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
+                        {/* Card 3: Files & Media */}
+                        <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm overflow-hidden p-6 md:p-8">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-base font-bold text-[#1C1F23]">Files & Attachments</h3>
+                            <div>
+                              <input
+                                type="file"
+                                ref={projectFileInputRef}
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    handleAddProjectFile(editingRowId, e.target.files[0]);
+                                    e.target.value = '';
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => projectFileInputRef.current?.click()}
+                                className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-[#1061E3] hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5 shadow-sm"
                               >
-                                {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
-                              </div>
-                              <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
+                                <Paperclip className="w-3.5 h-3.5" />
+                                Add File
+                              </button>
                             </div>
-                            <span className="text-[10px] text-[#8E9299]">
-                              {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
-                            </span>
                           </div>
-                          <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
-                          {update.attachment && (
-                            <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2 py-1 w-fit">
-                              <FileIcon className="w-3.5 h-3.5" />
-                              <span className="truncate max-w-[200px]">{update.attachment}</span>
+
+                          {/* Files list */}
+                          <div className="border border-[#E2E4E9] rounded-xl overflow-hidden bg-[#F9FAFB] p-4">
+                            {editingRow.files && editingRow.files.length > 0 ? (
+                              <div className="flex flex-col gap-2">
+                                {editingRow.files.map((file: any, index: number) => (
+                                  <div key={index} className="flex items-center justify-between bg-white border border-[#E2E4E9] rounded-lg px-4 py-2.5 shadow-xs">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <FileIcon className="w-4 h-4 text-[#8E9299] shrink-0" />
+                                      {file.url ? (
+                                        <a
+                                          href={file.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-sm font-semibold text-[#1061E3] hover:text-blue-700 transition-colors truncate hover:underline"
+                                        >
+                                          {file.name}
+                                        </a>
+                                      ) : (
+                                        <span className="text-sm font-semibold text-[#1C1F23] truncate">{file.name}</span>
+                                      )}
+                                      {file.size && (
+                                        <span className="text-[11px] text-[#8E9299] font-medium">({file.size})</span>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        if (confirm('Delete this file?')) {
+                                          const updatedFiles = editingRow.files.filter((_: any, i: number) => i !== index);
+                                          handleUpdateRow(editingRowId, { files: updatedFiles });
+                                        }
+                                      }}
+                                      className="text-[#8E9299] hover:text-[#D32F2F] p-1 rounded hover:bg-red-50 transition-colors"
+                                      title="Delete attachment"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-6 text-sm text-[#8E9299]">
+                                No attachments yet. Add files.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Card 4: Updates & Discussion */}
+                        <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm overflow-hidden p-6 md:p-8">
+                          <h3 className="text-base font-bold text-[#1C1F23] mb-6">Updates & Activity</h3>
+
+                          <div className="flex flex-col gap-4 mb-6">
+                            {editingRow.updates && editingRow.updates.length > 0 ? (
+                              editingRow.updates.map((update: any) => (
+                                <div key={update.id} className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E2E4E9] shadow-xs flex flex-col gap-2">
+                                  <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div
+                                        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+                                        style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
+                                      >
+                                        {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
+                                      </div>
+                                      <span className="font-bold text-xs text-[#1C1F23] truncate">{update.author}</span>
+                                    </div>
+                                    <span className="text-[10px] font-medium text-[#8E9299]">
+                                      {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-[#4A4D53] whitespace-pre-wrap pl-9">{update.text}</p>
+                                  {update.attachment && (
+                                    <div className="mt-1 ml-9 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5 w-fit">
+                                      <FileIcon className="w-3.5 h-3.5" />
+                                      <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-center py-6 text-sm text-[#8E9299] border border-dashed border-[#E2E4E9] rounded-xl bg-[#F9FAFB]">
+                                No updates posted yet.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Add Update Input Area */}
+                          <div className="flex flex-col gap-3 relative border border-[#E2E4E9] rounded-xl p-3 bg-white focus-within:ring-2 focus-within:ring-[#1061E3] focus-within:border-transparent transition-all">
+                            {attachedFile && (
+                              <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-2 shrink-0">
+                                <div className="flex items-center gap-2 text-sm text-[#1061E3]">
+                                  <FileIcon className="w-4 h-4" />
+                                  <span className="truncate max-w-[250px] font-semibold">{attachedFile.name}</span>
+                                </div>
+                                <button onClick={() => setAttachedFile(null)} className="text-[#8E9299] hover:text-[#D32F2F] transition-colors"><X className="w-4 h-4" /></button>
+                              </div>
+                            )}
+                            <div className="flex gap-3 items-start relative">
+                              <div className="relative flex-grow">
+                                <textarea 
+                                  ref={textareaRef}
+                                  value={newUpdateText}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setNewUpdateText(val);
+                                    
+                                    // Mentions logic
+                                    const cursorP = e.target.selectionStart;
+                                    const textToCursor = val.slice(0, cursorP);
+                                    const match = textToCursor.match(/@(\w*)$/);
+                                    if (match) {
+                                      setMentionFilter(match[1]);
+                                      setShowMentionMenu(true);
+                                      setMentionIndex(0);
+                                    } else {
+                                      setShowMentionMenu(false);
+                                    }
+                                  }}
+                                  placeholder="Post a comment or update (use @ to mention)..."
+                                  className="w-full border-none outline-none resize-none text-sm text-[#1C1F23] placeholder:text-[#8E9299] min-h-[60px]"
+                                  onKeyDown={e => {
+                                    if (showMentionMenu) {
+                                      const filteredMembers = teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()));
+                                      if (e.key === 'ArrowDown') {
+                                        e.preventDefault();
+                                        setMentionIndex(prev => (prev + 1) % filteredMembers.length);
+                                      } else if (e.key === 'ArrowUp') {
+                                        e.preventDefault();
+                                        setMentionIndex(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
+                                      } else if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (filteredMembers.length > 0) {
+                                          const member = filteredMembers[mentionIndex];
+                                          const cursorP = textareaRef.current?.selectionStart || 0;
+                                          const textToCursor = newUpdateText.slice(0, cursorP);
+                                          const textAfterCursor = newUpdateText.slice(cursorP);
+                                          const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
+                                          setNewUpdateText(newText);
+                                          setShowMentionMenu(false);
+                                          textareaRef.current?.focus();
+                                        }
+                                      } else if (e.key === 'Escape') {
+                                        setShowMentionMenu(false);
+                                      }
+                                    } else if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      handleAddUpdate(editingRowId);
+                                    }
+                                  }}
+                                />
+                                {/* Mention Menu */}
+                                {showMentionMenu && (
+                                  <div className="absolute z-10 bottom-full mb-1 left-0 w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden py-1">
+                                    {teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).length > 0 ? (
+                                      teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).map((member, i) => (
+                                        <button
+                                          key={member.id}
+                                          onClick={() => {
+                                            const cursorP = textareaRef.current?.selectionStart || 0;
+                                            const textToCursor = newUpdateText.slice(0, cursorP);
+                                            const textAfterCursor = newUpdateText.slice(cursorP);
+                                            const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
+                                            setNewUpdateText(newText);
+                                            setShowMentionMenu(false);
+                                            textareaRef.current?.focus();
+                                          }}
+                                          className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${i === mentionIndex ? 'bg-[#F0F2F5] text-[#1061E3]' : 'text-[#1C1F23] hover:bg-gray-50'}`}
+                                        >
+                                          <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
+                                            {member.name.charAt(0)}
+                                          </div>
+                                          {member.name}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-2 text-xs text-[#8E9299]">No members found</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Post button */}
+                              <button 
+                                onClick={() => handleAddUpdate(editingRowId)}
+                                disabled={!newUpdateText.trim() && !attachedFile}
+                                className="px-4 py-2 bg-[#1061E3] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                              >
+                                Post
+                              </button>
                             </div>
-                          )}
+
+                            {/* Textarea Bottom Action Bar */}
+                            <div className="flex gap-2 border-t border-[#F0F2F5] pt-2 mt-1">
+                              <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                style={{ display: 'none' }} 
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    setAttachedFile(e.target.files[0]);
+                                    e.target.value = '';
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
+                                title="Attach File"
+                              >
+                                <Paperclip className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const textarea = textareaRef.current;
+                                  if (textarea) {
+                                    const start = textarea.selectionStart;
+                                    const end = textarea.selectionEnd;
+                                    const newText = newUpdateText.substring(0, start) + '@' + newUpdateText.substring(end);
+                                    setNewUpdateText(newText);
+                                    setShowMentionMenu(true);
+                                    setMentionFilter('');
+                                    setTimeout(() => {
+                                      textarea.focus();
+                                      textarea.setSelectionRange(start + 1, start + 1);
+                                    }, 0);
+                                  }
+                                }}
+                                className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
+                                title="Tag Member"
+                              >
+                                <AtSign className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      ));
-                    })()}
-                    {(() => {
-                      const editingRow = data.find(r => r.id === editingRowId);
-                      if (!editingRow?.updates || editingRow.updates.length === 0) {
-                        return <p className="text-sm text-[#8E9299] text-center py-2">No updates yet.</p>;
-                      }
-                      return null;
-                    })()}
-                  </div>
-                  <div className="flex flex-col gap-2 relative">
-                    {attachedFile && (
-                      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-md p-2">
-                        <div className="flex items-center gap-2 text-sm text-[#1061E3]">
-                          <FileIcon className="w-4 h-4" />
-                          <span className="truncate max-w-[250px] font-medium">{attachedFile.name}</span>
-                        </div>
-                        <button onClick={() => setAttachedFile(null)} className="text-[#8E9299] hover:text-[#D32F2F] transition-colors"><X className="w-4 h-4" /></button>
+
                       </div>
-                    )}
-                    <div className="flex gap-2 items-start relative">
-                      <div className="relative flex-grow">
-                        <textarea 
-                          ref={textareaRef}
-                          value={newUpdateText}
+                    );
+                  })()}
+                </div>
+              </motion.div>
+            </div>
+          ) : (
+            <div className="fixed inset-0 z-50 flex justify-end">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+                onClick={() => setEditingRowId(null)}
+              />
+              <motion.div 
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="relative w-full max-w-md bg-white shadow-2xl flex flex-col h-full border-l border-[#E2E4E9]"
+              >
+                <div className="px-6 py-4 border-b border-[#E2E4E9] flex items-center justify-between bg-[#F9FAFB] shrink-0">
+                  <h3 className="font-bold text-lg text-[#1C1F23]">Edit {projectType} Details</h3>
+                  <button onClick={() => setEditingRowId(null)} className="text-[#8E9299] hover:text-[#1C1F23] transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
+                  <div className="flex gap-2 overflow-x-auto">
+                    {[
+                      { id: 'details', label: 'Details' },
+                      { id: 'description', label: 'Description' },
+                      { id: 'updates', label: 'Updates' },
+                      { id: 'files', label: 'Files' },
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveEditTab(tab.id as EditTab)}
+                        className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+                          activeEditTab === tab.id
+                            ? 'bg-[#1061E3] text-white'
+                            : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
+                  {activeEditTab === 'details' && (() => {
+                    const editingRow = data.find(r => r.id === editingRowId);
+                    return columns.map(col => (
+                      <div key={col.id}>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
+                        {col.id === 'status' ? (
+                          <select 
+                            value={editingRow?.[col.id] ?? ''}
+                            onChange={e => {
+                              const patch: any = { [col.id]: e.target.value };
+                              if (projectType === 'Google Ads') {
+                                patch.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
+                              } else if (e.target.value === 'Running') {
+                                patch.groupId = 'group-running';
+                              } else if (e.target.value === 'Needs Invoiced') {
+                                patch.groupId = 'group-needs-invoiced';
+                              } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
+                                patch.groupId = 'group-completed';
+                              } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
+                                patch.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
+                              }
+                              handleUpdateRow(editingRowId, patch);
+                            }}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                          >
+                            {(editingRow?.parentId ? (projectType === 'Local Listings' ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'] : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done']) : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        ) : col.id === 'priority' ? (
+                          <select
+                            value={editingRow?.[col.id] ?? ''}
+                            onChange={e => {
+                              handleUpdateRow(editingRowId, { [col.id]: e.target.value });
+                            }}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                          >
+                            <option value="">Select Priority</option>
+                            {['Low', 'Medium', 'High', 'Urgent'].map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        ) : col.id === 'planType' ? (
+                          <select
+                            value={editingRow?.[col.id] ?? 'Basic Plan'}
+                            onChange={e => {
+                              handleUpdateRow(editingRowId, { [col.id]: e.target.value });
+                            }}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                          >
+                            <option value="Basic Plan">Basic Plan</option>
+                            <option value="Plus Plan">Plus Plan</option>
+                          </select>
+                        ) : col.id === 'billableHours' ? (
+                          <BillableHoursDropdown 
+                            value={editingRow?.[col.id] || ''}
+                            onChange={(newVal) => handleUpdateRow(editingRowId, { [col.id]: newVal })}
+                            customLabels={customBillableHours}
+                            onCreateLabel={handleCreateBillableHour}
+                          />
+                        ) : col.id === 'assignee' ? (
+                          <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md bg-white">
+                            <AssigneeDropdown 
+                              values={editingRow?.assignees || (editingRow?.[col.id] ? [editingRow[col.id]] : [])} 
+                              onSaveMultiple={(newVals) => {
+                                handleUpdateRow(editingRowId, { 
+                                  assignees: newVals,
+                                  assignee: newVals[0] || ''
+                                });
+                              }} 
+                              teamMembers={teamMembers} 
+                            />
+                          </div>
+                        ) : (
+                          <input 
+                            type={col.id === 'deadline' ? 'date' : 'text'}
+                            value={editingRow?.[col.id] ?? ''}
+                            onChange={e => {
+                              handleUpdateRow(editingRowId, { [col.id]: e.target.value });
+                            }}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+                          />
+                        )}
+                      </div>
+                    ));
+                  })()}
+
+                  {/* Updates Section */}
+                  {activeEditTab === 'description' && (() => {
+                    const editingRow = data.find(r => r.id === editingRowId);
+                    return (
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Description</label>
+                        <textarea
+                          value={editingRow?.description ?? ''}
                           onChange={e => {
-                            const val = e.target.value;
-                            setNewUpdateText(val);
-                            
-                            // Mentions logic
-                            const cursorP = e.target.selectionStart;
-                            const textToCursor = val.slice(0, cursorP);
-                            const match = textToCursor.match(/@(\w*)$/);
-                            if (match) {
-                              setMentionFilter(match[1]);
-                              setShowMentionMenu(true);
-                              setMentionIndex(0);
-                            } else {
-                              setShowMentionMenu(false);
-                            }
+                            handleUpdateRow(editingRowId, { description: e.target.value });
                           }}
-                          placeholder="Write an update..."
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[80px] resize-y pb-8"
-                          onKeyDown={e => {
-                            if (showMentionMenu) {
-                              const filteredMembers = teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()));
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault();
-                                setMentionIndex(prev => (prev + 1) % filteredMembers.length);
-                              } else if (e.key === 'ArrowUp') {
-                                e.preventDefault();
-                                setMentionIndex(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
-                              } else if (e.key === 'Enter') {
-                                e.preventDefault();
-                                if (filteredMembers.length > 0) {
-                                  const member = filteredMembers[mentionIndex];
-                                  const cursorP = textareaRef.current?.selectionStart || 0;
-                                  const textToCursor = newUpdateText.slice(0, cursorP);
-                                  const textAfterCursor = newUpdateText.slice(cursorP);
-                                  const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
-                                  setNewUpdateText(newText);
-                                  setShowMentionMenu(false);
-                                  textareaRef.current?.focus();
-                                }
-                              } else if (e.key === 'Escape') {
+                          placeholder={`Add a description for this ${projectType.toLowerCase()} project...`}
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[280px] resize-y"
+                        />
+                      </div>
+                    );
+                  })()}
+
+                  {activeEditTab === 'updates' && (
+                  <div>
+                    <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
+                    <div className="flex flex-col gap-4 mb-4">
+                      {(() => {
+                        const editingRow = data.find(r => r.id === editingRowId);
+                        return editingRow?.updates?.map((update: any) => (
+                          <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
+                            <div className="flex justify-between items-center mb-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                  style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
+                                >
+                                  {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
+                                </div>
+                                <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
+                              </div>
+                              <span className="text-[10px] text-[#8E9299]">
+                                {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
+                              </span>
+                            </div>
+                            <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
+                            {update.attachment && (
+                              <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2 py-1 w-fit">
+                                <FileIcon className="w-3.5 h-3.5" />
+                                <span className="truncate max-w-[200px]">{update.attachment}</span>
+                              </div>
+                            )}
+                          </div>
+                        ));
+                      })()}
+                      {(() => {
+                        const editingRow = data.find(r => r.id === editingRowId);
+                        if (!editingRow?.updates || editingRow.updates.length === 0) {
+                          return <p className="text-sm text-[#8E9299] text-center py-2">No updates yet.</p>;
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    <div className="flex flex-col gap-2 relative">
+                      {attachedFile && (
+                        <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-md p-2">
+                          <div className="flex items-center gap-2 text-sm text-[#1061E3]">
+                            <FileIcon className="w-4 h-4" />
+                            <span className="truncate max-w-[250px] font-medium">{attachedFile.name}</span>
+                          </div>
+                          <button onClick={() => setAttachedFile(null)} className="text-[#8E9299] hover:text-[#D32F2F] transition-colors"><X className="w-4 h-4" /></button>
+                        </div>
+                      )}
+                      <div className="flex gap-2 items-start relative">
+                        <div className="relative flex-grow">
+                          <textarea 
+                            ref={textareaRef}
+                            value={newUpdateText}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setNewUpdateText(val);
+                              
+                              // Mentions logic
+                              const cursorP = e.target.selectionStart;
+                              const textToCursor = val.slice(0, cursorP);
+                              const match = textToCursor.match(/@(\w*)$/);
+                              if (match) {
+                                setMentionFilter(match[1]);
+                                setShowMentionMenu(true);
+                                setMentionIndex(0);
+                              } else {
                                 setShowMentionMenu(false);
                               }
-                            } else if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              handleAddUpdate(editingRowId);
-                            }
-                          }}
-                        />
-                        <div className="absolute bottom-2 left-2 flex gap-1">
-                          <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            style={{ display: 'none' }} 
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files.length > 0) {
-                                setAttachedFile(e.target.files[0]);
-                                e.target.value = ''; // Reset input to allow selecting same file again
-                              }
                             }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
-                            title="Attach File"
-                          >
-                            <Paperclip className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const textarea = textareaRef.current;
-                              if (textarea) {
-                                const start = textarea.selectionStart;
-                                const end = textarea.selectionEnd;
-                                const newText = newUpdateText.substring(0, start) + '@' + newUpdateText.substring(end);
-                                setNewUpdateText(newText);
-                                setShowMentionMenu(true);
-                                setMentionFilter('');
-                                setTimeout(() => {
-                                  textarea.focus();
-                                  textarea.setSelectionRange(start + 1, start + 1);
-                                }, 0);
-                              }
-                            }}
-                            className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
-                            title="Tag Member"
-                          >
-                            <AtSign className="w-4 h-4" />
-                          </button>
-                        </div>
-                        {/* Mention Menu */}
-                        {showMentionMenu && (
-                          <div className="absolute z-10 bottom-full mb-1 left-0 w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden py-1">
-                            {teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).length > 0 ? (
-                              teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).map((member, i) => (
-                                <button
-                                  key={member.id}
-                                  onClick={() => {
+                            placeholder="Write an update..."
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[80px] resize-y pb-8"
+                            onKeyDown={e => {
+                              if (showMentionMenu) {
+                                const filteredMembers = teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()));
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  setMentionIndex(prev => (prev + 1) % filteredMembers.length);
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  setMentionIndex(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (filteredMembers.length > 0) {
+                                    const member = filteredMembers[mentionIndex];
                                     const cursorP = textareaRef.current?.selectionStart || 0;
                                     const textToCursor = newUpdateText.slice(0, cursorP);
                                     const textAfterCursor = newUpdateText.slice(cursorP);
@@ -1494,104 +2131,189 @@ export default function WorkspaceProjectView({
                                     setNewUpdateText(newText);
                                     setShowMentionMenu(false);
                                     textareaRef.current?.focus();
-                                  }}
-                                  className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${i === mentionIndex ? 'bg-[#F0F2F5] text-[#1061E3]' : 'text-[#1C1F23] hover:bg-gray-50'}`}
-                                >
-                                  <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
-                                    {member.name.charAt(0)}
-                                  </div>
-                                  {member.name}
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-3 py-2 text-xs text-[#8E9299]">No members found</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <button 
-                        onClick={() => handleAddUpdate(editingRowId)}
-                        disabled={!newUpdateText.trim() && !attachedFile}
-                        className="px-4 py-2 h-[80px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                      >
-                        Post
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                {activeEditTab === 'files' && (() => {
-                  const editingRow = data.find(r => r.id === editingRowId);
-                  return (
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-bold text-sm text-[#1C1F23]">Files</h4>
-                        <div>
-                          <input
-                            type="file"
-                            ref={projectFileInputRef}
-                            style={{ display: 'none' }}
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files.length > 0) {
-                                handleAddProjectFile(editingRowId, e.target.files[0]);
-                                e.target.value = '';
+                                  }
+                                } else if (e.key === 'Escape') {
+                                  setShowMentionMenu(false);
+                                }
+                              } else if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleAddUpdate(editingRowId);
                               }
                             }}
                           />
-                          <button
-                            type="button"
-                            onClick={() => projectFileInputRef.current?.click()}
-                            className="px-3 py-1.5 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5"
-                          >
-                            <Paperclip className="w-4 h-4" />
-                            Add File
-                          </button>
-                        </div>
-                      </div>
-                      {editingRow?.files && editingRow.files.length > 0 ? (
-                        <div className="flex flex-col gap-3">
-                          {editingRow.files.map((file: any) => (
-                            <div key={file.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9] flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <FileIcon className="w-4 h-4 text-[#1061E3] shrink-0" />
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium text-[#1C1F23] truncate">{file.name}</p>
-                                  <p className="text-[11px] text-[#8E9299]">
-                                    {file.uploadedAt ? new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.uploadedAt)) : 'Just now'}
-                                  </p>
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveProjectFile(editingRowId, file.id)}
-                                className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
-                                title="Remove File"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                          <div className="absolute bottom-2 left-2 flex gap-1">
+                            <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              style={{ display: 'none' }} 
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  setAttachedFile(e.target.files[0]);
+                                  e.target.value = ''; // Reset input to allow selecting same file again
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
+                              title="Attach File"
+                            >
+                              <Paperclip className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = textareaRef.current;
+                                if (textarea) {
+                                  const start = textarea.selectionStart;
+                                  const end = textarea.selectionEnd;
+                                  const newText = newUpdateText.substring(0, start) + '@' + newUpdateText.substring(end);
+                                  setNewUpdateText(newText);
+                                  setShowMentionMenu(true);
+                                  setMentionFilter('');
+                                  setTimeout(() => {
+                                    textarea.focus();
+                                    textarea.setSelectionRange(start + 1, start + 1);
+                                  }, 0);
+                                }
+                              }}
+                              className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
+                              title="Tag Member"
+                            >
+                              <AtSign className="w-4 h-4" />
+                            </button>
+                          </div>
+                          {/* Mention Menu */}
+                          {showMentionMenu && (
+                            <div className="absolute z-10 bottom-full mb-1 left-0 w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden py-1">
+                              {teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).length > 0 ? (
+                                teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).map((member, i) => (
+                                  <button
+                                    key={member.id}
+                                    onClick={() => {
+                                      const cursorP = textareaRef.current?.selectionStart || 0;
+                                      const textToCursor = newUpdateText.slice(0, cursorP);
+                                      const textAfterCursor = newUpdateText.slice(cursorP);
+                                      const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
+                                      setNewUpdateText(newText);
+                                      setShowMentionMenu(false);
+                                      textareaRef.current?.focus();
+                                    }}
+                                    className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${i === mentionIndex ? 'bg-[#F0F2F5] text-[#1061E3]' : 'text-[#1C1F23] hover:bg-gray-50'}`}
+                                  >
+                                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
+                                      {member.name.charAt(0)}
+                                    </div>
+                                    {member.name}
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="px-3 py-2 text-xs text-[#8E9299]">No members found</div>
+                              )}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      ) : (
-                        <p className="text-sm text-[#8E9299] text-center py-8 border border-dashed border-[#D0D5DD] rounded-lg">
-                          No files attached yet.
-                        </p>
-                      )}
+                        <button 
+                          onClick={() => handleAddUpdate(editingRowId)}
+                          disabled={!newUpdateText.trim() && !attachedFile}
+                          className="px-4 py-2 h-[80px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        >
+                          Post
+                        </button>
+                      </div>
                     </div>
-                  );
-                })()}
-              </div>
-              <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
-                <button 
-                  onClick={() => setEditingRowId(null)}
-                  className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
-                >
-                  Done
-                </button>
-              </div>
-            </motion.div>
-          </div>
+                  </div>
+                  )}
+
+                  {activeEditTab === 'files' && (() => {
+                    const editingRow = data.find(r => r.id === editingRowId);
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-bold text-sm text-[#1C1F23]">Files</h4>
+                          <div>
+                            <input
+                              type="file"
+                              ref={projectFileInputRef}
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  handleAddProjectFile(editingRowId, e.target.files[0]);
+                                  e.target.value = ''; // Reset input to allow selecting same file again
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => projectFileInputRef.current?.click()}
+                              className="px-3 py-1.5 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+                            >
+                              <Paperclip className="w-4 h-4" />
+                              Add File
+                            </button>
+                          </div>
+                        </div>
+                        {editingRow?.files && editingRow.files.length > 0 ? (
+                          <div className="flex flex-col gap-2">
+                            {editingRow.files.map((file: any) => (
+                              <div key={file.id} className="flex items-center justify-between p-3 border border-[#E2E4E9] rounded-lg bg-[#F9FAFB] group/file">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="p-2 bg-white border border-[#E2E4E9] rounded-md text-[#8E9299]">
+                                    <FileIcon className="w-5 h-5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    {file.url ? (
+                                      <a
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sm font-semibold text-[#1061E3] hover:text-blue-700 hover:underline transition-colors truncate block max-w-[200px]"
+                                        title={file.name}
+                                      >
+                                        {file.name}
+                                      </a>
+                                    ) : (
+                                      <p className="text-sm font-medium text-[#1C1F23] truncate block max-w-[200px]" title={file.name}>
+                                        {file.name}
+                                      </p>
+                                    )}
+                                    <p className="text-[11px] text-[#8E9299]">
+                                      {file.uploadedAt ? new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.uploadedAt)) : 'Just now'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveProjectFile(editingRowId, file.id)}
+                                  className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
+                                  title="Remove File"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-[#8E9299] text-center py-8 border border-dashed border-[#D0D5DD] rounded-lg">
+                            No files attached yet.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
+                  <button 
+                    onClick={() => setEditingRowId(null)}
+                    className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )
         )}
       </AnimatePresence>
 
@@ -1601,6 +2323,7 @@ export default function WorkspaceProjectView({
         teamMembers={teamMembers}
         companies={companies}
         workspace={projectType}
+        groups={groups}
       />
     </div>
   );

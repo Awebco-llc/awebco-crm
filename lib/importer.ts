@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { Company, Contact, TeamMember, Status, Ticket } from '@/components/Shared';
-import { createCompany, createContact, createTicket } from '@/lib/crmStore';
+import { createCompany, createContact, createTicket, createGroup } from '@/lib/crmStore';
 
 export interface ImportResult {
   firstName: string;
@@ -22,27 +22,195 @@ export interface TicketImportResult {
   companyName: string;
   deadline: string;
   url: string;
+  groupName?: string;
+  isSubRow?: boolean;
+  parentName?: string;
+}
+
+function isNextRowHeader(rows: string[][], startIndex: number): boolean {
+  for (let i = startIndex; i < rows.length; i++) {
+    const nextRow = rows[i].map(c => (c === undefined || c === null) ? '' : String(c).trim());
+    if (nextRow.every(c => c === '')) continue;
+    
+    const isHeader = nextRow.some(cell => cell.toLowerCase() === 'name') && 
+                     nextRow.some(cell => cell.toLowerCase() === 'status') && 
+                     nextRow.some(cell => ['person', 'owner', 'assignee', 'people'].includes(cell.toLowerCase()));
+    
+    return isHeader;
+  }
+  return false;
+}
+
+export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
+  const results: TicketImportResult[] = [];
+  
+  let currentGroup = '';
+  let currentParentName = '';
+  
+  let mainHeaders: string[] | null = null;
+  let subitemHeaders: string[] | null = null;
+  let isParsingSubitems = false;
+
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex].map(c => (c === undefined || c === null) ? '' : String(c).trim());
+    
+    // Skip completely empty rows
+    if (row.every(c => c === '')) continue;
+
+    // Skip the Workspace/Type header e.g., "SEO,,,,,,,"
+    if (row[0].toLowerCase() === 'seo' && row.slice(1).every(c => c === '')) {
+      continue;
+    }
+
+    // Check if it is a main or subitem header row
+    const isHeader = row.some(cell => cell.toLowerCase() === 'name') && 
+                     row.some(cell => cell.toLowerCase() === 'status') && 
+                     row.some(cell => ['person', 'owner', 'assignee', 'people'].includes(cell.toLowerCase()));
+    
+    if (isHeader) {
+      if (row[0].toLowerCase() === 'subitems') {
+        subitemHeaders = row;
+        isParsingSubitems = true;
+      } else {
+        mainHeaders = row;
+        isParsingSubitems = false;
+      }
+      continue;
+    }
+
+    if (row[0].toLowerCase() === 'subitems') {
+      subitemHeaders = row;
+      isParsingSubitems = true;
+      continue;
+    }
+
+    // Check if it is a Group Name header (e.g., Awebco, Sentry Roofing)
+    // Only a group header if it is followed by a header row!
+    const isGroupHeader = row[0] !== '' && 
+                          row.slice(1).every(c => c === '') && 
+                          !['name', 'subitems', 'status', 'person', 'owner', 'assignee', 'people', 'date', 'description', 'link'].includes(row[0].toLowerCase()) &&
+                          isNextRowHeader(rows, rowIndex + 1);
+    
+    if (isGroupHeader) {
+      currentGroup = row[0];
+      currentParentName = '';
+      continue;
+    }
+
+    // Parse data rows
+    if (isParsingSubitems) {
+      const nameIdx = subitemHeaders?.findIndex(h => h.toLowerCase() === 'name') ?? 1;
+      const ownerIdx = subitemHeaders?.findIndex(h => ['owner', 'person', 'assignee', 'people'].includes(h.toLowerCase())) ?? 2;
+      const statusIdx = subitemHeaders?.findIndex(h => h.toLowerCase() === 'status') ?? 3;
+      const dateIdx = subitemHeaders?.findIndex(h => ['date', 'deadline', 'due date'].includes(h.toLowerCase())) ?? 4;
+      const docIdx = subitemHeaders?.findIndex(h => h.toLowerCase().includes('doc')) ?? 5;
+      const linkIdx = subitemHeaders?.findIndex(h => h.toLowerCase() === 'link') ?? 6;
+      const notesIdx = subitemHeaders?.findIndex(h => ['notes', 'description'].includes(h.toLowerCase())) ?? 7;
+
+      const subName = row[nameIdx] || '';
+      
+      if (!subName) {
+        if (row[0] !== '') {
+          isParsingSubitems = false;
+          // Fall through to parse as main row
+        } else {
+          continue;
+        }
+      } else {
+        results.push({
+          projectName: subName,
+          description: row[notesIdx] || '',
+          status: row[statusIdx] || 'Not Started',
+          priority: 'Medium',
+          assigneeName: row[ownerIdx] || '',
+          companyName: '',
+          deadline: row[dateIdx] || '',
+          url: row[linkIdx] || row[docIdx] || '',
+          groupName: currentGroup,
+          isSubRow: true,
+          parentName: currentParentName
+        });
+        continue;
+      }
+    }
+
+    // Parse as main row
+    if (mainHeaders) {
+      const nameIdx = mainHeaders.findIndex(h => h.toLowerCase() === 'name') ?? 0;
+      const personIdx = mainHeaders.findIndex(h => ['person', 'owner', 'assignee', 'people'].includes(h.toLowerCase())) ?? 2;
+      const statusIdx = mainHeaders.findIndex(h => h.toLowerCase() === 'status') ?? 3;
+      const dateIdx = mainHeaders.findIndex(h => ['date', 'deadline', 'due date'].includes(h.toLowerCase())) ?? 4;
+      const descIdx = mainHeaders.findIndex(h => ['description', 'notes'].includes(h.toLowerCase())) ?? 5;
+      const linkIdx = mainHeaders.findIndex(h => h.toLowerCase() === 'link') ?? 6;
+
+      const pName = row[nameIdx] || '';
+      if (pName) {
+        currentParentName = pName;
+        results.push({
+          projectName: pName,
+          description: row[descIdx] || '',
+          status: row[statusIdx] || 'Not Started',
+          priority: 'Medium',
+          assigneeName: row[personIdx] || '',
+          companyName: '',
+          deadline: row[dateIdx] || '',
+          url: row[linkIdx] || '',
+          groupName: currentGroup,
+          isSubRow: false
+        });
+      }
+    } else {
+      const pName = row[0] || '';
+      if (pName) {
+        currentParentName = pName;
+        results.push({
+          projectName: pName,
+          description: row[5] || '',
+          status: row[3] || 'Not Started',
+          priority: 'Medium',
+          assigneeName: row[2] || '',
+          companyName: '',
+          deadline: row[4] || '',
+          url: row[6] || '',
+          groupName: currentGroup,
+          isSubRow: false
+        });
+      }
+    }
+  }
+
+  return results;
 }
 
 export async function parseFile(file: File): Promise<any[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
+
     if (file.name.endsWith('.csv')) {
       Papa.parse(file, {
         header: false,
         skipEmptyLines: true,
         complete: (results) => {
           const rows = results.data as string[][];
+          
+          const isHierarchical = rows.some(row =>
+            row.some(cell => typeof cell === 'string' && cell.toLowerCase() === 'subitems')
+          );
+
+          if (isHierarchical) {
+            resolve(parseHierarchicalCSV(rows));
+            return;
+          }
+
           const headerIndex = findHeaderRow(rows);
           if (headerIndex === -1) {
             resolve([]);
             return;
           }
-          
+
           const headers = rows[headerIndex];
           const dataRows = rows.slice(headerIndex + 1);
-          
+
           const mappedData = dataRows.map(row => {
             const obj: any = {};
             headers.forEach((h, i) => {
@@ -50,7 +218,7 @@ export async function parseFile(file: File): Promise<any[]> {
             });
             return obj;
           });
-          
+
           resolve(mappedData);
         },
         error: (err) => reject(err)
@@ -62,16 +230,25 @@ export async function parseFile(file: File): Promise<any[]> {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
-        
+
+        const isHierarchical = rows.some(row =>
+          row.some(cell => typeof cell === 'string' && cell.toLowerCase() === 'subitems')
+        );
+
+        if (isHierarchical) {
+          resolve(parseHierarchicalCSV(rows));
+          return;
+        }
+
         const headerIndex = findHeaderRow(rows);
         if (headerIndex === -1) {
           resolve([]);
           return;
         }
-        
+
         const headers = rows[headerIndex];
         const dataRows = rows.slice(headerIndex + 1);
-        
+
         const mappedData = dataRows.map(row => {
           const obj: any = {};
           headers.forEach((h, i) => {
@@ -79,7 +256,7 @@ export async function parseFile(file: File): Promise<any[]> {
           });
           return obj;
         });
-        
+
         resolve(mappedData);
       };
       reader.readAsBinaryString(file);
@@ -88,9 +265,9 @@ export async function parseFile(file: File): Promise<any[]> {
 }
 
 function findHeaderRow(rows: string[][]): number {
-  return rows.findIndex(row => 
+  return rows.findIndex(row =>
     row.some(cell => typeof cell === 'string' && (
-      cell.toLowerCase().includes('email') || 
+      cell.toLowerCase().includes('email') ||
       cell.toLowerCase().includes('first name') ||
       cell.toLowerCase().includes('last name') ||
       cell.toLowerCase().includes('subject') ||
@@ -112,6 +289,10 @@ export function mapImportData(rawData: any[]): ImportResult[] {
 }
 
 export function mapTicketImportData(rawData: any[]): TicketImportResult[] {
+  if (rawData.length > 0 && rawData[0].projectName !== undefined) {
+    return rawData as TicketImportResult[];
+  }
+  
   return rawData.map(row => ({
     projectName: row['Subject'] || row['Title'] || row['Project Name'] || row['Name'] || '',
     description: row['Description'] || row['Body'] || row['Notes'] || '',
@@ -133,12 +314,12 @@ export async function processImport(
 ) {
   const companyCache = new Map<string, string>();
   existingCompanies.forEach(c => companyCache.set(c.name.toLowerCase(), c.id));
-  
+
   let processedCount = 0;
-  
+
   for (const item of items) {
     let companyId = '';
-    
+
     if (item.companyName) {
       const lowerName = item.companyName.toLowerCase();
       if (companyCache.has(lowerName)) {
@@ -173,11 +354,11 @@ export async function processImport(
         companyCache.set(lowerName, companyId);
       }
     }
-    
-    const assignedTo = teamMembers.find(m => 
+
+    const assignedTo = teamMembers.find(m =>
       m.name.toLowerCase() === item.assignedToName.toLowerCase()
     );
-    
+
     await createContact({
       firstName: item.firstName,
       lastName: item.lastName,
@@ -189,7 +370,7 @@ export async function processImport(
       status: 'Lead' as Status,
       groupId: defaultGroupId,
     });
-    
+
     processedCount++;
     onProgress(processedCount);
   }
@@ -200,16 +381,24 @@ export async function processTicketImport(
   workspace: string,
   existingCompanies: Company[],
   teamMembers: TeamMember[],
-  onProgress: (count: number) => void
+  onProgress: (count: number) => void,
+  existingGroups?: any[]
 ) {
   const companyCache = new Map<string, string>();
   existingCompanies.forEach(c => companyCache.set(c.name.toLowerCase(), c.id));
-  
+
+  const groupCache = new Map<string, string>();
+  if (existingGroups) {
+    existingGroups.forEach(g => groupCache.set(g.name.toLowerCase(), g.id));
+  }
+
+  const createdTicketsCache = new Map<string, string>();
+
   let processedCount = 0;
-  
+
   for (const item of items) {
     let companyId = '';
-    
+
     if (item.companyName) {
       const lowerName = item.companyName.toLowerCase();
       if (companyCache.has(lowerName)) {
@@ -244,24 +433,49 @@ export async function processTicketImport(
         companyCache.set(lowerName, companyId);
       }
     }
-    
-    const assignedTo = teamMembers.find(m => 
+
+    let groupId = '';
+    if (item.groupName) {
+      const lowerGroupName = item.groupName.toLowerCase();
+      if (groupCache.has(lowerGroupName)) {
+        groupId = groupCache.get(lowerGroupName)!;
+      } else {
+        const groupRef = await createGroup({
+          name: item.groupName,
+          workspace: workspace,
+          order: groupCache.size
+        });
+        groupId = groupRef.id;
+        groupCache.set(lowerGroupName, groupId);
+      }
+    }
+
+    let parentId = '';
+    if (item.isSubRow && item.parentName) {
+      parentId = createdTicketsCache.get(item.parentName.toLowerCase()) || '';
+    }
+
+    const assignedTo = teamMembers.find(m =>
       m.name.toLowerCase() === item.assigneeName.toLowerCase()
     );
-    
-    await createTicket({
+
+    const ticketId = await createTicket({
       projectName: item.projectName,
       description: item.description,
       status: item.status,
       priority: item.priority,
       assignee: assignedTo?.id || teamMembers[0]?.id || '',
       companyId: companyId,
+      groupId: groupId || undefined,
+      parentId: parentId || undefined,
       deadline: item.deadline,
       url: item.url,
       workspace: workspace,
       order: processedCount,
     });
-    
+
+    createdTicketsCache.set(item.projectName.toLowerCase(), ticketId);
+
     processedCount++;
     onProgress(processedCount);
   }

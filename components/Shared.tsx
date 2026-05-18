@@ -123,6 +123,7 @@ export interface TicketFile {
   id: string;
   name: string;
   uploadedAt: string;
+  url?: string;
 }
 
 export interface Ticket {
@@ -130,6 +131,7 @@ export interface Ticket {
   parentId?: string;
   projectName: string;
   assignee: string;
+  assignees?: string[];
   status: string;
   deadline: string;
   url: string;
@@ -143,6 +145,10 @@ export interface Ticket {
   priority?: string;
   billableHours?: string;
   companyId?: string;
+  companyName?: string;
+  contactName?: string;
+  email?: string;
+  category?: string;
   isManual?: boolean;
   groupId?: string;
   workspace: string;
@@ -342,20 +348,33 @@ export function EditableStatus({ value, onSave, options = DEFAULT_STATUS_OPTIONS
   );
 }
 
-export function AssigneeDropdown({ value, onSave, teamMembers }: { value: string, onSave: (val: string) => void, teamMembers: TeamMember[] }) {
+export function AssigneeDropdown({ 
+  value, 
+  onSave, 
+  teamMembers,
+  values,
+  onSaveMultiple
+}: { 
+  value?: string, 
+  onSave?: (val: string) => void, 
+  teamMembers: TeamMember[],
+  values?: string[],
+  onSaveMultiple?: (vals: string[]) => void
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const isMulti = Boolean(values && onSaveMultiple);
   const member = teamMembers.find(m => m.id === value) || teamMembers[0];
+  const assignedMembers = teamMembers.filter(m => values?.includes(m.id));
 
   useEffect(() => {
     const handleGlobalClick = () => setIsOpen(false);
     
-    // Update position on scroll or resize when open
     const updatePosition = () => {
       if (isOpen && buttonRef.current) {
         const rect = buttonRef.current.getBoundingClientRect();
-        // Keep it onscreen if too far right
         const leftPos = rect.left + 192 > window.innerWidth ? window.innerWidth - 200 : rect.left;
         setPosition({
           top: rect.bottom + window.scrollY + 4,
@@ -385,27 +404,61 @@ export function AssigneeDropdown({ value, onSave, teamMembers }: { value: string
       onClick={e => e.stopPropagation()}
     >
       <div className="px-3 py-2 text-xs font-semibold text-[#8E9299] bg-[#F9FAFB] border-b border-[#E2E4E9]">
-        Select Assignee
+        Select Assignee${isMulti ? 's' : ''}
       </div>
       <div className="max-h-48 overflow-y-auto pt-1">
-        {teamMembers.map(tm => (
-          <button
-            key={tm.id}
-            className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-[#F0F2F5] transition-colors ${value === tm.id ? 'bg-blue-50 text-blue-700' : 'text-[#1C1F23]'}`}
-            onClick={() => {
-              onSave(tm.id);
+        <button
+          className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-red-50 transition-colors text-red-600 font-semibold border-b border-gray-100 pb-2 mb-1"
+          onClick={() => {
+            if (isMulti && onSaveMultiple) {
+              onSaveMultiple([]);
+            } else if (onSave) {
+              onSave('');
               setIsOpen(false);
-            }}
-          >
-            <div 
-              className="w-5 h-5 rounded-full inline-flex items-center justify-center text-white text-[9px] font-bold shrink-0"
-              style={{ backgroundColor: tm.color }}
+            }
+          }}
+        >
+          <div className="w-5 h-5 rounded-full border border-dashed border-red-300 flex items-center justify-center text-red-500 shrink-0 text-xs bg-red-50">
+            ×
+          </div>
+          <span>Clear Assignees</span>
+        </button>
+        {teamMembers.map(tm => {
+          const isSelected = isMulti ? values?.includes(tm.id) : value === tm.id;
+          return (
+            <button
+              key={tm.id}
+              className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-[#F0F2F5] transition-colors ${isSelected ? 'bg-blue-50 text-blue-700' : 'text-[#1C1F23]'}`}
+              onClick={() => {
+                if (isMulti && values && onSaveMultiple) {
+                  const alreadySelected = values.includes(tm.id);
+                  const updated = alreadySelected
+                    ? values.filter(v => v !== tm.id)
+                    : [...values, tm.id];
+                  onSaveMultiple(updated);
+                } else if (onSave) {
+                  onSave(tm.id);
+                  setIsOpen(false);
+                }
+              }}
             >
-              {tm.initials}
-            </div>
-            {tm.name}
-          </button>
-        ))}
+              <div 
+                className="w-5 h-5 rounded-full inline-flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                style={{ backgroundColor: tm.color }}
+              >
+                {tm.initials}
+              </div>
+              <span className="truncate flex-grow">{tm.name}</span>
+              {isSelected && isMulti && (
+                <div className="w-3.5 h-3.5 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 ml-auto">
+                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>,
     document.body
@@ -416,11 +469,41 @@ export function AssigneeDropdown({ value, onSave, teamMembers }: { value: string
       <button 
         ref={buttonRef}
         type="button"
-        className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold cursor-pointer hover:ring-2 ring-gray-200 transition-all"
-        style={{ backgroundColor: member?.color || '#ccc' }}
-        title={member?.name || 'Unassigned'}
+        className="inline-flex items-center justify-center cursor-pointer hover:ring-2 ring-gray-200 transition-all rounded-full p-0.5"
       >
-        {member?.initials || '?'}
+        {isMulti ? (
+          <div className="flex -space-x-1.5 overflow-hidden items-center">
+            {assignedMembers.length > 0 ? (
+              assignedMembers.slice(0, 3).map(tm => (
+                <div
+                  key={tm.id}
+                  className="w-6 h-6 rounded-full ring-2 ring-white flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                  style={{ backgroundColor: tm.color }}
+                  title={tm.name}
+                >
+                  {tm.initials}
+                </div>
+              ))
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-gray-100 border border-dashed border-[#D0D5DD] flex items-center justify-center text-[#8E9299] text-xs hover:bg-gray-200 transition-colors" title="Unassigned">
+                +
+              </div>
+            )}
+            {assignedMembers.length > 3 && (
+              <div className="w-6 h-6 rounded-full bg-[#F0F2F5] ring-2 ring-white flex items-center justify-center text-[#4A4D53] text-[9px] font-bold shrink-0" title={`${assignedMembers.length - 3} more`}>
+                +${assignedMembers.length - 3}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div 
+            className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold"
+            style={{ backgroundColor: member?.color || '#ccc' }}
+            title={member?.name || 'Unassigned'}
+          >
+            {member?.initials || '?'}
+          </div>
+        )}
       </button>
 
       {dropdownMenu}

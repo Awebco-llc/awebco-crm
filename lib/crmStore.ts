@@ -7,6 +7,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 
 import type { Contact, Company, TeamMember, ProductService, Proposal, Deal, ContactGroup, StorageFile, Ticket } from '@/components/Shared';
@@ -215,27 +216,27 @@ export async function deleteContactGroup(id: string): Promise<void> {
 
 export async function createTeamMember(input: TeamMember): Promise<string> {
   const db = getDb();
-  
+
   const apps = getApps();
   let secondaryApp = apps.find(app => app.name === 'SecondaryApp');
   if (!secondaryApp) {
     secondaryApp = initializeApp(getFirebaseConfig(), 'SecondaryApp');
   }
   const secondaryAuth = getAuth(secondaryApp);
-  
+
   if (!input.email || !input.password) {
     throw new Error('Email and password are required to create a team member.');
   }
 
   const userCredential = await createUserWithEmailAndPassword(secondaryAuth, input.email, input.password);
   await signOut(secondaryAuth);
-  
+
   const { id, ...dataWithoutId } = input;
   const uid = userCredential.user.uid;
   const ref = doc(db, 'users', uid);
-  
+
   const cleanData = Object.fromEntries(Object.entries(dataWithoutId).filter(([_, v]) => v !== undefined));
-  
+
   await setDoc(ref, {
     ...cleanData,
     authUid: uid,
@@ -248,7 +249,7 @@ export async function createTeamMember(input: TeamMember): Promise<string> {
 export async function updateTeamMember(id: string, patch: Partial<Omit<TeamMember, 'id'>>): Promise<void> {
   const db = getDb();
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([_, v]) => v !== undefined));
-  
+
   await setDoc(
     doc(db, 'users', id),
     {
@@ -306,9 +307,26 @@ type TicketDoc = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: 
 
 export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]) => void, onError?: (e: unknown) => void): Unsubscribe {
   const q = query(
-    collection(getDb(), 'tickets'), 
+    collection(getDb(), 'tickets'),
     where('workspace', '==', workspace),
     orderBy('order', 'asc')
+  );
+  return onSnapshot(q, (snap) => {
+    onChange(snap.docs.map((d) => {
+      const data = d.data() as any;
+      return {
+        id: d.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+      } as Ticket;
+    }));
+  }, (e) => onError?.(e));
+}
+
+export function subscribeAllTickets(onChange: (tickets: Ticket[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const q = query(
+    collection(getDb(), 'tickets')
   );
   return onSnapshot(q, (snap) => {
     onChange(snap.docs.map((d) => {
@@ -336,4 +354,59 @@ export async function updateTicket(id: string, patch: Partial<Omit<Ticket, 'id'>
 
 export async function deleteTicket(id: string): Promise<void> {
   await deleteDoc(doc(getDb(), 'tickets', id));
+}
+
+// Groups
+export function subscribeGroups(workspace: string, onUpdate: (groups: any[]) => void, onError?: (err: any) => void) {
+  const q = query(
+    collection(getDb(), 'groups'),
+    where('workspace', '==', workspace)
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const groups = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as any[];
+    
+    // Sort in memory to avoid requiring a composite index
+    groups.sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    onUpdate(groups);
+  }, (err) => onError?.(err));
+}
+
+export async function updateGroup(groupId: string, patch: any) {
+  const docRef = doc(getDb(), 'groups', groupId);
+  await updateDoc(docRef, {
+    ...patch,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function createGroup(group: any) {
+  return await addDoc(collection(getDb(), 'groups'), {
+    ...group,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteGroup(groupId: string) {
+  await deleteDoc(doc(getDb(), 'groups', groupId));
+}
+
+export function subscribeBillableHours(onUpdate: (labels: string[]) => void, onError?: (err: any) => void) {
+  const q = query(collection(getDb(), 'billableHoursLabels'), orderBy('createdAt', 'asc'));
+  return onSnapshot(q, (snapshot) => {
+    const labels = snapshot.docs.map(doc => doc.data().label as string);
+    onUpdate(labels);
+  }, (err) => onError?.(err));
+}
+
+export async function createBillableHour(label: string) {
+  return await addDoc(collection(getDb(), 'billableHoursLabels'), {
+    label,
+    createdAt: serverTimestamp()
+  });
 }

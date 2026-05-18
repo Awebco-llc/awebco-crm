@@ -18,12 +18,12 @@ function requiredPublicEnv(name: string, value: string | undefined): string {
 
 let cached:
   | {
-      app: FirebaseApp;
-      db: Firestore;
-      auth: Auth;
-      googleProvider: GoogleAuthProvider;
-      storage: FirebaseStorage;
-    }
+    app: FirebaseApp;
+    db: Firestore;
+    auth: Auth;
+    googleProvider: GoogleAuthProvider;
+    storage: FirebaseStorage;
+  }
   | undefined;
 
 export function getFirebaseConfig() {
@@ -69,24 +69,12 @@ export function getFirebaseApp(): FirebaseApp {
   return initFirebaseClient().app;
 }
 
-export function getAuthClient() {
-  const app = getFirebaseApp();
-  // On the server, we initialize Auth without any persistence (since there is no localStorage)
-  if (typeof window === 'undefined') {
-    const { getAuth, inMemoryPersistence } = require('firebase/auth');
-    const auth = getAuth(app);
-    auth.setPersistence(inMemoryPersistence);
-    return auth;
-  }
-  const { getAuth } = require('firebase/auth');
-  return getAuth(app);
+export function getDb(): Firestore {
+  return initFirebaseClient().db;
 }
 
-export function getDb() {
-  const app = getFirebaseApp();
-  const firestoreDatabaseId = process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID || '(default)';
-  const { getFirestore } = require('firebase/firestore');
-  return getFirestore(app, firestoreDatabaseId);
+export function getAuthClient(): Auth {
+  return initFirebaseClient().auth;
 }
 
 export function getGoogleProvider(): GoogleAuthProvider {

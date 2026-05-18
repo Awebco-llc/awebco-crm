@@ -26,10 +26,14 @@ export default function SettingsView({
   teamMembers,
   setTeamMembers,
   currentUserRole,
+  useFullScreenUnifiedTicketView,
+  setUseFullScreenUnifiedTicketView,
 }: {
   teamMembers: TeamMember[],
   setTeamMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>,
   currentUserRole?: TeamMember['role'],
+  useFullScreenUnifiedTicketView?: boolean,
+  setUseFullScreenUnifiedTicketView?: React.Dispatch<React.SetStateAction<boolean>>,
 }) {
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -406,6 +410,37 @@ export default function SettingsView({
                 Only the master admin can add, edit, or delete team member accounts.
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Workspace & Ticket Settings */}
+        <div className="bg-white rounded-xl shadow-sm border border-[#E2E4E9] overflow-hidden mb-8">
+          <div className="px-6 py-5 border-b border-[#E2E4E9]">
+            <h2 className="text-lg font-semibold text-[#1C1F23]">Workspace & Ticket Settings</h2>
+            <p className="text-sm text-[#8E9299] mt-1">Customize how your CRM workspace interfaces look and behave.</p>
+          </div>
+          <div className="p-6 flex flex-col gap-6">
+            <div className="flex items-center justify-between gap-4 p-4 border border-[#E2E4E9] rounded-lg bg-[#F9FAFB]">
+              <div>
+                <h3 className="font-semibold text-[#1C1F23] text-sm">Full Screen Support Ticket View</h3>
+                <p className="text-xs text-[#8E9299] mt-0.5">When clicked, support tickets will open in a beautiful, distraction-free full screen layout showing all metadata, description, files, and updates in a single unified scroll view.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={useFullScreenUnifiedTicketView}
+                  onChange={(e) => {
+                    const newVal = e.target.checked;
+                    if (setUseFullScreenUnifiedTicketView) {
+                      setUseFullScreenUnifiedTicketView(newVal);
+                    }
+                    localStorage.setItem('useFullScreenUnifiedTicketView', String(newVal));
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
+              </label>
+            </div>
           </div>
         </div>
       </div>
