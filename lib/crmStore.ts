@@ -398,6 +398,15 @@ export async function createGroup(group: any) {
   });
 }
 
+export async function createGroupWithId(groupId: string, group: any) {
+  const docRef = doc(getDb(), 'groups', groupId);
+  await setDoc(docRef, {
+    ...group,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
 export async function deleteGroup(groupId: string) {
   await deleteDoc(doc(getDb(), 'groups', groupId));
 }
@@ -414,5 +423,46 @@ export async function createBillableHour(label: string) {
   return await addDoc(collection(getDb(), 'billableHoursLabels'), {
     label,
     createdAt: serverTimestamp()
+  });
+}
+
+export function subscribeMessages(onChange: (messages: any[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const db = getDb();
+  const q = query(collection(db, 'messages'), orderBy('timestamp'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      onChange(
+        snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            senderId: data.senderId,
+            receiverId: data.receiverId,
+            text: data.text,
+            timestamp: data.timestamp?.toDate?.() ? data.timestamp.toDate().toISOString() : data.timestamp || new Date().toISOString(),
+            read: data.read ?? false,
+          };
+        }),
+      );
+    },
+    (e) => onError?.(e),
+  );
+}
+
+export async function createMessage(input: { senderId: string; receiverId: string; text: string }): Promise<string> {
+  const db = getDb();
+  const ref = await addDoc(collection(db, 'messages'), {
+    ...input,
+    timestamp: serverTimestamp(),
+    read: false,
+  });
+  return ref.id;
+}
+
+export async function markMessageAsRead(id: string): Promise<void> {
+  const db = getDb();
+  await updateDoc(doc(db, 'messages', id), {
+    read: true,
   });
 }

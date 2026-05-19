@@ -23,8 +23,20 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const reset = () => {
+    setStep('upload');
+    setFile(null);
+    setPreviewData([]);
+    setImportProgress(0);
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       reset();
     }
   }, [isOpen]);
@@ -65,16 +77,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
     }
   };
 
-  const reset = () => {
-    setStep('upload');
-    setFile(null);
-    setPreviewData([]);
-    setImportProgress(0);
-    setError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+
 
   if (!isOpen) return null;
 

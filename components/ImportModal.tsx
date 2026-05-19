@@ -24,9 +24,21 @@ export default function ImportModal({ isOpen, onClose, teamMembers, companies, c
   const [selectedGroupId, setSelectedGroupId] = useState(defaultGroupId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const reset = () => {
+    setStep('upload');
+    setFile(null);
+    setPreviewData([]);
+    setImportProgress(0);
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // Reset state when modal is opened/closed
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       reset();
     } else {
       setSelectedGroupId(defaultGroupId);
@@ -69,16 +81,7 @@ export default function ImportModal({ isOpen, onClose, teamMembers, companies, c
     }
   };
 
-  const reset = () => {
-    setStep('upload');
-    setFile(null);
-    setPreviewData([]);
-    setImportProgress(0);
-    setError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+
 
   if (!isOpen) return null;
 

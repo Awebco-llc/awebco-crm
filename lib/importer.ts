@@ -25,6 +25,7 @@ export interface TicketImportResult {
   groupName?: string;
   isSubRow?: boolean;
   parentName?: string;
+  billableHours?: string;
 }
 
 function parseDateValue(val: any): string {
@@ -138,6 +139,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
       const docIdx = subitemHeaders?.findIndex(h => h.toLowerCase().includes('doc')) ?? 5;
       const linkIdx = subitemHeaders?.findIndex(h => h.toLowerCase() === 'link') ?? 6;
       const notesIdx = subitemHeaders?.findIndex(h => ['notes', 'description'].includes(h.toLowerCase())) ?? 7;
+      const billableHoursIdx = subitemHeaders?.findIndex(h => h.toLowerCase().includes('billable') || h.toLowerCase().includes('hours')) ?? -1;
 
       const subName = row[nameIdx] || '';
       
@@ -158,6 +160,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
           companyName: '',
           deadline: parseDateValue(row[dateIdx]),
           url: row[linkIdx] || row[docIdx] || '',
+          billableHours: billableHoursIdx !== -1 ? row[billableHoursIdx] : '',
           groupName: currentGroup,
           isSubRow: true,
           parentName: currentParentName
@@ -174,6 +177,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
       const dateIdx = mainHeaders.findIndex(h => ['date', 'deadline', 'due date'].includes(h.toLowerCase())) ?? 4;
       const descIdx = mainHeaders.findIndex(h => ['description', 'notes'].includes(h.toLowerCase())) ?? 5;
       const linkIdx = mainHeaders.findIndex(h => h.toLowerCase() === 'link') ?? 6;
+      const billableHoursIdx = mainHeaders.findIndex(h => h.toLowerCase().includes('billable') || h.toLowerCase().includes('hours')) ?? -1;
 
       const pName = row[nameIdx] || '';
       if (pName) {
@@ -187,6 +191,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
           companyName: '',
           deadline: parseDateValue(row[dateIdx]),
           url: row[linkIdx] || '',
+          billableHours: billableHoursIdx !== -1 ? row[billableHoursIdx] : '',
           groupName: currentGroup,
           isSubRow: false
         });
@@ -204,6 +209,7 @@ export function parseHierarchicalCSV(rows: string[][]): TicketImportResult[] {
           companyName: '',
           deadline: parseDateValue(row[4]),
           url: row[6] || '',
+          billableHours: row[8] || '',
           groupName: currentGroup,
           isSubRow: false
         });
@@ -334,6 +340,7 @@ export function mapTicketImportData(rawData: any[]): TicketImportResult[] {
     companyName: row['Company'] || row['Account'] || '',
     deadline: parseDateValue(row['Deadline'] || row['Due Date']),
     url: row['URL'] || row['Link'] || '',
+    billableHours: row['Billable Hours'] || row['billableHours'] || row['BillableHours'] || '',
   })).filter(item => item.projectName);
 }
 
@@ -504,6 +511,7 @@ export async function processTicketImport(
       url: item.url,
       workspace: workspace,
       order: processedCount,
+      billableHours: item.billableHours || '',
     });
 
     createdTicketsCache.set(item.projectName.toLowerCase(), ticketId);

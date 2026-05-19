@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import WorkspaceProjectView from '@/components/WorkspaceProjectView';
-import SocialMediaProjectView from '@/components/SocialMediaProjectView';
+
 import InboxView from '@/components/InboxView';
 import SettingsView from '@/components/SettingsView';
 import CompaniesView from '@/components/CompaniesView';
@@ -22,7 +22,7 @@ import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
 import ImportModal from '@/components/ImportModal';
 import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup } from '@/components/Shared';
-import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember } from '@/lib/crmStore';
+import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getAuthClient } from '@/lib/firebase';
@@ -409,6 +409,13 @@ export default function Page() {
     return false;
   });
 
+  const [allowDeletingGroups, setAllowDeletingGroups] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('allowDeletingGroups') === 'true';
+    }
+    return false;
+  });
+
   useEffect(() => {
     localStorage.setItem('activeNav', activeNav);
   }, [activeNav]);
@@ -419,6 +426,7 @@ export default function Page() {
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [emailingContact, setEmailingContact] = useState<Contact | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [dataError, setDataError] = useState<string>('');
 
   useEffect(() => {
@@ -446,6 +454,10 @@ export default function Page() {
       console.error('Firestore deals subscribe failed', e);
       setDataError('Could not load deals from Firestore.');
     });
+    const unsubMessages = subscribeMessages(setChatMessages, (e) => {
+      console.error('Firestore messages subscribe failed', e);
+      setDataError('Could not load chat messages from Firestore.');
+    });
     const unsubContactGroups = subscribeContactGroups((groups) => {
       setContactGroups(groups);
       // Auto-initialize order for groups that don't have it
@@ -453,8 +465,8 @@ export default function Page() {
         if (group.order === undefined) {
           try {
             await updateContactGroup(group.id, { order: index });
-          } catch (e) {
-            console.error('Failed to initialize group order', e);
+          } catch (err) {
+            console.error('Failed to set group order', err);
           }
         }
       });
@@ -469,6 +481,7 @@ export default function Page() {
       unsubProducts();
       unsubProposals();
       unsubDeals();
+      unsubMessages();
       unsubContactGroups();
     };
   }, []);
@@ -486,6 +499,48 @@ export default function Page() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Request browser Notification permission on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch(console.error);
+      }
+    }
+  }, []);
+
+  // Listen to incoming messages for background/popup notification triggers
+  const prevMessagesCountRef = useRef<number>(0);
+  useEffect(() => {
+    if (!profile) {
+      prevMessagesCountRef.current = chatMessages.length;
+      return;
+    }
+
+    // Trigger popup notifications on new messages
+    if (chatMessages.length > prevMessagesCountRef.current) {
+      const latestMessage = chatMessages[chatMessages.length - 1];
+      if (
+        latestMessage &&
+        latestMessage.receiverId === profile.id &&
+        !latestMessage.read
+      ) {
+        // Trigger browser push notification
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          const sender = teamMembers.find((t) => t.id === latestMessage.senderId);
+          const senderName = sender?.name || 'Someone';
+          const notification = new Notification(`New message from ${senderName}`, {
+            body: latestMessage.text,
+          });
+          notification.onclick = () => {
+            window.focus();
+            setActiveNav('Inbox');
+          };
+        }
+      }
+    }
+    prevMessagesCountRef.current = chatMessages.length;
+  }, [chatMessages, profile, teamMembers]);
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -998,20 +1053,34 @@ export default function Page() {
         </div>
 
         <nav className="py-2.5">
-          {NAV_ITEMS_MAIN.map(item => (
-            <div 
-              key={item.name}
-              onClick={() => setActiveNav(item.name)}
-              className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
-                activeContentNav === item.name 
-                  ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
-                  : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
-              }`}
-            >
-              <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
-              {item.name}
-            </div>
-          ))}
+          {NAV_ITEMS_MAIN.map(item => {
+            const isInbox = item.name === 'Inbox';
+            const unreadMessagesCount = isInbox && currentTeamMember
+              ? chatMessages.filter(m => m.receiverId === currentTeamMember.id && !m.read).length
+              : 0;
+
+            return (
+              <div 
+                key={item.name}
+                onClick={() => setActiveNav(item.name)}
+                className={`px-5 py-2 text-sm flex items-center justify-between cursor-pointer transition-colors ${
+                  activeContentNav === item.name 
+                    ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
+                    : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
+                  <span>{item.name}</span>
+                </div>
+                {unreadMessagesCount > 0 && (
+                  <span className="bg-[#D32F2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 min-w-[18px] text-center shadow-sm">
+                    {unreadMessagesCount}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         {canAccessCRM && (visibleNavFilter === 'All' || visibleNavFilter === 'CRM') && (
@@ -1291,21 +1360,21 @@ export default function Page() {
         ) : activeContentNav === 'My Tasks' ? (
           <MyTasksView teamMembers={teamMembers} companies={companies} contacts={contacts} currentUserId={currentTeamMember?.id} onOpenTask={handleOpenTask} />
         ) : activeContentNav === 'Inbox' ? (
-          <InboxView teamMembers={teamMembers} currentUserId={currentTeamMember?.id} />
+          <InboxView teamMembers={teamMembers} currentUserId={currentTeamMember?.id} messages={chatMessages} />
         ) : activeContentNav === 'Websites' ? (
-          <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
+          <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} allowDeletingGroups={allowDeletingGroups} />
         ) : activeContentNav === 'Design & Print' ? (
-          <WorkspaceProjectView key={`dp-${workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
+          <WorkspaceProjectView key={`dp-${workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Design & Print" flagKey="dp" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Design & Print' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} allowDeletingGroups={allowDeletingGroups} />
         ) : activeContentNav === 'Google Ads' ? (
-          <WorkspaceProjectView key={`ppc-${workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
+          <WorkspaceProjectView key={`ppc-${workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Google Ads" flagKey="ppc" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Google Ads' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} allowDeletingGroups={allowDeletingGroups} />
         ) : activeContentNav === 'Local Listings' ? (
-          <WorkspaceProjectView key={`ll-${workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
+          <WorkspaceProjectView key={`ll-${workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Local Listings" flagKey="ll" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Local Listings' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} allowDeletingGroups={allowDeletingGroups} />
         ) : activeContentNav === 'SEO' ? (
-          <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
+          <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} allowDeletingGroups={allowDeletingGroups} />
         ) : activeContentNav === 'Social Media' ? (
-          <SocialMediaProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} />
+          <WorkspaceProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Social Media" flagKey="smm" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} allowDeletingGroups={allowDeletingGroups} />
         ) : activeContentNav === 'Support Tickets' ? (
-          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} />
+          <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingGroups={allowDeletingGroups} />
         ) : canAccessCRM && activeContentNav === 'Companies' ? (
           <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} />
         ) : canAccessCRM && activeContentNav === 'Deals / Sales' ? (
@@ -1325,6 +1394,8 @@ export default function Page() {
             currentUserRole={currentTeamMember?.role}
             useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView}
             setUseFullScreenUnifiedTicketView={setUseFullScreenUnifiedTicketView}
+            allowDeletingGroups={allowDeletingGroups}
+            setAllowDeletingGroups={setAllowDeletingGroups}
           />
         ) : (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">

@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { TeamMember } from './Shared';
 import { Search, Send } from 'lucide-react';
+import { createMessage, markMessageAsRead } from '@/lib/crmStore';
 
 interface ChatMessage {
   id: string;
@@ -10,16 +11,18 @@ interface ChatMessage {
   receiverId: string;
   text: string;
   timestamp: string;
+  read: boolean;
 }
 
-const INITIAL_MESSAGES: ChatMessage[] = [
-  { id: '1', senderId: '1', receiverId: '2', text: 'Hey, did you finish the website redesign proposal?', timestamp: '2026-04-18T10:00:00Z' },
-  { id: '2', senderId: '2', receiverId: '1', text: 'Almost done. Just reviewing the price catalog one more time.', timestamp: '2026-04-18T10:05:00Z' },
-  { id: '3', senderId: '1', receiverId: '2', text: 'Awesome, let me know if you need help.', timestamp: '2026-04-18T10:06:00Z' },
-];
-
-export default function InboxView({ teamMembers, currentUserId }: { teamMembers: TeamMember[], currentUserId: string | undefined }) {
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+export default function InboxView({ 
+  teamMembers, 
+  currentUserId,
+  messages
+}: { 
+  teamMembers: TeamMember[], 
+  currentUserId: string | undefined,
+  messages: ChatMessage[]
+}) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +39,21 @@ export default function InboxView({ teamMembers, currentUserId }: { teamMembers:
       }
     }
   }, [teamMembers, currentUserId, selectedUserId]);
+
+  // Mark messages from the selected user as read when the chat is active
+  useEffect(() => {
+    if (!currentUserId || !selectedUserId) return;
+    const unreadFromSelected = messages.filter(
+      (m) => m.senderId === selectedUserId && m.receiverId === currentUserId && !m.read
+    );
+    if (unreadFromSelected.length > 0) {
+      unreadFromSelected.forEach((msg) => {
+        markMessageAsRead(msg.id).catch((err) =>
+          console.error('Failed to mark message as read', err)
+        );
+      });
+    }
+  }, [messages, currentUserId, selectedUserId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,20 +82,20 @@ export default function InboxView({ teamMembers, currentUserId }: { teamMembers:
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [messages, currentUserId, selectedUserId]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || !currentUserId || !selectedUserId) return;
 
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      senderId: currentUserId,
-      receiverId: selectedUserId,
-      text: inputText.trim(),
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages([...messages, newMessage]);
-    setInputText('');
+    try {
+      await createMessage({
+        senderId: currentUserId,
+        receiverId: selectedUserId,
+        text: inputText.trim(),
+      });
+      setInputText('');
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
   };
 
   const selectedUser = teamMembers.find(m => m.id === selectedUserId);
@@ -141,6 +159,9 @@ export default function InboxView({ teamMembers, currentUserId }: { teamMembers:
                       <h4 className={`text-sm font-semibold truncate ${isSelected ? 'text-[#1061E3]' : 'text-[#1C1F23]'}`}>
                         {member.name}
                       </h4>
+                      {messages.some(m => m.senderId === member.id && m.receiverId === currentUserId && !m.read) && (
+                        <span className="w-2 h-2 bg-[#1061E3] rounded-full shrink-0" />
+                      )}
                     </div>
                     {latestMessage && (
                       <p className="text-xs text-[#8E9299] truncate">

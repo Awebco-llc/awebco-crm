@@ -23,7 +23,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket, EditableDeadline } from '@/components/Shared';
-import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour } from '@/lib/crmStore';
+import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour, createGroupWithId } from '@/lib/crmStore';
 import TicketImportModal from './TicketImportModal';
 
 interface Column {
@@ -81,13 +81,16 @@ function SortableHeader({ column }: { column: Column }) {
     opacity: isDragging ? 0.5 : 1,
     position: 'relative' as const,
     zIndex: isDragging ? 10 : 1,
+    width: getColumnWidth(column.id),
+    minWidth: getColumnWidth(column.id),
+    maxWidth: getColumnWidth(column.id),
   };
 
   return (
     <th
       ref={setNodeRef}
       style={style}
-      className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase"
+      className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase truncate"
     >
       <div className="flex items-center gap-2">
         <button {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity text-[#8E9299] hover:text-[#1C1F23]">
@@ -112,6 +115,37 @@ const getInitials = (name?: string) => {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
+};
+
+const getColumnWidth = (colId: string): string => {
+  switch (colId) {
+    case 'projectName':
+      return '350px';
+    case 'assignee':
+      return '125px';
+    case 'status':
+      return '160px';
+    case 'deadline':
+      return '120px';
+    case 'notes':
+      return '300px';
+    case 'priority':
+      return '110px';
+    case 'billableHours':
+      return '130px';
+    case 'url':
+      return '180px';
+    case 'planType':
+      return '130px';
+    case 'category':
+      return '130px';
+    case 'contactName':
+      return '130px';
+    case 'email':
+      return '180px';
+    default:
+      return '150px';
+  }
 };
 
 interface BillableHoursDropdownProps {
@@ -252,7 +286,7 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel }:
                 }}
                 className="w-full text-left px-3 py-2 rounded text-xs text-[#38BDF8] hover:bg-[#2C314D] font-semibold transition-colors"
               >
-                + Create label "{searchQuery.trim()}"
+                + Create label &quot;{searchQuery.trim()}&quot;
               </button>
             )}
 
@@ -325,7 +359,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
       onContextMenu={(e) => onContextMenu?.(e, row.id, isSubRow)}
       className={`hover:bg-gray-50 transition-colors cursor-pointer group ${isSubRow ? 'bg-[#FAFAFA]' : ''} ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : ''}`}
     >
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-[70px] select-none" onClick={(e) => e.stopPropagation()}>
+      <td style={{ width: '70px', minWidth: '70px', maxWidth: '70px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] select-none" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
           {!isSubRow && (
             <input 
@@ -344,20 +378,22 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
         </div>
       </td>
       {columns.map((col: any) => (
-        <td key={col.id} className={`px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative ${
-          col.id === 'projectName' 
-            ? 'max-w-[450px] min-w-[250px]' 
-            : col.id === 'notes'
-            ? 'max-w-[350px] min-w-[150px]'
-            : 'max-w-[160px]'
-        }`}>
+        <td 
+          key={col.id} 
+          style={{
+            width: getColumnWidth(col.id),
+            minWidth: getColumnWidth(col.id),
+            maxWidth: getColumnWidth(col.id),
+          }}
+          className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative"
+        >
           {col.id === 'status' ? (
             <EditableStatus 
               value={row[col.id]} 
-              options={projectType === 'Local Listings'
+              options={projectType === 'Local Listings' || projectType === 'Social Media'
                 ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
                 : row.parentId
-                  ? (projectType === 'Local Listings'
+                  ? (projectType === 'Local Listings' || projectType === 'Social Media'
                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
                     : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
                   : (statusOptions || [])}
@@ -372,7 +408,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                 } else if (newVal === 'S14: Launched' || newVal === 'Launched' || newVal === 'Done') {
                   patch.groupId = 'group-completed';
                 } else if (row.groupId === 'group-needs-invoiced' || row.groupId === 'group-completed' || row.groupId === 'group-running') {
-                  patch.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
+                  patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
                 }
                 onUpdate(row.id, patch);
               }} 
@@ -471,7 +507,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
           )}
         </td>
       ))}
-      <td className="px-4 py-3 border-b border-[#F0F2F5] text-right w-12">
+      <td style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5] text-right">
         <button
           onClick={(e) => { e.stopPropagation(); deleteRow(row.id); }}
           className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -490,7 +526,23 @@ function GroupDroppableBody({ groupId, children }: { groupId: string, children: 
   return <tbody ref={setNodeRef} className="min-h-[50px] align-top">{children}</tbody>;
 }
 
-function GroupHeader({ group, onUpdate, onRemove }: { group: { id: string, name: string }, onUpdate: (id: string, name: string) => void, onRemove: (id: string) => void }) {
+function GroupHeader({ 
+  group, 
+  onUpdate, 
+  onRemove, 
+  dragHandleProps, 
+  isCollapsed, 
+  onToggleCollapse,
+  allowDeletingGroups = false
+}: { 
+  group: { id: string, name: string }, 
+  onUpdate: (id: string, name: string) => void, 
+  onRemove: (id: string) => void, 
+  dragHandleProps?: any, 
+  isCollapsed?: boolean, 
+  onToggleCollapse?: () => void,
+  allowDeletingGroups?: boolean
+}) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(group.name);
 
@@ -503,6 +555,18 @@ function GroupHeader({ group, onUpdate, onRemove }: { group: { id: string, name:
   return (
     <div className="flex items-center justify-between mb-3 group/header">
       <div className="flex items-center gap-2">
+        {dragHandleProps && (
+          <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23] p-1 hover:bg-gray-100 rounded">
+            <GripVertical className="w-4 h-4" />
+          </div>
+        )}
+        <button 
+          onClick={onToggleCollapse} 
+          className="p-1 hover:bg-gray-100 rounded text-[#8E9299] hover:text-[#1C1F23] transition-colors"
+          title={isCollapsed ? "Expand group" : "Collapse group"}
+        >
+          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
         {isEditing ? (
           <input 
             autoFocus
@@ -531,13 +595,34 @@ function GroupHeader({ group, onUpdate, onRemove }: { group: { id: string, name:
           </div>
         )}
       </div>
-      <button 
-        onClick={() => onRemove(group.id)}
-        className="opacity-0 group-hover/header:opacity-100 p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
-        title="Remove group"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      {allowDeletingGroups && (
+        <button 
+          onClick={() => onRemove(group.id)}
+          className="opacity-0 group-hover/header:opacity-100 p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
+          title="Remove group"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SortableGroupWrapper({ group, children }: { group: any, children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `group-sortable-${group.id}` });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="mb-8">
+      {React.Children.map(children, child => {
+        if (React.isValidElement(child) && child.type === GroupHeader) {
+          return React.cloneElement(child, { dragHandleProps: { ...attributes, ...listeners } } as any);
+        }
+        return child;
+      })}
     </div>
   );
 }
@@ -553,7 +638,8 @@ export default function WorkspaceProjectView({
   onMention,
   canManageBoardMembers,
   onUpdateMemberPermissions,
-  useFullScreenUnifiedTicketView
+  useFullScreenUnifiedTicketView,
+  allowDeletingGroups = false
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -566,6 +652,7 @@ export default function WorkspaceProjectView({
   canManageBoardMembers: boolean,
   onUpdateMemberPermissions?: (memberId: string, workspaceName: string, hasAccess: boolean) => void,
   useFullScreenUnifiedTicketView?: boolean,
+  allowDeletingGroups?: boolean,
 }) {
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
@@ -590,7 +677,7 @@ export default function WorkspaceProjectView({
       }
       return filtered;
     }
-    if (projectType === 'SEO' || projectType === 'Google Ads') {
+    if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
       return INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
     }
     return INITIAL_COLUMNS.filter(c => !['companyName', 'contactName', 'email', 'category'].includes(c.id));
@@ -598,6 +685,8 @@ export default function WorkspaceProjectView({
   const [data, setData] = useState<any[]>([]);
   const [groups, setGroups] = useState<{id: string, name: string}[]>([]);
   const [isGroupsLoaded, setIsGroupsLoaded] = useState(false);
+  const [isDefaultGroups, setIsDefaultGroups] = useState(true);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [isAddColOpen, setIsAddColOpen] = useState(false);
@@ -744,6 +833,7 @@ export default function WorkspaceProjectView({
       return 'group-completed';
     }
     if (projectType === 'Local Listings') return 'group-setup';
+    if (projectType === 'Social Media') return 'group-smm';
     return 'group-active';
   };
 
@@ -760,7 +850,7 @@ export default function WorkspaceProjectView({
         'Done'
       ];
     }
-    if (projectType === 'Google Ads') {
+    if (projectType === 'Google Ads' || projectType === 'Social Media') {
       return [
         'Not Started',
         'Setup',
@@ -811,9 +901,11 @@ export default function WorkspaceProjectView({
   }, [projectType]);
 
   React.useEffect(() => {
+    setCollapsedGroupIds(new Set());
     const unsub = subscribeGroups(projectType, (fetchedGroups) => {
       setIsGroupsLoaded(true);
       if (fetchedGroups.length === 0) {
+        setIsDefaultGroups(true);
         // Just show the UI defaults for now
         const defaults = projectType === 'Local Listings' 
           ? [{ name: 'Setup', id: 'group-setup' }, { name: 'Running', id: 'group-running' }]
@@ -821,10 +913,13 @@ export default function WorkspaceProjectView({
           ? [{ name: 'Setup', id: 'group-active' }, { name: 'Running', id: 'group-running' }]
           : projectType === 'Design & Print' || projectType === 'Support Tickets'
           ? [{ name: 'Active', id: 'group-active' }, { name: 'Needs Invoiced', id: 'group-needs-invoiced' }, { name: 'Complete', id: 'group-completed' }]
+          : projectType === 'Social Media'
+          ? [{ name: 'Social Media Management', id: 'group-smm' }, { name: 'Social Media Advertising', id: 'group-sma' }]
           : [{ name: 'Active', id: 'group-active' }, { name: 'Completed / Launched', id: 'group-completed' }];
         
         setGroups(defaults);
       } else {
+        setIsDefaultGroups(false);
         setGroups(fetchedGroups);
       }
     }, (err: any) => {
@@ -833,6 +928,7 @@ export default function WorkspaceProjectView({
       const defaults = [{ id: 'group-active', name: 'Active' }, { id: 'group-completed', name: 'Completed' }];
       setGroups(defaults);
       setIsGroupsLoaded(true);
+      setIsDefaultGroups(true);
     });
     return () => unsub();
   }, [projectType]);
@@ -843,6 +939,58 @@ export default function WorkspaceProjectView({
       triggerSheetsSync();
     } catch (err) {
       console.error('Failed to update ticket', err);
+    }
+  };
+
+  const handleUpdateGroup = async (id: string, name: string) => {
+    try {
+      if (isDefaultGroups) {
+        // Initialize default groups in Firestore first, changing the name of the target group
+        for (let i = 0; i < groups.length; i++) {
+          const defGroup = groups[i];
+          await createGroupWithId(defGroup.id, {
+            name: defGroup.id === id ? name : defGroup.name,
+            workspace: projectType,
+            order: i
+          });
+        }
+      } else {
+        await updateGroup(id, { name });
+      }
+    } catch (err) {
+      console.error('Failed to update group:', err);
+    }
+  };
+
+  const handleRemoveGroup = async (id: string) => {
+    try {
+      const fallbackGroup = groups.find(g => g.id !== id)?.id;
+      
+      // Move tickets belonging to the deleted group
+      const ticketsToMove = data.filter(r => getRowGroupId(r) === id);
+      if (fallbackGroup) {
+        for (const r of ticketsToMove) {
+          await handleUpdateRow(r.id, { groupId: fallbackGroup });
+        }
+      }
+
+      if (isDefaultGroups) {
+        // Initialize default groups in Firestore (excluding the deleted one)
+        let orderIdx = 0;
+        for (let i = 0; i < groups.length; i++) {
+          const defGroup = groups[i];
+          if (defGroup.id === id) continue;
+          await createGroupWithId(defGroup.id, {
+            name: defGroup.name,
+            workspace: projectType,
+            order: orderIdx++
+          });
+        }
+      } else {
+        await deleteGroup(id);
+      }
+    } catch (err) {
+      console.error('Failed to remove group:', err);
     }
   };
 
@@ -946,7 +1094,7 @@ export default function WorkspaceProjectView({
       description: '',
       notes: '',
       files: [],
-      groupId: parent?.groupId || (projectType === 'Local Listings' ? 'group-setup' : 'group-active'),
+      groupId: parent?.groupId || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
       workspace: projectType,
       order: data.filter(r => r.parentId === parentId).length,
     };
@@ -1016,6 +1164,34 @@ export default function WorkspaceProjectView({
       else if (prevItem && nextItem) newOrder = ((prevItem.order || 0) + (nextItem.order || 0)) / 2;
       
       await handleUpdateRow(activeId, { order: newOrder });
+    } else if (String(active.id).startsWith('group-sortable-')) {
+      const activeId = String(active.id).replace('group-sortable-', '');
+      const overId = String(over.id).replace('group-sortable-', '');
+      
+      const oldIndex = groups.findIndex((g) => g.id === activeId);
+      const newIndex = groups.findIndex((g) => g.id === overId);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newGroups = arrayMove(groups, oldIndex, newIndex);
+        setGroups(newGroups);
+        
+        try {
+          if (isDefaultGroups) {
+            for (let i = 0; i < newGroups.length; i++) {
+              await createGroupWithId(newGroups[i].id, {
+                name: newGroups[i].name,
+                workspace: projectType,
+                order: i
+              });
+            }
+          } else {
+            for (let i = 0; i < newGroups.length; i++) {
+              await updateGroup(newGroups[i].id, { order: i });
+            }
+          }
+        } catch (err) {
+          console.error('Failed to update group orders:', err);
+        }
+      }
     } else {
       setColumns((items) => {
         const oldIndex = items.findIndex((col) => col.id === active.id);
@@ -1064,7 +1240,7 @@ export default function WorkspaceProjectView({
         notes: '',
         files: [],
         isManual: true,
-        groupId: projectType === 'Local Listings' ? 'group-setup' : 'group-active',
+        groupId: projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active',
         workspace: projectType,
         order: maxOrder + 1,
       };
@@ -1305,6 +1481,18 @@ export default function WorkspaceProjectView({
             onClick={async () => {
               setIsAddingGroup(true);
               try {
+                if (isDefaultGroups) {
+                  // Initialize default groups in Firestore first so they don't disappear
+                  for (let i = 0; i < groups.length; i++) {
+                    const defGroup = groups[i];
+                    await createGroupWithId(defGroup.id, {
+                      name: defGroup.name,
+                      workspace: projectType,
+                      order: i
+                    });
+                  }
+                }
+
                 await createGroup({ 
                   name: 'New Group', 
                   workspace: projectType, 
@@ -1324,133 +1512,140 @@ export default function WorkspaceProjectView({
             {isAddingGroup ? 'Adding...' : 'Add Group'}
           </button>
         </div>
-      </div>
-
-      <div className="flex-grow px-6 pb-6 overflow-auto">
+      </div>      <div className="flex-grow px-6 pb-6 overflow-auto">
         <DndContext id="websites-dnd-context" sensors={sensors} collisionDetection={closestCenter} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-          {groups.map((group) => {
-            const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
-            const visibleData = data.filter(r => rowMatchesStatus(r));
-            const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
-            return (
-              <div key={group.id} className="mb-8">
-                <GroupHeader 
-                  group={group} 
-                  onUpdate={(id, name) => updateGroup(id, { name })} 
-                  onRemove={(id) => {
-                    const fallbackGroup = groups.find(g => g.id !== id)?.id;
-                    if (fallbackGroup) {
-                      data.filter(r => getRowGroupId(r) === id).forEach(r => handleUpdateRow(r.id, { groupId: fallbackGroup }));
-                    }
-                    deleteGroup(id);
-                  }} 
-                />
-                 <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
-                  <table className="w-full border-collapse text-left">
-                    <thead>
-                      <tr>
-                        <th className="w-[70px] bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]">
-                          <div className="flex items-center pl-1">
-                            <input 
-                              type="checkbox"
-                              checked={groupRows.length > 0 && groupRows.every(r => selectedRowIds.has(r.id))}
-                              onChange={(e) => {
-                                const isChecked = e.target.checked;
-                                const rowIds = groupRows.map(r => r.id);
-                                setSelectedRowIds(prev => {
-                                  const next = new Set(prev);
-                                  if (isChecked) {
-                                    rowIds.forEach(id => next.add(id));
-                                  } else {
-                                    rowIds.forEach(id => next.delete(id));
-                                  }
-                                  return next;
-                                });
-                              }}
-                              className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4"
-                            />
-                          </div>
-                        </th>
-                        <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
-                          {columns.map(col => (
-                            <SortableHeader key={col.id} column={col} />
-                          ))}
-                        </SortableContext>
-                        <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] w-[50px]">
-                          <button 
-                            onClick={() => setIsAddColOpen(true)} 
-                            className="p-1 hover:bg-[#E2E4E9] rounded text-[#1C1F23] transition-colors flex items-center justify-center w-6 h-6"
-                            title="Add Column"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </th>
-                      </tr>
-                    </thead>
-                    <GroupDroppableBody groupId={group.id}>
-                      <SortableContext items={groupRows.flatMap(r => [
-                        `row-${r.id}`,
-                        ...(expandedIds.has(r.id) ? visibleData.filter((sub: any) => sub.parentId === r.id).map((sub: any) => `row-${sub.id}`) : [])
-                      ])} strategy={verticalListSortingStrategy}>
-                        {groupRows.map(row => (
-                          <React.Fragment key={row.id}>
-                            <SortableRow 
-                              row={row} 
-                              columns={columns} 
-                              onUpdate={handleUpdateRow}
-                              setEditingRowId={setEditingRowId} 
-                              teamMembers={teamMembers}
-                              statusOptions={statusOptions}
-                              expandedIds={expandedIds}
-                              toggleExpand={toggleExpand}
-                              addSubRow={addSubRow}
-                              isSubRow={false}
-                              deleteRow={deleteRow}
-                              projectType={projectType}
-                              onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
-                                e.preventDefault();
-                                setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
-                              }}
-                              subtaskCount={visibleData.filter(r => r.parentId === row.id).length}
-                              isSelected={selectedRowIds.has(row.id)}
-                              onToggleSelect={() => handleToggleSelectRow(row.id)}
-                            />
-                            {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
-                              <SortableRow 
-                                key={subRow.id} 
-                                row={subRow} 
-                                columns={columns} 
-                                onUpdate={handleUpdateRow}
-                                setEditingRowId={setEditingRowId} 
-                                teamMembers={teamMembers}
-                                statusOptions={statusOptions}
-                                isSubRow={true}
-                                deleteRow={deleteRow}
-                                projectType={projectType}
-                                onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
-                                  e.preventDefault();
-                                  setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
-                                }}
-                                isSelected={false}
-                                onToggleSelect={undefined}
-                              />
+          <SortableContext items={groups.map(g => `group-sortable-${g.id}`)} strategy={verticalListSortingStrategy}>
+            {groups.map((group) => {
+              const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
+              const visibleData = data.filter(r => rowMatchesStatus(r));
+              const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
+              const isCollapsed = collapsedGroupIds.has(group.id);
+              return (
+                <SortableGroupWrapper key={group.id} group={group}>
+                  <GroupHeader 
+                    group={group} 
+                    onUpdate={handleUpdateGroup} 
+                    onRemove={handleRemoveGroup} 
+                    isCollapsed={isCollapsed}
+                    onToggleCollapse={() => {
+                      setCollapsedGroupIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(group.id)) next.delete(group.id);
+                        else next.add(group.id);
+                        return next;
+                      });
+                    }}
+                    allowDeletingGroups={allowDeletingGroups}
+                  />
+                  {!isCollapsed && (
+                    <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
+                      <table className="w-full border-collapse text-left table-fixed">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '70px', minWidth: '70px', maxWidth: '70px' }} className="bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]">
+                              <div className="flex items-center pl-1">
+                                <input 
+                                  type="checkbox"
+                                  checked={groupRows.length > 0 && groupRows.every(r => selectedRowIds.has(r.id))}
+                                  onChange={(e) => {
+                                    const isChecked = e.target.checked;
+                                    const rowIds = groupRows.map(r => r.id);
+                                    setSelectedRowIds(prev => {
+                                      const next = new Set(prev);
+                                      if (isChecked) {
+                                        rowIds.forEach(id => next.add(id));
+                                      } else {
+                                        rowIds.forEach(id => next.delete(id));
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4"
+                                />
+                              </div>
+                            </th>
+                            <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
+                              {columns.map(col => (
+                                <SortableHeader key={col.id} column={col} />
+                              ))}
+                            </SortableContext>
+                            <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
+                              <button 
+                                onClick={() => setIsAddColOpen(true)} 
+                                className="p-1 hover:bg-[#E2E4E9] rounded text-[#1C1F23] transition-colors flex items-center justify-center w-6 h-6"
+                                title="Add Column"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </th>
+                          </tr>
+                        </thead>
+                        <GroupDroppableBody groupId={group.id}>
+                          <SortableContext items={groupRows.flatMap(r => [
+                            `row-${r.id}`,
+                            ...(expandedIds.has(r.id) ? visibleData.filter((sub: any) => sub.parentId === r.id).map((sub: any) => `row-${sub.id}`) : [])
+                          ])} strategy={verticalListSortingStrategy}>
+                            {groupRows.map(row => (
+                              <React.Fragment key={row.id}>
+                                <SortableRow 
+                                  row={row} 
+                                  columns={columns} 
+                                  onUpdate={handleUpdateRow}
+                                  setEditingRowId={setEditingRowId} 
+                                  teamMembers={teamMembers}
+                                  statusOptions={statusOptions}
+                                  expandedIds={expandedIds}
+                                  toggleExpand={toggleExpand}
+                                  addSubRow={addSubRow}
+                                  isSubRow={false}
+                                  deleteRow={deleteRow}
+                                  projectType={projectType}
+                                  onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
+                                    e.preventDefault();
+                                    setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
+                                  }}
+                                  subtaskCount={visibleData.filter(r => r.parentId === row.id).length}
+                                  isSelected={selectedRowIds.has(row.id)}
+                                  onToggleSelect={() => handleToggleSelectRow(row.id)}
+                                />
+                                {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
+                                  <SortableRow 
+                                    key={subRow.id} 
+                                    row={subRow} 
+                                    columns={columns} 
+                                    onUpdate={handleUpdateRow}
+                                    setEditingRowId={setEditingRowId} 
+                                    teamMembers={teamMembers}
+                                    statusOptions={statusOptions}
+                                    isSubRow={true}
+                                    deleteRow={deleteRow}
+                                    projectType={projectType}
+                                    onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
+                                      e.preventDefault();
+                                      setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
+                                    }}
+                                    isSelected={false}
+                                    onToggleSelect={undefined}
+                                  />
+                                ))}
+                              </React.Fragment>
                             ))}
-                          </React.Fragment>
-                        ))}
-                      </SortableContext>
-                      {groupRows.length === 0 && (
-                        <tr>
-                          <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">
-                            No projects in this group.
-                          </td>
-                        </tr>
-                      )}
-                    </GroupDroppableBody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
+                          </SortableContext>
+                          {groupRows.length === 0 && (
+                            <tr>
+                              <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">
+                                No projects in this group.
+                              </td>
+                            </tr>
+                          )}
+                        </GroupDroppableBody>
+                      </table>
+                    </div>
+                  )}
+                </SortableGroupWrapper>
+              );
+            })}
+          </SortableContext>
         </DndContext>
       </div>
 
@@ -2143,13 +2338,13 @@ export default function WorkspaceProjectView({
                               } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
                                 patch.groupId = 'group-completed';
                               } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
-                                patch.groupId = projectType === 'Local Listings' ? 'group-setup' : 'group-active';
+                                patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
                               }
                               handleUpdateRow(editingRowId, patch);
                             }}
                             className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                           >
-                            {(editingRow?.parentId ? (projectType === 'Local Listings' ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'] : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done']) : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            {(editingRow?.parentId ? (projectType === 'Local Listings' || projectType === 'Social Media' ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'] : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done']) : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                           </select>
                         ) : col.id === 'priority' ? (
                           <select
