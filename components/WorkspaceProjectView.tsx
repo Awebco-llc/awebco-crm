@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -125,6 +126,8 @@ const getColumnWidth = (colId: string): string => {
       return '125px';
     case 'status':
       return '160px';
+    case 'updatesCount':
+      return '60px';
     case 'deadline':
       return '120px';
     case 'notes':
@@ -338,7 +341,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -387,7 +390,35 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
           }}
           className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative"
         >
-          {col.id === 'status' ? (
+          {col.id === 'updatesCount' ? (
+            <div className="flex items-center justify-center w-full" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={(e) => onCommentsClick?.(e, row.id)}
+                className={`group/btn flex items-center justify-center w-8 h-8 rounded-full transition-all relative ${
+                  row.updates && row.updates.length > 0
+                    ? 'text-[#1061E3] hover:bg-[#F0F2F5]'
+                    : 'text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5]'
+                }`}
+                title={
+                  row.updates && row.updates.length > 0
+                    ? `${row.updates.length} updates. Click to leave update.`
+                    : 'No updates. Click to leave update.'
+                }
+              >
+                {row.updates && row.updates.length > 0 ? (
+                  <div className="relative">
+                    <MessageCircle className="w-5 h-5 text-[#8E9299] hover:text-[#1061E3] transition-colors" />
+                    <span className="absolute -top-1.5 -right-1.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center border border-white shadow-sm">
+                      {row.updates.length}
+                    </span>
+                  </div>
+                ) : (
+                  <MessageCirclePlus className="w-5 h-5 opacity-40 group-hover/btn:opacity-100 transition-opacity" />
+                )}
+              </button>
+            </div>
+          ) : col.id === 'status' ? (
             <EditableStatus 
               value={row[col.id]} 
               options={projectType === 'Local Listings' || projectType === 'Social Media'
@@ -656,15 +687,15 @@ export default function WorkspaceProjectView({
 }) {
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
+    let result: Column[];
     if (projectType === 'Local Listings') {
-      return [
+      result = [
         { id: 'projectName', header: 'Project Name' },
         { id: 'assignee', header: 'Assignee' },
         { id: 'status', header: 'Status' },
         { id: 'planType', header: 'Plan Type' }
       ];
-    }
-    if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
+    } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
       const filtered = INITIAL_COLUMNS.filter(c => {
         if (projectType !== 'Support Tickets' && ['companyName', 'contactName', 'email', 'category'].includes(c.id)) {
           return false;
@@ -675,15 +706,48 @@ export default function WorkspaceProjectView({
       if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
         filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
       }
-      return filtered;
+      result = filtered;
+    } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
+      result = INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
+    } else {
+      result = INITIAL_COLUMNS.filter(c => !['companyName', 'contactName', 'email', 'category'].includes(c.id));
     }
-    if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
-      return INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
+
+    const statusIndex = result.findIndex(c => c.id === 'status');
+    if (statusIndex !== -1) {
+      result.splice(statusIndex + 1, 0, { id: 'updatesCount', header: '' });
+    } else {
+      result.push({ id: 'updatesCount', header: '' });
     }
-    return INITIAL_COLUMNS.filter(c => !['companyName', 'contactName', 'email', 'category'].includes(c.id));
+    return result;
   });
-  const [data, setData] = useState<any[]>([]);
-  const [groups, setGroups] = useState<{id: string, name: string}[]>([]);
+  const [rawTickets, setRawTickets] = useState<any[]>([]);
+
+  const data = React.useMemo(() => {
+    return rawTickets.filter(r => {
+      if (r.companyId) {
+        const company = companies.find(c => c.id === r.companyId);
+        if (company && flagKey && company[flagKey] === false) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [rawTickets, companies, flagKey]);
+
+  const [rawGroups, setRawGroups] = useState<any[]>([]);
+
+  const groups = React.useMemo(() => {
+    return rawGroups.filter(g => {
+      if (g.companyId) {
+        const company = companies.find(c => c.id === g.companyId);
+        if (company && flagKey && company[flagKey] === false) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [rawGroups, companies, flagKey]);
   const [isGroupsLoaded, setIsGroupsLoaded] = useState(false);
   const [isDefaultGroups, setIsDefaultGroups] = useState(true);
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
@@ -695,6 +759,9 @@ export default function WorkspaceProjectView({
   const [rowToDeleteId, setRowToDeleteId] = useState<string | null>(null);
   const [newUpdateText, setNewUpdateText] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [activeCommentsRowId, setActiveCommentsRowId] = useState<string | null>(null);
+  const [commentsPopoverPosition, setCommentsPopoverPosition] = useState({ top: 0, left: 0 });
+  const [quickUpdateText, setQuickUpdateText] = useState('');
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionIndex, setMentionIndex] = useState(-1);
@@ -890,7 +957,7 @@ export default function WorkspaceProjectView({
 
   React.useEffect(() => {
     const unsub = subscribeTickets(projectType, (tickets) => {
-      setData(tickets);
+      setRawTickets(tickets);
     }, (err: any) => {
       console.error('Subscription error:', err);
       if (err.message?.includes('index')) {
@@ -917,16 +984,16 @@ export default function WorkspaceProjectView({
           ? [{ name: 'Social Media Management', id: 'group-smm' }, { name: 'Social Media Advertising', id: 'group-sma' }]
           : [{ name: 'Active', id: 'group-active' }, { name: 'Completed / Launched', id: 'group-completed' }];
         
-        setGroups(defaults);
+        setRawGroups(defaults);
       } else {
         setIsDefaultGroups(false);
-        setGroups(fetchedGroups);
+        setRawGroups(fetchedGroups);
       }
     }, (err: any) => {
       console.error('Group subscription error:', err);
       // Fallback to defaults on error
       const defaults = [{ id: 'group-active', name: 'Active' }, { id: 'group-completed', name: 'Completed' }];
-      setGroups(defaults);
+      setRawGroups(defaults);
       setIsGroupsLoaded(true);
       setIsDefaultGroups(true);
     });
@@ -1022,6 +1089,69 @@ export default function WorkspaceProjectView({
     setAttachedFile(null);
   };
 
+  const handleCommentsButtonClick = (e: React.MouseEvent, rowId: string) => {
+    e.stopPropagation();
+    if (activeCommentsRowId === rowId) {
+      setActiveCommentsRowId(null);
+    } else {
+      setActiveCommentsRowId(rowId);
+      setQuickUpdateText('');
+      const rect = e.currentTarget.getBoundingClientRect();
+      setCommentsPopoverPosition({
+        top: rect.bottom + window.scrollY + 6,
+        left: Math.max(10, Math.min(window.innerWidth - 300, rect.left + window.scrollX - 120))
+      });
+    }
+  };
+
+  const handleQuickAddUpdate = async (rowId: string) => {
+    if (!quickUpdateText.trim()) return;
+
+    const row = data.find(item => item.id === rowId);
+    if (!row) return;
+
+    const author = currentUserName || teamMembers?.[0]?.name || 'You';
+    const trimmedText = quickUpdateText.trim();
+
+    if (onMention && trimmedText) {
+      onMention(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId);
+    }
+    
+    const newUpdate = {
+      id: `update-${Date.now()}`,
+      author,
+      text: trimmedText,
+      timestamp: new Date().toISOString()
+    };
+    
+    const updates = row.updates ? [...row.updates, newUpdate] : [newUpdate];
+    await handleUpdateRow(rowId, { updates });
+    
+    setQuickUpdateText('');
+    setActiveCommentsRowId(null);
+  };
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveCommentsRowId(null);
+    };
+
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveCommentsRowId(null);
+      }
+    };
+
+    if (activeCommentsRowId) {
+      document.addEventListener('click', handleGlobalClick);
+      document.addEventListener('keydown', handleGlobalKeydown);
+      return () => {
+        document.removeEventListener('click', handleGlobalClick);
+        document.removeEventListener('keydown', handleGlobalKeydown);
+      };
+    }
+  }, [activeCommentsRowId]);
+
   const handleAddProjectFile = async (rowId: string, file: File) => {
     const row = data.find(item => item.id === rowId);
     if (!row) return;
@@ -1094,7 +1224,7 @@ export default function WorkspaceProjectView({
       description: '',
       notes: '',
       files: [],
-      groupId: parent?.groupId || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
+      groupId: parent?.groupId || groups[0]?.id || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
       workspace: projectType,
       order: data.filter(r => r.parentId === parentId).length,
     };
@@ -1172,7 +1302,7 @@ export default function WorkspaceProjectView({
       const newIndex = groups.findIndex((g) => g.id === overId);
       if (oldIndex !== -1 && newIndex !== -1) {
         const newGroups = arrayMove(groups, oldIndex, newIndex);
-        setGroups(newGroups);
+        setRawGroups(newGroups);
         
         try {
           if (isDefaultGroups) {
@@ -1240,7 +1370,7 @@ export default function WorkspaceProjectView({
         notes: '',
         files: [],
         isManual: true,
-        groupId: projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active',
+        groupId: groups[0]?.id || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
         workspace: projectType,
         order: maxOrder + 1,
       };
@@ -1501,7 +1631,7 @@ export default function WorkspaceProjectView({
               } catch (err) {
                 console.error('Failed to create group:', err);
                 // Force a temporary UI update so they can at least use it
-                setGroups(prev => [...prev, { id: `temp-${Date.now()}`, name: 'New Group' }]);
+                setRawGroups(prev => [...prev, { id: `temp-${Date.now()}`, name: 'New Group' }]);
               } finally {
                 setIsAddingGroup(false);
               }
@@ -1607,6 +1737,7 @@ export default function WorkspaceProjectView({
                                   subtaskCount={visibleData.filter(r => r.parentId === row.id).length}
                                   isSelected={selectedRowIds.has(row.id)}
                                   onToggleSelect={() => handleToggleSelectRow(row.id)}
+                                  onCommentsClick={handleCommentsButtonClick}
                                 />
                                 {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
                                   <SortableRow 
@@ -1626,6 +1757,7 @@ export default function WorkspaceProjectView({
                                     }}
                                     isSelected={false}
                                     onToggleSelect={undefined}
+                                    onCommentsClick={handleCommentsButtonClick}
                                   />
                                 ))}
                               </React.Fragment>
@@ -2321,7 +2453,7 @@ export default function WorkspaceProjectView({
                 <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
                   {activeEditTab === 'details' && (() => {
                     const editingRow = data.find(r => r.id === editingRowId);
-                    return columns.map(col => (
+                    return columns.filter(c => c.id !== 'updatesCount').map(col => (
                       <div key={col.id}>
                         <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
                         {col.id === 'status' ? (
@@ -2805,6 +2937,80 @@ export default function WorkspaceProjectView({
         workspace={projectType}
         groups={groups}
       />
+
+      {activeCommentsRowId && (() => {
+        const row = data.find(r => r.id === activeCommentsRowId);
+        if (!row) return null;
+        return createPortal(
+          <div
+            className="fixed z-[9999] w-72 bg-white border border-[#E2E4E9] rounded-xl shadow-xl p-4 flex flex-col gap-3 font-sans"
+            style={{ top: commentsPopoverPosition.top, left: commentsPopoverPosition.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-[#F0F2F5]">
+              <span className="font-bold text-xs text-[#1C1F23] uppercase tracking-wider">Leave Update</span>
+              <button 
+                type="button"
+                onClick={() => setActiveCommentsRowId(null)}
+                className="text-[#8E9299] hover:text-[#1C1F23] transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {row.updates && row.updates.length > 0 && (
+              <div className="max-h-36 overflow-y-auto flex flex-col gap-2 pr-1 border-b border-[#F0F2F5] pb-2">
+                {row.updates.slice().reverse().slice(0, 3).reverse().map((update: any) => (
+                  <div key={update.id} className="text-xs bg-[#F9FAFB] rounded-lg p-2 border border-[#E2E4E9] flex flex-col gap-1">
+                    <div className="flex justify-between items-center font-semibold text-[#1C1F23]">
+                      <span className="truncate max-w-[120px]">{update.author}</span>
+                      <span className="text-[9px] text-[#8E9299]">
+                        {update.timestamp ? new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp)) : 'Just now'}
+                      </span>
+                    </div>
+                    <p className="text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <textarea
+              autoFocus
+              value={quickUpdateText}
+              onChange={(e) => setQuickUpdateText(e.target.value)}
+              placeholder="Type an update or comment..."
+              className="w-full border border-[#E2E4E9] rounded-lg p-2.5 text-xs text-[#1C1F23] placeholder:text-[#8E9299] min-h-[60px] focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent resize-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleQuickAddUpdate(row.id);
+                } else if (e.key === 'Escape') {
+                  setActiveCommentsRowId(null);
+                }
+              }}
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveCommentsRowId(null)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!quickUpdateText.trim()}
+                onClick={() => handleQuickAddUpdate(row.id)}
+                className="px-3 py-1.5 bg-[#1061E3] hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+              >
+                Post
+              </button>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
     </div>
   );
 }

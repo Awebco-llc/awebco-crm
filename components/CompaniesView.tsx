@@ -4,7 +4,9 @@ import React, { useState, useMemo } from 'react';
 import { Search, Plus, X, Check, GripVertical, FileText, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
-import { createCompany, updateCompany, deleteCompany } from '@/lib/crmStore';
+import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket } from '@/lib/crmStore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { getDb } from '@/lib/firebase';
 import {
   DndContext,
   closestCenter,
@@ -270,6 +272,183 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleToggleService = async (companyId: string, field: keyof Company, isChecked: boolean) => {
+    try {
+      // 1. Update company service in Firestore
+      await updateCompany(companyId, { [field]: isChecked });
+
+      // 2. If checking service, check if a ticket already exists or needs to be created
+      if (isChecked) {
+        const SERVICE_TO_WORKSPACE_MAP: Record<string, string> = {
+          web: 'Websites',
+          seo: 'SEO',
+          ll: 'Local Listings',
+          ppc: 'Google Ads',
+          smm: 'Social Media',
+          dp: 'Design & Print',
+          support: 'Support Tickets',
+        };
+
+        const workspaceName = SERVICE_TO_WORKSPACE_MAP[field as string];
+        if (workspaceName) {
+          const db = getDb();
+          let targetGroupId = '';
+
+          if (workspaceName === 'SEO') {
+            const company = companies.find(c => c.id === companyId);
+            if (company) {
+              // Check if a group for this company already exists on the SEO board
+              const groupQuery = query(
+                collection(db, 'groups'),
+                where('workspace', '==', 'SEO'),
+                where('companyId', '==', companyId)
+              );
+              const groupSnapshot = await getDocs(groupQuery);
+
+              if (groupSnapshot.empty) {
+                // Check if there are no groups in Firestore for SEO to write default groups first
+                const allGroupsQuery = query(
+                  collection(db, 'groups'),
+                  where('workspace', '==', 'SEO')
+                );
+                const allGroupsSnapshot = await getDocs(allGroupsQuery);
+                let nextOrder = 0;
+
+                if (allGroupsSnapshot.empty) {
+                  // Create default groups first so they don't disappear
+                  const defaults = [
+                    { id: 'group-active', name: 'Setup' },
+                    { id: 'group-running', name: 'Running' }
+                  ];
+                  for (const def of defaults) {
+                    await createGroupWithId(def.id, {
+                      name: def.name,
+                      workspace: 'SEO',
+                      order: nextOrder++
+                    });
+                  }
+                } else {
+                  // Find maximum order among existing groups
+                  let maxOrder = 0;
+                  allGroupsSnapshot.forEach((doc) => {
+                    const gData = doc.data();
+                    if (gData.order !== undefined && gData.order > maxOrder) {
+                      maxOrder = gData.order;
+                    }
+                  });
+                  nextOrder = maxOrder + 1;
+                }
+
+                // Create the new group named after the business name
+                const newGroupRef = await createGroup({
+                  name: company.name,
+                  workspace: 'SEO',
+                  companyId: company.id,
+                  order: nextOrder
+                });
+                targetGroupId = newGroupRef.id;
+              } else {
+                targetGroupId = groupSnapshot.docs[0].id;
+              }
+            }
+          } else {
+            // Non-SEO workspace: resolve the target group ID dynamically.
+            const groupsQuery = query(
+              collection(db, 'groups'),
+              where('workspace', '==', workspaceName)
+            );
+            const groupsSnapshot = await getDocs(groupsQuery);
+            if (!groupsSnapshot.empty) {
+              const existingGroups = groupsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              })) as any[];
+              existingGroups.sort((a, b) => (a.order || 0) - (b.order || 0));
+              targetGroupId = existingGroups[0].id;
+            } else {
+              // No groups exist in Firestore for this workspace. Initialize default groups.
+              const defaults = workspaceName === 'Local Listings'
+                ? [{ id: 'group-setup', name: 'Setup' }, { id: 'group-running', name: 'Running' }]
+                : workspaceName === 'Social Media'
+                ? [{ id: 'group-smm', name: 'Social Media Management' }, { id: 'group-sma', name: 'Social Media Advertising' }]
+                : workspaceName === 'Design & Print' || workspaceName === 'Support Tickets'
+                ? [{ id: 'group-active', name: 'Active' }, { id: 'group-needs-invoiced', name: 'Needs Invoiced' }, { id: 'group-completed', name: 'Complete' }]
+                : [{ id: 'group-active', name: 'Active' }, { id: 'group-completed', name: 'Completed / Launched' }];
+
+              targetGroupId = defaults[0].id;
+              let nextOrder = 0;
+              for (const def of defaults) {
+                await createGroupWithId(def.id, {
+                  name: def.name,
+                  workspace: workspaceName,
+                  order: nextOrder++
+                });
+              }
+            }
+          }
+
+          // Check if ticket already exists
+          const q = query(
+            collection(db, 'tickets'),
+            where('companyId', '==', companyId),
+            where('workspace', '==', workspaceName)
+          );
+          const querySnapshot = await getDocs(q);
+
+          if (querySnapshot.empty) {
+            const company = companies.find(c => c.id === companyId);
+            if (company) {
+              const primaryContact = contacts.find(c => c.id === company.primaryContactId);
+              const contactName = primaryContact ? `${primaryContact.firstName} ${primaryContact.lastName}`.trim() : '';
+              const contactEmail = primaryContact ? primaryContact.email : (company.email || '');
+
+              const newTicket: any = {
+                projectName: `${company.name} Project`,
+                assignee: company.assignedToId || '',
+                assignees: company.assignedToId ? [company.assignedToId] : [],
+                status: 'Not Started',
+                deadline: company.deadline || '',
+                url: company.domain || '',
+                description: `Automatically created for ${company.name} from CRM.`,
+                notes: '',
+                files: [],
+                isManual: false,
+                groupId: targetGroupId || (workspaceName === 'Local Listings' ? 'group-setup' : workspaceName === 'Social Media' ? 'group-smm' : 'group-active'),
+                workspace: workspaceName,
+                companyId: company.id,
+                companyName: company.name,
+                contactName,
+                email: contactEmail,
+                order: 0,
+              };
+
+              if (workspaceName === 'Local Listings') {
+                newTicket.planType = 'Basic Plan';
+              }
+              if (workspaceName === 'Support Tickets' || workspaceName === 'Design & Print') {
+                newTicket.priority = 'Medium';
+              }
+
+              await createTicket(newTicket);
+            }
+          } else {
+            // Ticket exists. If it's SEO and group is created/exists, sync the ticket's groupId if needed
+            if (workspaceName === 'SEO' && targetGroupId) {
+              const existingTicketDoc = querySnapshot.docs[0];
+              const ticketData = existingTicketDoc.data();
+              if (ticketData.groupId !== targetGroupId) {
+                await updateTicket(existingTicketDoc.id, { groupId: targetGroupId });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle service:', err);
+      alert('Failed to toggle service. Check console.');
+    }
+  };
+
   const toggleService = (e: React.MouseEvent, id: string, field: keyof Company) => {
     e.stopPropagation();
     const company = companies.find(c => c.id === id);
@@ -278,8 +457,8 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       return;
     }
     
-    // If checking, just do it directly
-    setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: !c[field] } : c));
+    // If checking, just do it directly through Firestore
+    handleToggleService(id, field, true);
   };
 
   const companyProposals = proposals.filter(proposal => proposal.companyId === editingCompanyId);
@@ -683,7 +862,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 </button>
                 <button 
                   onClick={() => {
-                    setCompanies(prev => prev.map(c => c.id === confirmAction.id ? { ...c, [confirmAction.field]: false } : c));
+                    handleToggleService(confirmAction.id, confirmAction.field, false);
                     setConfirmAction(null);
                   }}
                   className="px-4 py-2 rounded-md text-sm font-semibold bg-[#D32F2F] text-white hover:bg-red-700 transition-colors"

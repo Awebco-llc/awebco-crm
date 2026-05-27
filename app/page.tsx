@@ -88,6 +88,7 @@ interface AppNotification {
   preview: string;
   createdAt: string;
   read: boolean;
+  type?: 'mention' | 'message';
 }
 
 interface WorkspaceOpenRequest {
@@ -525,10 +526,33 @@ export default function Page() {
         latestMessage.receiverId === profile.id &&
         !latestMessage.read
       ) {
+        const sender = teamMembers.find((t) => t.id === latestMessage.senderId);
+        const senderName = sender?.name || 'Someone';
+
+        // Add to bell notifications list if not already present
+        const notificationId = `msg-${latestMessage.id}`;
+        setTimeout(() => {
+          setNotifications(prev => {
+            if (prev.some(n => n.id === notificationId)) return prev;
+            return [
+              {
+                id: notificationId,
+                recipientId: profile.id,
+                actorName: senderName,
+                sourceLabel: 'Inbox',
+                sourceTitle: 'New Message',
+                preview: latestMessage.text,
+                createdAt: latestMessage.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+                read: false,
+                type: 'message' as const
+              },
+              ...prev
+            ];
+          });
+        }, 0);
+
         // Trigger browser push notification
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          const sender = teamMembers.find((t) => t.id === latestMessage.senderId);
-          const senderName = sender?.name || 'Someone';
           const notification = new Notification(`New message from ${senderName}`, {
             body: latestMessage.text,
           });
@@ -541,6 +565,17 @@ export default function Page() {
     }
     prevMessagesCountRef.current = chatMessages.length;
   }, [chatMessages, profile, teamMembers]);
+
+  // Clear/read message notifications when Inbox is active
+  useEffect(() => {
+    if (activeNav === 'Inbox') {
+      setTimeout(() => {
+        setNotifications(prev =>
+          prev.map(n => n.type === 'message' ? { ...n, read: true } : n)
+        );
+      }, 0);
+    }
+  }, [activeNav]);
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1175,12 +1210,25 @@ export default function Page() {
                       userNotifications.map(notification => (
                         <button
                           key={notification.id}
-                          onClick={() => markNotificationAsRead(notification.id)}
+                          onClick={() => {
+                            markNotificationAsRead(notification.id);
+                            if (notification.type === 'message') {
+                              setActiveNav('Inbox');
+                            }
+                          }}
                           className={`w-full text-left px-4 py-3 border-b border-[#F0F2F5] hover:bg-[#F9FAFB] transition-colors ${notification.read ? 'bg-white' : 'bg-[#F5F9FF]'}`}
                         >
                           <div className="flex items-start justify-between gap-3 mb-1">
                             <p className="text-sm text-[#1C1F23]">
-                              <span className="font-semibold">{notification.actorName}</span> mentioned you in {notification.sourceLabel.toLowerCase()}
+                              {notification.type === 'message' ? (
+                                <>
+                                  <span className="font-semibold">{notification.actorName}</span> sent you a message
+                                </>
+                              ) : (
+                                <>
+                                  <span className="font-semibold">{notification.actorName}</span> mentioned you in {notification.sourceLabel.toLowerCase()}
+                                </>
+                              )}
                             </p>
                             {!notification.read && (
                               <span className="mt-1 w-2 h-2 rounded-full bg-[#1061E3] shrink-0" />

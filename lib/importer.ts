@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { Company, Contact, TeamMember, Status, Ticket } from '@/components/Shared';
-import { createCompany, createContact, createTicket, createGroup } from '@/lib/crmStore';
+import { Company, Contact, TeamMember, Status, Ticket, Deal } from '@/components/Shared';
+import { createCompany, createContact, createTicket, createGroup, createDeal } from '@/lib/crmStore';
 
 export interface ImportResult {
   firstName: string;
@@ -11,6 +11,22 @@ export interface ImportResult {
   companyName: string;
   title: string;
   assignedToName: string;
+}
+
+export interface DealImportResult {
+  name: string;
+  currentStep: string;
+  status: string;
+  ownerName: string;
+  dealValue: string;
+  contactName: string;
+  companyName: string;
+  notes: string;
+  lastInteraction: string;
+  expectedCloseDate: string;
+  closeProbability: string;
+  forecastValue: string;
+  section: string; // Active Deals, Closed / Won, Lost, 2025, etc.
 }
 
 export interface TicketImportResult {
@@ -515,6 +531,351 @@ export async function processTicketImport(
     });
 
     createdTicketsCache.set(item.projectName.toLowerCase(), ticketId);
+
+    processedCount++;
+    onProgress(processedCount);
+  }
+}
+
+// ===================== Deal Import =====================
+
+const DEAL_SECTION_HEADERS = [
+  'active deals',
+  'closed / won',
+  'closed / won 2026',
+  'closed / won 2025',
+  'lost',
+  '2025',
+  '2026',
+];
+
+const DEAL_COLUMN_HEADERS = ['name', 'tasks', 'current step', 'status', 'owner', 'deal value', 'contacts', 'company', 'notes', 'last interaction', 'expected close date', 'close probability', 'forecast value'];
+
+function isDealHeaderRow(row: string[]): boolean {
+  const lower = row.map(c => (c || '').trim().toLowerCase());
+  return lower.includes('name') &&
+    lower.includes('status') &&
+    (lower.includes('owner') || lower.includes('deal value') || lower.includes('current step'));
+}
+
+function isDealSectionHeader(row: string[]): boolean {
+  const firstCell = (row[0] || '').trim().toLowerCase();
+  const restEmpty = row.slice(1).every(c => !(c || '').trim());
+  if (!firstCell || !restEmpty) return false;
+  return DEAL_SECTION_HEADERS.some(h => firstCell.includes(h)) ||
+    /^\d{4}$/.test(firstCell) ||
+    firstCell.startsWith('closed') ||
+    firstCell === 'lost' ||
+    firstCell.startsWith('active');
+}
+
+function isSummaryRow(row: string[]): boolean {
+  const firstCell = (row[0] || '').trim();
+  if (firstCell) return false;
+  // Summary rows have no name but may have aggregated values like totals
+  const hasNumericValues = row.some(c => {
+    const trimmed = (c || '').trim();
+    return /^\d[\d,]*$/.test(trimmed) && parseInt(trimmed.replace(/,/g, '')) > 100;
+  });
+  return hasNumericValues;
+}
+
+function isSubitemRow(row: string[]): boolean {
+  const firstCell = (row[0] || '').trim().toLowerCase();
+  return firstCell === 'subitems';
+}
+
+export function parseDealCSV(rows: string[][]): DealImportResult[] {
+  const results: DealImportResult[] = [];
+  let currentSection = 'Active Deals';
+  let headerMap: Record<string, number> = {};
+  let hasHeaders = false;
+  let skipNextDataRows = false; // skip subitem data rows
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i].map(c => (c === undefined || c === null) ? '' : String(c).trim());
+
+    // Skip completely empty rows
+    if (row.every(c => c === '')) {
+      skipNextDataRows = false;
+      continue;
+    }
+
+    // Skip the "Learn how to" instruction line
+    if (row.some(c => c.toLowerCase().includes('learn how to use'))) continue;
+
+    // Skip the title "Deals / Sales" line
+    if (row[0].toLowerCase() === 'deals / sales' && row.slice(1).every(c => !c)) continue;
+
+    // Check section headers (Active Deals, Closed / Won 2026, Lost, 2025, etc.)
+    if (isDealSectionHeader(row)) {
+      currentSection = row[0].trim();
+      hasHeaders = false;
+      skipNextDataRows = false;
+      continue;
+    }
+
+    // IMPORTANT: Check subitem headers BEFORE deal headers,
+    // because "Subitems,Name,Owner,Status,..." also matches isDealHeaderRow
+    if (isSubitemRow(row)) {
+      skipNextDataRows = true;
+      continue;
+    }
+
+    // Skip subitem data rows (they follow a "Subitems" header)
+    // Subitem data rows always have an empty first column (e.g. ",Sitemap,,,,,")
+    // A row with a non-empty first column means we're back to main deal rows
+    if (skipNextDataRows) {
+      if (!row[0]) {
+        continue; // still a subitem data row (empty first cell)
+      }
+      // row[0] is non-empty, so this is a main row — stop skipping
+      skipNextDataRows = false;
+      // fall through to parse as main row or header
+    }
+
+    // Check column header rows
+    if (isDealHeaderRow(row)) {
+      headerMap = {};
+      row.forEach((cell, idx) => {
+        const key = cell.toLowerCase().trim();
+        if (key) headerMap[key] = idx;
+      });
+      hasHeaders = true;
+      skipNextDataRows = false;
+      continue;
+    }
+
+    // Skip summary/total rows
+    if (isSummaryRow(row)) continue;
+
+    if (!hasHeaders) continue;
+
+    const nameIdx = headerMap['name'] ?? 0;
+    const currentStepIdx = headerMap['current step'] ?? 2;
+    const statusIdx = headerMap['status'] ?? 3;
+    const ownerIdx = headerMap['owner'] ?? 4;
+    const dealValueIdx = headerMap['deal value'] ?? 5;
+    const contactsIdx = headerMap['contacts'] ?? 6;
+    const companyIdx = headerMap['company'] ?? 7;
+    const notesIdx = headerMap['notes'] ?? 8;
+    const lastInteractionIdx = headerMap['last interaction'] ?? 9;
+    const expectedCloseDateIdx = headerMap['expected close date'] ?? 10;
+    const closeProbabilityIdx = headerMap['close probability'] ?? 11;
+    const forecastValueIdx = headerMap['forecast value'] ?? 12;
+
+    const name = row[nameIdx] || '';
+    if (!name) continue;
+
+    results.push({
+      name,
+      currentStep: row[currentStepIdx] || '',
+      status: row[statusIdx] || '',
+      ownerName: row[ownerIdx] || '',
+      dealValue: row[dealValueIdx] || '',
+      contactName: row[contactsIdx] || '',
+      companyName: row[companyIdx] || '',
+      notes: row[notesIdx] || '',
+      lastInteraction: parseDateValue(row[lastInteractionIdx]),
+      expectedCloseDate: parseDateValue(row[expectedCloseDateIdx]),
+      closeProbability: row[closeProbabilityIdx] || '',
+      forecastValue: row[forecastValueIdx] || '',
+      section: currentSection,
+    });
+  }
+
+  return results;
+}
+
+export function mapDealImportData(rawData: any[]): DealImportResult[] {
+  // If already parsed by parseDealCSV, just return
+  if (rawData.length > 0 && rawData[0].name !== undefined && rawData[0].section !== undefined) {
+    return rawData as DealImportResult[];
+  }
+  // Fallback for generic key-value row data
+  return rawData.map(row => ({
+    name: row['Name'] || row['name'] || '',
+    currentStep: row['Current Step'] || row['current step'] || '',
+    status: row['Status'] || row['status'] || '',
+    ownerName: row['Owner'] || row['owner'] || row['People'] || '',
+    dealValue: row['Deal Value'] || row['deal value'] || '',
+    contactName: row['Contacts'] || row['contacts'] || row['Contact'] || '',
+    companyName: row['Company'] || row['company'] || '',
+    notes: row['Notes'] || row['notes'] || '',
+    lastInteraction: parseDateValue(row['Last interaction'] || row['last interaction']),
+    expectedCloseDate: parseDateValue(row['Expected Close Date'] || row['expected close date']),
+    closeProbability: row['Close Probability'] || row['close probability'] || '',
+    forecastValue: row['Forecast Value'] || row['forecast value'] || '',
+    section: 'Active Deals',
+  })).filter(item => item.name);
+}
+
+function mapDealStatus(csvStatus: string, section: string): string {
+  const s = csvStatus.trim();
+  const sec = section.toLowerCase();
+
+  if (sec.includes('won') || s.toLowerCase() === 'won') return 'WON';
+  if (sec === 'lost' || s.toLowerCase() === 'lost') return 'LOST';
+  if (s === 'Need to Follow Up') return 'Need to Follow Up';
+  if (s === 'Client Hold Request') return 'Client Hold Request';
+  if (s === 'Awaiting Customer') return 'Awaiting Customer';
+  if (s === 'Unresponsive') return 'Unresponsive';
+  if (s === 'In Progress') return 'In Progress';
+  if (s === 'Need to Call / Email') return 'Need to Call / Email';
+
+  // If no status but in a section, infer
+  if (!s && sec.includes('won')) return 'WON';
+  if (!s && sec === 'lost') return 'LOST';
+
+  return s || 'Not started';
+}
+
+function mapDealStep(csvStep: string): string {
+  const s = csvStep.trim();
+  if (!s) return '';
+
+  const stepMap: Record<string, string> = {
+    'step 1: discovery call': 'Step 1: Discovery Call',
+    'step 2: onboarding form': 'Step 2: Onboarding',
+    'step 2: onboarding': 'Step 2: Onboarding',
+    'step 3: strategy meeting': 'Step 3: Strategy Meeting',
+    'step 4: plan & proposal': 'Step 4: Plan & Proposal',
+    'step 5: proposal signing': 'Step 5: Proposal Signing',
+    'step 6: 50% deposit payment': 'Step 6: Deposit Payment',
+    'step 6: deposit payment': 'Step 6: Deposit Payment',
+    'won': '',
+    'lost': '',
+  };
+
+  return stepMap[s.toLowerCase()] || s;
+}
+
+export async function processDealImport(
+  items: DealImportResult[],
+  existingCompanies: Company[],
+  existingContacts: { id: string; firstName: string; lastName: string; companyId: string }[],
+  teamMembers: TeamMember[],
+  existingDeals: Deal[],
+  onProgress: (count: number) => void
+) {
+  const companyCache = new Map<string, string>();
+  existingCompanies.forEach(c => companyCache.set(c.name.toLowerCase(), c.id));
+
+  const dealNameCache = new Set<string>();
+  existingDeals.forEach(d => dealNameCache.add(d.name.toLowerCase()));
+
+  let processedCount = 0;
+
+  for (const item of items) {
+    // Skip if a deal with this name already exists
+    if (dealNameCache.has(item.name.toLowerCase())) {
+      processedCount++;
+      onProgress(processedCount);
+      continue;
+    }
+
+    let companyId = '';
+
+    if (item.companyName) {
+      const lowerName = item.companyName.toLowerCase();
+      if (companyCache.has(lowerName)) {
+        companyId = companyCache.get(lowerName)!;
+      } else {
+        companyId = await createCompany({
+          name: item.companyName,
+          domain: '',
+          phone: '',
+          email: '',
+          street: '',
+          city: '',
+          state: '',
+          zipcode: '',
+          industry: '',
+          founded: '',
+          servicesOffered: '',
+          productsOffered: '',
+          hoursOfOperation: '',
+          servicesNeeded: '',
+          facebookUrl: '',
+          referralSource: '',
+          assignedToId: teamMembers[0]?.id || '',
+          web: false,
+          seo: false,
+          ll: false,
+          ppc: false,
+          smm: false,
+          sma: false,
+          em: false,
+        });
+        companyCache.set(lowerName, companyId);
+      }
+    }
+
+    // Match contact by name
+    let contactId = '';
+    if (item.contactName) {
+      const contactNames = item.contactName.split(',').map(n => n.trim());
+      const firstContactName = contactNames[0];
+      if (firstContactName) {
+        const parts = firstContactName.split(/\s+/);
+        const firstName = parts[0] || '';
+        const lastName = parts.slice(1).join(' ') || '';
+        const found = existingContacts.find(c =>
+          c.firstName.toLowerCase() === firstName.toLowerCase() &&
+          (lastName === '' || c.lastName.toLowerCase() === lastName.toLowerCase())
+        );
+        if (found) {
+          contactId = found.id;
+        }
+      }
+    }
+
+    // Match owner to team member
+    let assignedToId = '';
+    if (item.ownerName) {
+      // Handle comma-separated owners (take first)
+      const ownerNames = item.ownerName.split(',').map(n => n.trim());
+      for (const ownerName of ownerNames) {
+        const found = teamMembers.find(m =>
+          m.name.toLowerCase() === ownerName.toLowerCase() ||
+          m.name.toLowerCase().includes(ownerName.toLowerCase()) ||
+          ownerName.toLowerCase().includes(m.name.toLowerCase())
+        );
+        if (found) {
+          assignedToId = found.id;
+          break;
+        }
+      }
+    }
+
+    const mappedStatus = mapDealStatus(item.status, item.section);
+    const mappedStep = mapDealStep(item.currentStep);
+
+    // Build notes array
+    const dealNotes: { id: string; text: string; createdAt: string; author?: string }[] = [];
+    if (item.notes && item.notes !== '/') {
+      dealNotes.push({
+        id: Date.now().toString() + '-' + processedCount,
+        text: item.notes,
+        createdAt: new Date().toISOString(),
+        author: 'Import',
+      });
+    }
+
+    const newDeal: Omit<Deal, 'id'> = {
+      name: item.name,
+      currentStep: mappedStep,
+      status: mappedStatus,
+      assignedToId,
+      value: item.dealValue ? String(item.dealValue) : '',
+      companyId,
+      contactId,
+      notes: dealNotes,
+      order: processedCount,
+    };
+
+    await createDeal(newDeal);
+    dealNameCache.add(item.name.toLowerCase());
 
     processedCount++;
     onProgress(processedCount);

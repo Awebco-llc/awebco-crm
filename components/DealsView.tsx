@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2 } from 'lucide-react';
+import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
 import { createDeal, updateDeal, deleteDeal } from '@/lib/crmStore';
+import DealImportModal from '@/components/DealImportModal';
 import {
   DndContext,
   closestCenter,
@@ -199,6 +200,7 @@ export default function DealsView({
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionIndex, setMentionIndex] = useState(-1);
   const [activeTab, setActiveTab] = useState<DealTab>('details');
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -393,6 +395,13 @@ export default function DealsView({
           />
         </div>
         <div className="flex gap-3">
+          <button 
+            onClick={() => setIsImportModalOpen(true)}
+            className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Import
+          </button>
           <button 
             onClick={openAddModal}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -965,6 +974,16 @@ export default function DealsView({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Deal Import Modal */}
+      <DealImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        teamMembers={teamMembers}
+        companies={companies}
+        contacts={contacts}
+        deals={deals}
+      />
     </div>
   );
 }
