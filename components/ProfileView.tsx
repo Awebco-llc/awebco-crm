@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TeamMember } from './Shared';
+import { updateTeamMember } from '@/lib/crmStore';
 
 export default function ProfileView({
   teamMembers,
@@ -17,6 +18,7 @@ export default function ProfileView({
   const [color, setColor] = useState(currentMember?.color || '#1061E3');
   const [photoUrl, setPhotoUrl] = useState(currentMember?.photoUrl || '');
   const [password, setPassword] = useState(currentMember?.password || '');
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(currentMember?.emailNotificationsEnabled ?? true);
 
   if (!currentMember) {
     return (
@@ -31,17 +33,32 @@ export default function ProfileView({
     );
   }
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTeamMembers(prev => prev.map(m => m.id === currentMember.id ? {
-      ...m,
+    const updated = {
+      ...currentMember,
       name,
       initials,
       color,
       password,
       photoUrl: photoUrl || undefined,
-    } : m));
-    alert('Profile updated successfully!');
+      emailNotificationsEnabled,
+    };
+    setTeamMembers(prev => prev.map(m => m.id === currentMember.id ? updated : m));
+    try {
+      await updateTeamMember(currentMember.id, {
+        name,
+        initials,
+        color,
+        password,
+        photoUrl: photoUrl || undefined,
+        emailNotificationsEnabled,
+      });
+      alert('Profile updated successfully!');
+    } catch (err) {
+      console.error('Failed to save profile changes:', err);
+      alert('Failed to save profile changes to database.');
+    }
   };
 
   const handlePhotoChange = (file?: File) => {
@@ -155,6 +172,21 @@ export default function ProfileView({
                 )}
               </div>
               <p className="text-xs text-[#8E9299] mt-2">This photo will be used as your avatar where profile photos are supported.</p>
+            </div>
+
+            <div className="flex flex-col gap-2 p-4 bg-[#F9FAFB] border border-[#E2E4E9] rounded-md">
+              <label className="flex items-center gap-2 text-sm font-semibold text-[#1C1F23] cursor-pointer">
+                <input 
+                  type="checkbox"
+                  checked={emailNotificationsEnabled}
+                  onChange={e => setEmailNotificationsEnabled(e.target.checked)}
+                  className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3] w-4 h-4 cursor-pointer"
+                />
+                Enable Email Notifications
+              </label>
+              <p className="text-xs text-[#8E9299]">
+                Receive periodic email digests summarizing unread messages and new task/deal assignments.
+              </p>
             </div>
 
             <div className="pt-4 flex justify-end">

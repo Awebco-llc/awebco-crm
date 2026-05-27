@@ -50,6 +50,7 @@ export interface TeamMember {
   photoUrl?: string;
   uid?: string;
   permissions?: TeamMemberPermissions;
+  emailNotificationsEnabled?: boolean;
 }
 
 export interface ProductService {
@@ -57,6 +58,9 @@ export interface ProductService {
   name: string;
   description: string;
   price: string;
+  url?: string;
+  sku?: string;
+  type?: string;
   order?: number;
 }
 
@@ -109,6 +113,7 @@ export interface Deal {
   contactId: string;
   notes: DealNote[];
   order?: number;
+  emailedAssignees?: string[];
 }
 
 export interface TicketUpdate {
@@ -155,6 +160,7 @@ export interface Ticket {
   order?: number;
   createdAt?: string;
   updatedAt?: string;
+  emailedAssignees?: string[];
 }
 
 export interface Company {

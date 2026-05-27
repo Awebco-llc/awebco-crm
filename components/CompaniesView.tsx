@@ -127,7 +127,19 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
   );
 }
 
-type CompanyProfileTab = 'details' | 'description' | 'updates' | 'proposals';
+const PLANS_CONFIG = [
+  { field: 'web', name: 'Websites', desc: 'Professional web design, development, and hosting.' },
+  { field: 'seo', name: 'SEO', desc: 'Search engine optimization to improve search rankings.' },
+  { field: 'll', name: 'Local Listings', desc: 'Manage local directory citations and map visibility.' },
+  { field: 'ppc', name: 'Google Ads', desc: 'Pay-per-click advertising setup and optimization.' },
+  { field: 'smm', name: 'Social Media Management', desc: 'Organic scheduling, posting, and profile management.' },
+  { field: 'sma', name: 'Social Media Ads', desc: 'Paid social media ad campaign setup and running.' },
+  { field: 'em', name: 'Email Marketing', desc: 'Automated list building, newsletters, and email flows.' },
+  { field: 'dp', name: 'Design & Print', desc: 'Graphic design for digital files and print materials.' },
+  { field: 'support', name: 'Support Tickets', desc: 'Technical troubleshooting, hosting management, and support.' }
+] as const;
+
+type CompanyProfileTab = 'details' | 'description' | 'plans' | 'updates' | 'proposals';
 
 export default function CompaniesView({ teamMembers, companies, setCompanies, contacts, proposals }: { teamMembers: TeamMember[], companies: Company[], setCompanies: React.Dispatch<React.SetStateAction<Company[]>>, contacts: Contact[], proposals: Proposal[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,6 +150,14 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   // Form State
   const [formData, setFormData] = useState<Partial<Company>>({});
   const [newUpdateText, setNewUpdateText] = useState('');
+
+  const onTogglePlan = (field: keyof Company) => {
+    const newVal = !formData[field];
+    updateForm(field, newVal);
+    if (editingCompanyId) {
+      handleToggleService(editingCompanyId, field, newVal);
+    }
+  };
 
   const [confirmAction, setConfirmAction] = useState<{id: string, field: keyof Company} | null>(null);
 
@@ -503,25 +523,25 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden text-left mb-8">
-            <thead>
+          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
+            <thead className="sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="w-10 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
-                <th className="w-[200px] bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY NAME</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DOMAIN</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">INDUSTRY</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRIMARY CONTACT</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PHONE</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">WEB</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SEO</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">LL</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">PPC</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SMM</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SMA</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">EM</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">DP</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
-                <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
+                <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
+                <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY NAME</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DOMAIN</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">INDUSTRY</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRIMARY CONTACT</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PHONE</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">WEB</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SEO</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">LL</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">PPC</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SMM</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SMA</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">EM</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">DP</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
+                <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
@@ -582,6 +602,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   {[
                     { id: 'details', label: 'Details' },
                     { id: 'description', label: 'Description' },
+                    { id: 'plans', label: 'Plans' },
                     { id: 'updates', label: 'Updates & Comments' },
                     { id: 'proposals', label: `Proposals${editingCompanyId && companyProposals.length > 0 ? ` (${companyProposals.length})` : ''}` },
                   ].map(tab => (
@@ -697,6 +718,47 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                         </div>
                       </div>
                     </>
+                  )}
+
+                  {activeTab === 'plans' && (
+                    <div className="flex flex-col gap-4">
+                      <h4 className="text-sm font-bold text-[#1C1F23] mb-1 uppercase tracking-wider">Plans & Services</h4>
+                      <p className="text-xs text-[#8E9299] mb-3">Enable or disable service plans for this client account. Active plans will automatically create corresponding boards and project tasks.</p>
+                      
+                      <div className="flex flex-col gap-3">
+                        {PLANS_CONFIG.map(plan => {
+                          const isActive = !!formData[plan.field];
+                          return (
+                            <div key={plan.field} className={`flex items-center justify-between p-4 border rounded-xl transition-all duration-200 ${
+                              isActive 
+                                ? 'border-[#1061E3] bg-[#F5F9FF] shadow-sm' 
+                                : 'border-[#E2E4E9] bg-white hover:border-[#CCCCCC]'
+                            }`}>
+                              <div className="flex-grow pr-4">
+                                <div className="flex items-center gap-2">
+                                  <h5 className="font-bold text-sm text-[#1C1F23]">{plan.name}</h5>
+                                  {isActive && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#E3F2FD] text-[#1061E3] uppercase">
+                                      Active
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-[#8E9299] mt-1">{plan.desc}</p>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0" onClick={e => e.stopPropagation()}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={isActive}
+                                  onChange={() => onTogglePlan(plan.field)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   )}
 
                   {activeTab === 'description' && (

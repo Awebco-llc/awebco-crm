@@ -91,7 +91,7 @@ function SortableHeader({ column }: { column: Column }) {
     <th
       ref={setNodeRef}
       style={style}
-      className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase truncate"
+      className="sticky top-0 z-10 bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase truncate"
     >
       <div className="flex items-center gap-2">
         <button {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity text-[#8E9299] hover:text-[#1C1F23]">
@@ -1668,11 +1668,11 @@ export default function WorkspaceProjectView({
                     allowDeletingGroups={allowDeletingGroups}
                   />
                   {!isCollapsed && (
-                    <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
+                    <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
                       <table className="w-full border-collapse text-left table-fixed">
-                        <thead>
+                        <thead className="sticky top-0 z-10 shadow-sm">
                           <tr>
-                            <th style={{ width: '70px', minWidth: '70px', maxWidth: '70px' }} className="bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]">
+                            <th style={{ width: '70px', minWidth: '70px', maxWidth: '70px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
                               <div className="flex items-center pl-1">
                                 <input 
                                   type="checkbox"
@@ -1699,7 +1699,7 @@ export default function WorkspaceProjectView({
                                 <SortableHeader key={col.id} column={col} />
                               ))}
                             </SortableContext>
-                            <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
+                            <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
                               <button 
                                 onClick={() => setIsAddColOpen(true)} 
                                 className="p-1 hover:bg-[#E2E4E9] rounded text-[#1C1F23] transition-colors flex items-center justify-center w-6 h-6"

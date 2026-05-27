@@ -520,16 +520,16 @@ export default function ProposalsView({
         <div className="max-w-6xl mx-auto space-y-4">
           <h2 className="text-xl font-bold text-[#1C1F23] mb-6">Recent Proposals</h2>
           
-          <div className="bg-white border text-left border-[#E2E4E9] rounded-lg shadow-sm overflow-hidden">
+          <div className="bg-white border text-left border-[#E2E4E9] rounded-lg shadow-sm">
             <table className="w-full border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-10 shadow-sm">
                 <tr className="bg-[#F9FAFB] border-b border-[#E2E4E9]">
-                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Title</th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Company</th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Date</th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Total Amount</th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Status</th>
-                  <th className="py-3 px-4 w-12"></th>
+                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Title</th>
+                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Company</th>
+                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Date</th>
+                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Total Amount</th>
+                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Status</th>
+                  <th className="py-3 px-4 w-12 sticky top-0 bg-[#F9FAFB] z-10 border-b border-[#E2E4E9]"></th>
                 </tr>
               </thead>
               <tbody>

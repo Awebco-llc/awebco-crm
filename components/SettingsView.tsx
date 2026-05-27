@@ -52,6 +52,7 @@ export default function SettingsView({
   const [editMemberColor, setEditMemberColor] = useState('#1061E3');
   const [editMemberCanViewCRM, setEditMemberCanViewCRM] = useState(true);
   const [editMemberWorkspaces, setEditMemberWorkspaces] = useState<string[]>(ALL_WORKSPACES);
+  const [editMemberEmailNotificationsEnabled, setEditMemberEmailNotificationsEnabled] = useState(true);
   const canEditProfiles = currentUserRole === 'master_admin';
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -123,6 +124,7 @@ export default function SettingsView({
     setEditMemberColor(member.color || '#1061E3');
     setEditMemberCanViewCRM(member.permissions?.canViewCRM ?? true);
     setEditMemberWorkspaces(member.permissions?.allowedWorkspaces ?? ALL_WORKSPACES);
+    setEditMemberEmailNotificationsEnabled(member.emailNotificationsEnabled ?? true);
   };
 
   const saveEditMember = async () => {
@@ -136,19 +138,21 @@ export default function SettingsView({
       const role = member.role === 'master_admin' ? 'master_admin' : editMemberRole;
       const initials = editMemberName.split(' ').map(namePart => namePart[0]).join('').substring(0, 2).toUpperCase();
 
-      updatedMember = {
+      const val: TeamMember = {
         ...member,
         name: editMemberName,
         initials,
         email: editMemberEmail.trim() || undefined,
-        role: editMemberRole,
+        role: role,
         color: editMemberColor,
+        emailNotificationsEnabled: editMemberEmailNotificationsEnabled,
         permissions: {
           canViewCRM: editMemberCanViewCRM,
           allowedWorkspaces: editMemberWorkspaces,
         }
       };
-      return updatedMember;
+      updatedMember = val;
+      return val;
     }));
     setEditingMemberId(null);
 
@@ -246,6 +250,19 @@ export default function SettingsView({
                           </div>
                         </div>
                       )}
+                      
+                      <div className="flex flex-col gap-2 mt-1 p-3 bg-white border border-[#E2E4E9] rounded-md">
+                        <h4 className="text-xs font-bold text-[#4A4D53] uppercase">Notifications</h4>
+                        <label className="flex items-center gap-2 text-sm font-semibold text-[#1C1F23] cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={editMemberEmailNotificationsEnabled}
+                            onChange={e => setEditMemberEmailNotificationsEnabled(e.target.checked)}
+                            className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3] w-4 h-4 cursor-pointer"
+                          />
+                          Email Notifications
+                        </label>
+                      </div>
                       {editMemberEmail && (
                         <button
                           type="button"

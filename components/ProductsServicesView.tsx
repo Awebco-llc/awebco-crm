@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, GripVertical, Trash2 } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Search, Plus, X, GripVertical, Trash2, Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import {
   DndContext,
   closestCenter,
@@ -74,10 +76,23 @@ function SortableRow({ item, onClick, onUpdate, onDelete }: { item: ProductServi
         <EditableCell value={item.name} onSave={v => onUpdate(item.id, 'name', v)} />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+        <EditableCell value={formatCatalogPrice(item.price)} onSave={v => onUpdate(item.id, 'price', v)} />
+      </td>
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <EditableCell value={item.description} onSave={v => onUpdate(item.id, 'description', v)} />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={formatCatalogPrice(item.price)} onSave={v => onUpdate(item.id, 'price', v)} />
+        {item.url ? (
+          <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-[#1061E3] hover:underline truncate block max-w-[180px]">{item.url}</a>
+        ) : <span className="text-[#C8CDD5]">—</span>}
+      </td>
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-[#8E9299]">
+        <EditableCell value={item.sku || ''} onSave={v => onUpdate(item.id, 'sku', v)} />
+      </td>
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+        {item.type ? (
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#F0F2F5] text-[#4A4D53]">{item.type}</span>
+        ) : <span className="text-[#C8CDD5]">—</span>}
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
         <button
@@ -92,13 +107,175 @@ function SortableRow({ item, onClick, onUpdate, onDelete }: { item: ProductServi
   );
 }
 
-export default function ProductsServicesView({ products, setProducts }: { products: ProductService[], setProducts: React.Dispatch<React.SetStateAction<ProductService[]>> }) {
+export default function ProductsServicesView({ 
+  products, 
+  setProducts,
+  proposals = []
+}: { 
+  products: ProductService[], 
+  setProducts: React.Dispatch<React.SetStateAction<ProductService[]>>,
+  proposals?: any[]
+}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<Partial<ProductService>>({});
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importSource, setImportSource] = useState<'options' | 'crm' | 'csv' | 'importing' | 'complete'>('options');
+  const [importedItems, setImportedItems] = useState<Array<{ name: string; description: string; price: string; url: string; sku: string; type: string }>>([]);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLoadFromCRM = () => {
+    setImportError(null);
+    const existingNames = new Set(products.map(p => p.name.toLowerCase().trim()));
+    const uniqueItems = new Map<string, { name: string; description: string; price: string; url: string; sku: string; type: string }>();
+
+    proposals.forEach(p => {
+      p.items?.forEach((item: any) => {
+        const name = (item.name || '').trim();
+        if (name && !existingNames.has(name.toLowerCase()) && !uniqueItems.has(name.toLowerCase())) {
+          uniqueItems.set(name.toLowerCase(), {
+            name: name,
+            description: (item.description || '').trim(),
+            price: String(item.price || 0),
+            url: '',
+            sku: '',
+            type: '',
+          });
+        }
+      });
+    });
+
+    const itemsToImport = Array.from(uniqueItems.values());
+    if (itemsToImport.length === 0) {
+      setImportError('No new unique services/products were found in the existing CRM proposals.');
+      setImportedItems([]);
+    } else {
+      setImportedItems(itemsToImport);
+      setImportSource('crm');
+    }
+  };
+
+  // Detect the header row index in a 2D array by looking for known column keywords
+  const findHeaderRowIndex = (rows2d: string[][]): number => {
+    const keywords = new Set(['name', 'item', 'price', 'description', 'sku', 'type', 'url']);
+    for (let i = 0; i < rows2d.length; i++) {
+      const cells = rows2d[i].map(c => (c || '').toLowerCase().trim());
+      const matches = cells.filter(c => keywords.has(c)).length;
+      if (matches >= 2) return i; // at least 2 known column names found
+    }
+    return 0;
+  };
+
+  // Convert 2D array (header row + data rows) into keyed objects
+  const rows2dToObjects = (rows2d: string[][], headerIdx: number): any[] => {
+    const headers = rows2d[headerIdx];
+    return rows2d.slice(headerIdx + 1).map(cells => {
+      const obj: any = {};
+      headers.forEach((h, i) => { obj[h.trim()] = cells[i] ?? ''; });
+      return obj;
+    });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    setImportError(null);
+    const existingNames = new Set(products.map(p => p.name.toLowerCase().trim()));
+
+    if (selectedFile.name.endsWith('.csv')) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target?.result as string;
+        // First pass: parse without header to get raw 2D array
+        const rawResult = Papa.parse<string[]>(text, { header: false, skipEmptyLines: true });
+        const rows2d = rawResult.data as string[][];
+        const headerIdx = findHeaderRowIndex(rows2d);
+        const rows = rows2dToObjects(rows2d, headerIdx);
+        parseMappedRows(rows, existingNames);
+      };
+      reader.readAsText(selectedFile);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const data = evt.target?.result;
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          // Get raw 2D array (no header inference) and find the real header row
+          const rows2d = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 }) as string[][];
+          const headerIdx = findHeaderRowIndex(rows2d);
+          const rows = rows2dToObjects(rows2d, headerIdx);
+          parseMappedRows(rows, existingNames);
+        } catch (err: any) {
+          setImportError(`Failed to parse Excel file: ${err.message}`);
+        }
+      };
+      reader.readAsBinaryString(selectedFile);
+    }
+  };
+
+
+  const parseMappedRows = (rows: any[], existingNames: Set<string>) => {
+    const itemsToImport: typeof importedItems = [];
+    rows.forEach(row => {
+      // Accept "Item" (the actual column name) plus legacy aliases
+      const name = (
+        row['Item'] || row['item'] ||
+        row['Name'] || row['name'] ||
+        row['Product Name'] || row['Service Name'] || ''
+      ).trim();
+      const description = (row['Description'] || row['description'] || '').trim();
+      const rawPrice = String(row['Price'] || row['price'] || '').trim().replace(/[$,\s]/g, '');
+      const url = (row['URL'] || row['url'] || row['Url'] || row['Link'] || '').trim();
+      const sku = (row['SKU'] || row['sku'] || row['Sku'] || row['Code'] || '').trim();
+      const type = (row['Type'] || row['type'] || row['Category'] || row['category'] || '').trim();
+
+      if (name && !existingNames.has(name.toLowerCase())) {
+        itemsToImport.push({ name, description, price: rawPrice, url, sku, type });
+      }
+    });
+
+    if (itemsToImport.length === 0) {
+      setImportError('No new unique items were found. Ensure your spreadsheet has an "Item" column (plus optional Price, Description, URL, SKU, Type).');
+      setImportedItems([]);
+    } else {
+      setImportedItems(itemsToImport);
+      setImportSource('csv');
+    }
+  };
+
+  const startImport = async () => {
+    setImportSource('importing');
+    setImportProgress(0);
+
+    let count = 0;
+    for (const item of importedItems) {
+      try {
+        await createProduct({
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          url: item.url,
+          sku: item.sku,
+          type: item.type,
+          order: products.length + count
+        });
+        count++;
+        setImportProgress(count);
+      } catch (err) {
+        console.error('Failed to import catalog item:', err);
+      }
+    }
+    setImportSource('complete');
+  };
 
   const filteredItems = useMemo(() => {
     return products.filter(i => 
@@ -177,6 +354,9 @@ export default function ProductsServicesView({ products, setProducts }: { produc
           name: cleanedFormData.name || '',
           description: cleanedFormData.description || '',
           price: cleanedFormData.price || '',
+          url: cleanedFormData.url || '',
+          sku: cleanedFormData.sku || '',
+          type: cleanedFormData.type || '',
           order: products.length,
         });
       } catch (e) {
@@ -207,6 +387,19 @@ export default function ProductsServicesView({ products, setProducts }: { produc
         </div>
         <div className="flex gap-3">
           <button 
+            onClick={() => {
+              setImportSource('options');
+              setImportedItems([]);
+              setImportProgress(0);
+              setImportError(null);
+              setIsImportModalOpen(true);
+            }}
+            className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-50 transition-colors flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Import
+          </button>
+          <button 
             onClick={openAddModal}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
@@ -230,14 +423,17 @@ export default function ProductsServicesView({ products, setProducts }: { produc
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden text-left mb-8">
-            <thead>
+          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
+            <thead className="sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="w-10 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
-                <th className="w-[250px] bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NAME</th>
-                <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DESCRIPTION</th>
-                <th className="w-[150px] bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRICE</th>
-                <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
+                <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
+                <th className="w-[220px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ITEM</th>
+                <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRICE</th>
+                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DESCRIPTION</th>
+                <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">URL</th>
+                <th className="w-[100px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">SKU</th>
+                <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">TYPE</th>
+                <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
@@ -247,7 +443,7 @@ export default function ProductsServicesView({ products, setProducts }: { produc
               >
                 {filteredItems.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-[#8E9299] text-sm">No items found.</td>
+                    <td colSpan={8} className="px-4 py-8 text-center text-[#8E9299] text-sm">No items found.</td>
                   </tr>
                 ) : filteredItems.map(item => (
                   <SortableRow 
@@ -293,16 +489,30 @@ export default function ProductsServicesView({ products, setProducts }: { produc
               <form onSubmit={handleSaveItem} className="flex flex-col flex-grow overflow-hidden">
                 <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Name</label>
+                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Item Name</label>
                     <input required type="text" value={formData.name || ''} onChange={e => updateForm('name', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Price</label>
+                      <input type="text" value={formData.price || ''} onChange={e => updateForm('price', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. $5,000 or $150/hr" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">SKU</label>
+                      <input type="text" value={formData.sku || ''} onChange={e => updateForm('sku', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. WEB-001" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Type / Category</label>
+                    <input type="text" value={formData.type || ''} onChange={e => updateForm('type', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. Service, Product, Add-on" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">URL</label>
+                    <input type="url" value={formData.url || ''} onChange={e => updateForm('url', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="https://..." />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Description</label>
                     <textarea value={formData.description || ''} onChange={e => updateForm('description', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[100px]" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Price</label>
-                    <input type="text" value={formData.price || ''} onChange={e => updateForm('price', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" placeholder="e.g. $5,000 or $150/hr" />
                   </div>
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
@@ -334,6 +544,160 @@ export default function ProductsServicesView({ products, setProducts }: { produc
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isImportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setIsImportModalOpen(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-10"
+            >
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-[#E2E4E9] flex items-center justify-between bg-[#F9FAFB] shrink-0">
+                <div>
+                  <h3 className="font-bold text-lg text-[#1C1F23]">Import to Price Catalog</h3>
+                  <p className="text-xs text-[#8E9299]">Populate your price catalog from active CRM proposals or via CSV upload</p>
+                </div>
+                <button onClick={() => setIsImportModalOpen(false)} className="text-[#8E9299] hover:text-[#1C1F23] transition-colors p-1 hover:bg-gray-100 rounded">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-grow overflow-auto p-6">
+                {importError && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex items-start gap-3 text-red-700">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
+                    <p className="text-sm">{importError}</p>
+                  </div>
+                )}
+
+                {importSource === 'options' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-6">
+                    <button
+                      onClick={handleLoadFromCRM}
+                      className="border border-[#E2E4E9] rounded-xl p-6 text-center hover:border-[#1061E3] hover:bg-blue-50/20 transition-all flex flex-col items-center justify-center gap-3 cursor-pointer group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-blue-50 text-[#1061E3] flex items-center justify-center group-hover:bg-[#1061E3] group-hover:text-white transition-colors">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-[#1C1F23]">Import from CRM Proposals</h4>
+                        <p className="text-xs text-[#8E9299] mt-1 max-w-[200px] mx-auto">Extract unique product items and pricing from existing proposal documents.</p>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border border-[#E2E4E9] rounded-xl p-6 text-center hover:border-[#1061E3] hover:bg-blue-50/20 transition-all flex flex-col items-center justify-center gap-3 cursor-pointer group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-gray-50 text-[#8E9299] flex items-center justify-center group-hover:bg-[#1061E3] group-hover:text-white transition-colors">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-[#1C1F23]">Upload CSV / Excel File</h4>
+                        <p className="text-xs text-[#8E9299] mt-1 max-w-[200px] mx-auto">Upload a spreadsheet matching Name, Description, and Price fields.</p>
+                      </div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept=".csv,.xls,.xlsx"
+                        onChange={handleFileChange}
+                      />
+                    </button>
+                  </div>
+                )}
+
+                {(importSource === 'crm' || importSource === 'csv') && (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex justify-between items-center bg-[#F0F2F5] p-3 rounded-lg text-sm font-semibold text-[#1C1F23]">
+                      <span>Ready to import {importedItems.length} unique item{importedItems.length === 1 ? '' : 's'}</span>
+                      <button onClick={() => setImportSource('options')} className="text-xs text-[#1061E3] hover:underline">Change Source</button>
+                    </div>
+
+                    <div className="border border-[#E2E4E9] rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="sticky top-0 bg-[#F9FAFB] shadow-sm z-10">
+                          <tr>
+                            <th className="px-3 py-2 border-b border-[#E2E4E9] font-bold text-[#8E9299]">NAME</th>
+                            <th className="px-3 py-2 border-b border-[#E2E4E9] font-bold text-[#8E9299]">DESCRIPTION</th>
+                            <th className="px-3 py-2 border-b border-[#E2E4E9] font-bold text-[#8E9299]">PRICE</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#F0F2F5]">
+                          {importedItems.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-[#1C1F23] font-semibold">{item.name}</td>
+                              <td className="px-3 py-2 text-[#8E9299] truncate max-w-[250px]">{item.description || '-'}</td>
+                              <td className="px-3 py-2 text-[#4A4D53] font-semibold">{formatCatalogPrice(item.price)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {importSource === 'importing' && (
+                  <div className="py-12 flex flex-col items-center justify-center gap-4">
+                    <Loader2 className="w-12 h-12 text-[#1061E3] animate-spin" />
+                    <div className="text-center">
+                      <h4 className="font-bold text-sm text-[#1C1F23]">Importing Items...</h4>
+                      <p className="text-xs text-[#8E9299] mt-1">{importProgress} of {importedItems.length} imported</p>
+                    </div>
+                  </div>
+                )}
+
+                {importSource === 'complete' && (
+                  <div className="py-12 flex flex-col items-center justify-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center">
+                      <CheckCircle2 className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div className="text-center">
+                      <h4 className="font-bold text-base text-[#1C1F23]">Import Complete!</h4>
+                      <p className="text-xs text-[#8E9299] mt-1">Successfully added {importedItems.length} new items to the price catalog.</p>
+                    </div>
+                    <button 
+                      onClick={() => setIsImportModalOpen(false)}
+                      className="mt-2 px-6 py-2 bg-[#1061E3] text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              {(importSource === 'crm' || importSource === 'csv') && (
+                <div className="px-6 py-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
+                  <button 
+                    onClick={() => setIsImportModalOpen(false)}
+                    className="px-4 py-2 text-sm font-semibold text-[#4A4D53] hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={startImport}
+                    className="px-6 py-2 text-sm font-semibold bg-[#1061E3] text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  >
+                    Import {importedItems.length} Item{importedItems.length === 1 ? '' : 's'}
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

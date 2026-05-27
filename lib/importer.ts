@@ -734,20 +734,31 @@ function mapDealStep(csvStep: string): string {
   const s = csvStep.trim();
   if (!s) return '';
 
+  const lower = s.toLowerCase();
+  
+  // Clean common prefixes like "step 1:", "1.", etc.
+  const clean = lower.replace(/^(step\s*\d+\s*:\s*|\d+\s*[\.\-:]\s*)/i, '').trim();
+
   const stepMap: Record<string, string> = {
-    'step 1: discovery call': 'Step 1: Discovery Call',
-    'step 2: onboarding form': 'Step 2: Onboarding',
-    'step 2: onboarding': 'Step 2: Onboarding',
-    'step 3: strategy meeting': 'Step 3: Strategy Meeting',
-    'step 4: plan & proposal': 'Step 4: Plan & Proposal',
-    'step 5: proposal signing': 'Step 5: Proposal Signing',
-    'step 6: 50% deposit payment': 'Step 6: Deposit Payment',
-    'step 6: deposit payment': 'Step 6: Deposit Payment',
-    'won': '',
-    'lost': '',
+    'discovery call': '1. Onboarding',
+    'onboarding': '1. Onboarding',
+    'onboarding form': '1. Onboarding',
+    'strategy meeting': '2. Strategy Meeting',
+    'plan & proposal': '3. Plan & Proposal',
+    'proposal signing': '4. Proposal Signing',
+    'deposit payment': '5. Deposit Payment',
+    '50% deposit payment': '5. Deposit Payment',
+    'content collection': '6. Content Collection',
+    'website design': '7. Website Design',
+    'design proofing': '8. Design Proofing',
+    'website development': '9. Website Development',
+    'development proofing': '10. Development Proofing',
+    'final payment': '11. Final Payment',
+    'launch checklist': '12. Launch Checklist',
+    'launch': '13. Launch',
   };
 
-  return stepMap[s.toLowerCase()] || s;
+  return stepMap[clean] || s;
 }
 
 export async function processDealImport(

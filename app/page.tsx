@@ -352,19 +352,19 @@ function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers
 
   return (
     <SortableContext id={id} items={contacts.map(c => c.id)} strategy={verticalListSortingStrategy}>
-      <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden text-left">
-        <thead>
+      <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left">
+        <thead className="sticky top-0 z-10 shadow-sm">
           <tr>
-            <th className="w-10 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
-            <th className="w-[120px] bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">FIRST NAME</th>
-            <th className="w-[120px] bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">LAST NAME</th>
-            <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">TITLE</th>
-            <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PHONE</th>
-            <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
-            <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
-            <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">EMAIL</th>
-            <th className="bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
-            <th className="w-12 bg-[#F9FAFB] px-4 py-3 border-b border-[#E2E4E9]"></th>
+            <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
+            <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">FIRST NAME</th>
+            <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">LAST NAME</th>
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">TITLE</th>
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PHONE</th>
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">EMAIL</th>
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
+            <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
           </tr>
         </thead>
         <tbody ref={setNodeRef} className="min-h-[50px]">
@@ -420,6 +420,37 @@ export default function Page() {
   useEffect(() => {
     localStorage.setItem('activeNav', activeNav);
   }, [activeNav]);
+
+  useEffect(() => {
+    // 1. Bootstrap notifications check & cron loop
+    fetch('/api/notifications/cron', { method: 'POST' }).catch(err => {
+      console.error('Failed to trigger background notifications cron job:', err);
+    });
+
+    // 2. Parse URL parameters for automatic navigation routing
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const navParam = urlParams.get('nav');
+      if (navParam) {
+        const decodedNav = decodeURIComponent(navParam);
+        const allNavs = [
+          'My Tasks', 'Inbox', 'Contacts', 'Companies', 'Deals / Sales', 
+          'Proposals', 'Price Catalog', 'Files', 'Support Tickets', 'Websites', 
+          'Design & Print', 'SEO', 'Local Listings', 'Google Ads', 'Social Media', 
+          'Settings', 'Profile'
+        ];
+        if (allNavs.includes(decodedNav)) {
+          setActiveNav(decodedNav);
+          
+          urlParams.delete('nav');
+          const newSearch = urlParams.toString();
+          const cleanUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+          window.history.replaceState(null, '', cleanUrl);
+        }
+      }
+    }
+  }, []);
+
   const [navFilter, setNavFilter] = useState<'All' | 'CRM' | 'Workspace'>('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -486,6 +517,18 @@ export default function Page() {
       unsubContactGroups();
     };
   }, []);
+
+  // Self-healing contact group name typo fix (lEADS to Leads)
+  useEffect(() => {
+    contactGroups.forEach(group => {
+      if (group.name === 'lEADS') {
+        updateContactGroup(group.id, { name: 'Leads' }).catch(err => {
+          console.error('Failed to auto-fix group typo lEADS -> Leads:', err);
+        });
+      }
+    });
+  }, [contactGroups]);
+
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [workspaceOpenRequest, setWorkspaceOpenRequest] = useState<WorkspaceOpenRequest | null>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -1430,7 +1473,7 @@ export default function Page() {
         ) : canAccessCRM && activeContentNav === 'Proposals' ? (
           <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} products={products} proposals={proposals} setProposals={setProposals} />
         ) : canAccessCRM && activeContentNav === 'Price Catalog' ? (
-          <ProductsServicesView products={products} setProducts={setProducts} />
+          <ProductsServicesView products={products} setProducts={setProducts} proposals={proposals} />
         ) : canAccessCRM && activeContentNav === 'Files' ? (
           <FilesView currentUserId={currentTeamMember?.id} />
         ) : activeContentNav === 'Profile' ? (
