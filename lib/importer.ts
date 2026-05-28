@@ -397,7 +397,7 @@ export async function processImport(
           servicesNeeded: '',
           facebookUrl: '',
           referralSource: '',
-          assignedToId: teamMembers[0]?.id || '',
+          assignedToId: '',
           web: false,
           seo: false,
           ll: false,
@@ -437,7 +437,8 @@ export async function processTicketImport(
   existingCompanies: Company[],
   teamMembers: TeamMember[],
   onProgress: (count: number) => void,
-  existingGroups?: any[]
+  existingGroups?: any[],
+  targetGroupId?: string
 ) {
   const companyCache = new Map<string, string>();
   existingCompanies.forEach(c => companyCache.set(c.name.toLowerCase(), c.id));
@@ -476,7 +477,7 @@ export async function processTicketImport(
           servicesNeeded: '',
           facebookUrl: '',
           referralSource: '',
-          assignedToId: teamMembers[0]?.id || '',
+          assignedToId: '',
           web: false,
           seo: false,
           ll: false,
@@ -489,8 +490,8 @@ export async function processTicketImport(
       }
     }
 
-    let groupId = '';
-    if (item.groupName) {
+    let groupId = targetGroupId || '';
+    if (!groupId && item.groupName) {
       const lowerGroupName = item.groupName.toLowerCase();
       if (groupCache.has(lowerGroupName)) {
         groupId = groupCache.get(lowerGroupName)!;
@@ -520,6 +521,7 @@ export async function processTicketImport(
       status: item.status,
       priority: item.priority,
       assignee: assignedTo?.id || '',
+      assignees: assignedTo?.id ? [assignedTo.id] : [],
       companyId: companyId,
       groupId: groupId || undefined,
       parentId: parentId || undefined,
@@ -809,7 +811,7 @@ export async function processDealImport(
           servicesNeeded: '',
           facebookUrl: '',
           referralSource: '',
-          assignedToId: teamMembers[0]?.id || '',
+          assignedToId: '',
           web: false,
           seo: false,
           ll: false,

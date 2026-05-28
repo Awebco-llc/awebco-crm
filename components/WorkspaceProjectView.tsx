@@ -74,7 +74,7 @@ const INITIAL_DATA = [
 
 const SUPPORT_TICKETS_BOARD_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_TICKETS_EMAIL || 'tickets@awebco.com';
 
-function SortableHeader({ column }: { column: Column }) {
+function SortableHeader({ column, onDelete }: { column: Column, onDelete?: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -87,17 +87,31 @@ function SortableHeader({ column }: { column: Column }) {
     maxWidth: getColumnWidth(column.id),
   };
 
+  // Core columns cannot be deleted
+  const isDeletable = !['projectName', 'assignee', 'status', 'updatesCount'].includes(column.id);
+
   return (
     <th
       ref={setNodeRef}
       style={style}
       className="sticky top-0 z-10 bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase truncate"
     >
-      <div className="flex items-center gap-2">
-        <button {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity text-[#8E9299] hover:text-[#1C1F23]">
-          <GripHorizontal className="w-3.5 h-3.5" />
-        </button>
-        {column.header}
+      <div className="flex items-center gap-1 justify-between">
+        <div className="flex items-center gap-1">
+          <button {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity text-[#8E9299] hover:text-[#1C1F23]">
+            <GripHorizontal className="w-3.5 h-3.5" />
+          </button>
+          {column.header}
+        </div>
+        {isDeletable && onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete column "${column.header}"? This will hide it from all rows.`)) onDelete(column.id); }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+            title={`Delete column "${column.header}"`}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
       </div>
     </th>
   );
@@ -1696,7 +1710,11 @@ export default function WorkspaceProjectView({
                             </th>
                             <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
                               {columns.map(col => (
-                                <SortableHeader key={col.id} column={col} />
+                                <SortableHeader
+                                  key={col.id}
+                                  column={col}
+                                  onDelete={(colId) => setColumns(prev => prev.filter(c => c.id !== colId))}
+                                />
                               ))}
                             </SortableContext>
                             <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
@@ -1772,6 +1790,39 @@ export default function WorkspaceProjectView({
                           )}
                         </GroupDroppableBody>
                       </table>
+                      {/* Add Row to this group */}
+                      <button
+                        onClick={async () => {
+                          try {
+                            const orders = (data || []).map((r: any) => Number(r.order) || 0);
+                            const maxOrder = orders.length > 0 ? Math.max(...orders) : 0;
+                            const newTicket: any = {
+                              projectName: 'New Project',
+                              assignee: '',
+                              assignees: [],
+                              status: defaultStatus || 'Not Started',
+                              deadline: '',
+                              url: '',
+                              description: '',
+                              notes: '',
+                              files: [],
+                              isManual: true,
+                              groupId: group.id,
+                              workspace: projectType,
+                              order: maxOrder + 1,
+                            };
+                            if (projectType === 'Local Listings') newTicket.planType = 'Basic Plan';
+                            if (projectType === 'Support Tickets' || projectType === 'Design & Print') newTicket.priority = 'Medium';
+                            await createTicket(newTicket);
+                          } catch (err) {
+                            console.error('Failed to add row:', err);
+                          }
+                        }}
+                        className="mt-1 w-full flex items-center gap-2 px-4 py-2 text-sm text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50/60 rounded-b-lg transition-colors font-medium group/addrow"
+                      >
+                        <Plus className="w-4 h-4 opacity-50 group-hover/addrow:opacity-100 transition-opacity" />
+                        Add Row
+                      </button>
                     </div>
                   )}
                 </SortableGroupWrapper>
@@ -1932,7 +1983,7 @@ export default function WorkspaceProjectView({
       {/* Edit Row Panel */}
       <AnimatePresence>
         {editingRowId && (
-          useFullScreenUnifiedTicketView && projectType === 'Support Tickets' ? (
+          useFullScreenUnifiedTicketView ? (
             <div className="fixed inset-0 z-50 bg-[#F9FAFB] flex flex-col h-screen w-screen overflow-hidden">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -1949,7 +2000,7 @@ export default function WorkspaceProjectView({
                       className="flex items-center gap-2 text-sm font-semibold text-[#4A4D53] hover:text-[#1C1F23] transition-colors bg-[#F0F2F5] hover:bg-[#E2E8F0] px-4 py-2 rounded-lg"
                     >
                       <X className="w-4 h-4" />
-                      Back to Tickets
+                      Back to {projectType}
                     </button>
                     <button
                       onClick={() => {
@@ -1957,13 +2008,13 @@ export default function WorkspaceProjectView({
                         setEditingRowId(null);
                       }}
                       className="flex items-center gap-2 text-sm font-semibold text-[#D32F2F] hover:text-white border border-[#D32F2F] hover:bg-[#D32F2F] transition-all px-3 py-2 rounded-lg shadow-sm ml-2"
-                      title="Delete Ticket"
+                      title="Delete Project"
                     >
                       <Trash2 className="w-4 h-4" />
-                      Delete Ticket
+                      Delete
                     </button>
                   </div>
-                  <h2 className="text-base font-bold text-[#1C1F23]">Ticket Detail View</h2>
+                  <h2 className="text-base font-bold text-[#1C1F23]">{projectType} — Detail View</h2>
                   <button
                     onClick={() => setEditingRowId(null)}
                     className="flex items-center gap-2 text-sm font-semibold text-white bg-[#1061E3] hover:bg-blue-700 transition-colors px-4 py-2 rounded-lg shadow-sm"
@@ -2130,7 +2181,7 @@ export default function WorkspaceProjectView({
                           <textarea
                             value={editingRow.description ?? ''}
                             onChange={e => handleUpdateRow(editingRowId, { description: e.target.value })}
-                            placeholder="Add a detailed description for this support ticket..."
+                            placeholder="Add a detailed description..."
                             className="w-full px-4 py-3 border border-[#E2E4E9] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[160px] resize-y"
                           />
                         </div>

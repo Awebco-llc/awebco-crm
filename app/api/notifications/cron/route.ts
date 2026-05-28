@@ -171,12 +171,43 @@ async function runNotificationCheck() {
       
       const subject = `[Awebco CRM] New Notifications Digest`;
       
-      console.log(`\n======================================================`);
-      console.log(`[EMAIL SIMULATOR] SENDING EMAIL DIGEST TO: ${userEmail}`);
-      console.log(`SUBJECT: ${subject}`);
-      console.log(`BODY:`);
-      console.log(emailHtml);
-      console.log(`======================================================\n`);
+      if (process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN) {
+        try {
+          const auth = Buffer.from(`api:${process.env.MAILGUN_API_KEY}`).toString('base64');
+          const host = process.env.MAILGUN_HOST || 'api.mailgun.net';
+          const url = `https://${host}/v3/${process.env.MAILGUN_DOMAIN}/messages`;
+
+          const formData = new URLSearchParams();
+          formData.append('from', process.env.MAILGUN_FROM_EMAIL || `CRM Notifications <noreply@${process.env.MAILGUN_DOMAIN}>`);
+          formData.append('to', userEmail);
+          formData.append('subject', subject);
+          formData.append('html', emailHtml);
+
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formData.toString()
+          });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Mailgun response error (${res.status}): ${errText}`);
+          }
+          console.log(`[Mailgun] Successfully sent digest to ${userEmail}`);
+        } catch (mailgunErr: any) {
+          console.error(`[Mailgun Error] Failed to send email to ${userEmail}:`, mailgunErr);
+        }
+      } else {
+        console.log(`\n======================================================`);
+        console.log(`[EMAIL SIMULATOR] SENDING EMAIL DIGEST TO: ${userEmail}`);
+        console.log(`SUBJECT: ${subject}`);
+        console.log(`BODY:`);
+        console.log(emailHtml);
+        console.log(`======================================================\n`);
+      }
       
       await addDoc(collection(db, 'sent_emails'), {
         to: userEmail,

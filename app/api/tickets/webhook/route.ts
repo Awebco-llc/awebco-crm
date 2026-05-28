@@ -168,6 +168,8 @@ export async function POST(req: Request) {
       status: 'Not Started',
       priority: priority,
       assignee: '',
+      assignees: [],
+      assignedToId: '',
       workspace: 'Support Tickets',
       companyName: companyName,
       contactName: contactName,

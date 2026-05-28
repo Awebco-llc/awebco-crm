@@ -21,6 +21,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
   const [previewData, setPreviewData] = useState<TicketImportResult[]>([]);
   const [importProgress, setImportProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -29,6 +30,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
     setPreviewData([]);
     setImportProgress(0);
     setError(null);
+    setSelectedGroupId('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -68,7 +70,7 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
     try {
       await processTicketImport(previewData, workspace, companies, teamMembers, (count) => {
         setImportProgress(count);
-      }, groups);
+      }, groups, selectedGroupId);
       setStep('complete');
     } catch (err) {
       setError('An error occurred during import.');
@@ -147,6 +149,25 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
                 </div>
                 <button onClick={reset} className="text-xs font-semibold text-[#1061E3] hover:underline">Change File</button>
               </div>
+
+              {groups && groups.length > 0 && (
+                <div className="bg-[#F9FAFB] border border-[#E2E4E9] p-4 rounded-xl flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-xs font-bold text-[#4A4D53] uppercase tracking-wider">Import into group</label>
+                    <p className="text-[11px] text-[#8E9299]">Choose a specific group to import these projects into, or auto-detect from the file.</p>
+                  </div>
+                  <select 
+                    value={selectedGroupId} 
+                    onChange={e => setSelectedGroupId(e.target.value)}
+                    className="px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white text-[#1C1F23] font-medium min-w-[240px] shadow-sm cursor-pointer"
+                  >
+                    <option value="">(Auto-detect from file)</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="border border-[#E2E4E9] rounded-lg overflow-hidden">
                 <div className="max-h-[300px] overflow-auto">

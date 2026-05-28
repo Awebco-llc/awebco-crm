@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, Check, GripVertical, FileText, Trash2 } from 'lucide-react';
+import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
 import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket } from '@/lib/crmStore';
@@ -76,7 +76,26 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
         <EditableCell value={company.name} onSave={v => onUpdate(company.id, 'name', v)} renderValue={v => <strong>{v}</strong>} />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={company.domain} onSave={v => onUpdate(company.id, 'domain', v)} />
+        <EditableCell 
+          value={company.domain} 
+          onSave={v => onUpdate(company.id, 'domain', v)} 
+          renderValue={v => {
+            if (!v) return '-';
+            const url = v.startsWith('http://') || v.startsWith('https://') ? v : `https://${v}`;
+            return (
+              <a 
+                href={url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                onClick={e => e.stopPropagation()} 
+                className="text-[#1061E3] hover:underline inline-flex items-center gap-1 group/link"
+              >
+                <span>{v}</span>
+                <ExternalLink className="w-3.5 h-3.5 text-[#1061E3] opacity-60 group-hover/link:opacity-100 transition-opacity shrink-0" />
+              </a>
+            );
+          }}
+        />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <EditableCell value={company.industry} onSave={v => onUpdate(company.id, 'industry', v)} />
@@ -128,15 +147,15 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
 }
 
 const PLANS_CONFIG = [
-  { field: 'web', name: 'Websites', desc: 'Professional web design, development, and hosting.' },
-  { field: 'seo', name: 'SEO', desc: 'Search engine optimization to improve search rankings.' },
-  { field: 'll', name: 'Local Listings', desc: 'Manage local directory citations and map visibility.' },
-  { field: 'ppc', name: 'Google Ads', desc: 'Pay-per-click advertising setup and optimization.' },
-  { field: 'smm', name: 'Social Media Management', desc: 'Organic scheduling, posting, and profile management.' },
-  { field: 'sma', name: 'Social Media Ads', desc: 'Paid social media ad campaign setup and running.' },
-  { field: 'em', name: 'Email Marketing', desc: 'Automated list building, newsletters, and email flows.' },
-  { field: 'dp', name: 'Design & Print', desc: 'Graphic design for digital files and print materials.' },
-  { field: 'support', name: 'Support Tickets', desc: 'Technical troubleshooting, hosting management, and support.' }
+  { field: 'web', notesField: 'webNotes', name: 'Websites', desc: 'Professional web design, development, and hosting.' },
+  { field: 'seo', notesField: 'seoNotes', name: 'SEO', desc: 'Search engine optimization to improve search rankings.' },
+  { field: 'll', notesField: 'llNotes', name: 'Local Listings', desc: 'Manage local directory citations and map visibility.' },
+  { field: 'ppc', notesField: 'ppcNotes', name: 'Google Ads', desc: 'Pay-per-click advertising setup and optimization.' },
+  { field: 'smm', notesField: 'smmNotes', name: 'Social Media Management', desc: 'Organic scheduling, posting, and profile management.' },
+  { field: 'sma', notesField: 'smaNotes', name: 'Social Media Ads', desc: 'Paid social media ad campaign setup and running.' },
+  { field: 'em', notesField: 'emNotes', name: 'Email Marketing', desc: 'Automated list building, newsletters, and email flows.' },
+  { field: 'dp', notesField: 'dpNotes', name: 'Design & Print', desc: 'Graphic design for digital files and print materials.' },
+  { field: 'support', notesField: 'supportNotes', name: 'Support Tickets', desc: 'Technical troubleshooting, hosting management, and support.' }
 ] as const;
 
 type CompanyProfileTab = 'details' | 'description' | 'plans' | 'updates' | 'proposals';
@@ -262,7 +281,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         servicesNeeded: formData.servicesNeeded || '',
         facebookUrl: formData.facebookUrl || '',
         referralSource: formData.referralSource || '',
-        assignedToId: formData.assignedToId || teamMembers[0]?.id || '1',
+        assignedToId: formData.assignedToId || '',
         primaryContactId: formData.primaryContactId || '',
         description: formData.description || '',
         updates: updatedUpdates,
@@ -423,13 +442,13 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               const contactEmail = primaryContact ? primaryContact.email : (company.email || '');
 
               const newTicket: any = {
-                projectName: `${company.name} Project`,
+                projectName: company.name,
                 assignee: company.assignedToId || '',
                 assignees: company.assignedToId ? [company.assignedToId] : [],
                 status: 'Not Started',
                 deadline: company.deadline || '',
                 url: company.domain || '',
-                description: `Automatically created for ${company.name} from CRM.`,
+                description: '',
                 notes: '',
                 files: [],
                 isManual: false,
@@ -728,32 +747,55 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                       <div className="flex flex-col gap-3">
                         {PLANS_CONFIG.map(plan => {
                           const isActive = !!formData[plan.field];
+                          const notesKey = plan.notesField as keyof Company;
                           return (
-                            <div key={plan.field} className={`flex items-center justify-between p-4 border rounded-xl transition-all duration-200 ${
+                            <div key={plan.field} className={`border rounded-xl transition-all duration-200 overflow-hidden ${
                               isActive 
                                 ? 'border-[#1061E3] bg-[#F5F9FF] shadow-sm' 
                                 : 'border-[#E2E4E9] bg-white hover:border-[#CCCCCC]'
                             }`}>
-                              <div className="flex-grow pr-4">
-                                <div className="flex items-center gap-2">
-                                  <h5 className="font-bold text-sm text-[#1C1F23]">{plan.name}</h5>
-                                  {isActive && (
-                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#E3F2FD] text-[#1061E3] uppercase">
-                                      Active
-                                    </span>
-                                  )}
+                              {/* Header row: plan name + toggle */}
+                              <div className="flex items-center justify-between px-4 pt-4 pb-3">
+                                <div className="flex-grow pr-4">
+                                  <div className="flex items-center gap-2">
+                                    <h5 className="font-bold text-sm text-[#1C1F23]">{plan.name}</h5>
+                                    {isActive && (
+                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#E3F2FD] text-[#1061E3] uppercase">
+                                        Active
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-[#8E9299] mt-0.5">{plan.desc}</p>
                                 </div>
-                                <p className="text-xs text-[#8E9299] mt-1">{plan.desc}</p>
+                                <label className="relative inline-flex items-center cursor-pointer select-none shrink-0" onClick={e => e.stopPropagation()}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isActive}
+                                    onChange={() => onTogglePlan(plan.field)}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
+                                </label>
                               </div>
-                              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0" onClick={e => e.stopPropagation()}>
-                                <input 
-                                  type="checkbox" 
-                                  checked={isActive}
-                                  onChange={() => onTogglePlan(plan.field)}
-                                  className="sr-only peer"
+                              {/* Notes textarea — always visible */}
+                              <div className="px-4 pb-4">
+                                <textarea
+                                  value={(formData[notesKey] as string) || ''}
+                                  onChange={e => updateForm(notesKey, e.target.value)}
+                                  onBlur={e => {
+                                    if (editingCompanyId) {
+                                      updateCompany(editingCompanyId, { [notesKey]: e.target.value });
+                                    }
+                                  }}
+                                  placeholder={`Notes for ${plan.name} — e.g. what they receive, their rate, plan details...`}
+                                  rows={2}
+                                  className={`w-full px-3 py-2 text-xs rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-[#1061E3] transition-colors placeholder:text-[#C8CDD5] ${
+                                    isActive
+                                      ? 'border-[#BFDBFE] bg-white text-[#1C1F23]'
+                                      : 'border-[#E2E4E9] bg-[#F9FAFB] text-[#4A4D53]'
+                                  }`}
                                 />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
-                              </label>
+                              </div>
                             </div>
                           );
                         })}

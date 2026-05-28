@@ -194,6 +194,15 @@ export interface Company {
   primaryContactId?: string;
   deadline?: string;
   description?: string;
+  webNotes?: string;
+  seoNotes?: string;
+  llNotes?: string;
+  ppcNotes?: string;
+  smmNotes?: string;
+  smaNotes?: string;
+  emNotes?: string;
+  dpNotes?: string;
+  supportNotes?: string;
   updates?: Array<{
     id: string;
     author?: string;
@@ -372,7 +381,7 @@ export function AssigneeDropdown({
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const isMulti = Boolean(values && onSaveMultiple);
-  const member = teamMembers.find(m => m.id === value) || teamMembers[0];
+  const member = teamMembers.find(m => m.id === value);
   const assignedMembers = teamMembers.filter(m => values?.includes(m.id));
 
   useEffect(() => {
@@ -501,13 +510,17 @@ export function AssigneeDropdown({
               </div>
             )}
           </div>
-        ) : (
+        ) : member ? (
           <div 
             className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold"
-            style={{ backgroundColor: member?.color || '#ccc' }}
-            title={member?.name || 'Unassigned'}
+            style={{ backgroundColor: member.color || '#ccc' }}
+            title={member.name}
           >
-            {member?.initials || '?'}
+            {member.initials}
+          </div>
+        ) : (
+          <div className="w-6 h-6 rounded-full bg-gray-100 border border-dashed border-[#D0D5DD] flex items-center justify-center text-[#8E9299] text-xs hover:bg-gray-200 transition-colors" title="Unassigned">
+            +
           </div>
         )}
       </button>

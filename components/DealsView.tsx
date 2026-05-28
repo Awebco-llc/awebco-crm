@@ -340,7 +340,7 @@ export default function DealsView({
         name: formData.name || '',
         currentStep: formData.currentStep || '',
         status: formData.status || 'Not started',
-        assignedToId: formData.assignedToId || teamMembers[0]?.id || '1',
+        assignedToId: formData.assignedToId || '',
         value: formData.value || '',
         companyId: formData.companyId || '',
         contactId: formData.contactId || '',

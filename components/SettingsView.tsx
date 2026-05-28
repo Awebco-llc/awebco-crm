@@ -443,8 +443,8 @@ export default function SettingsView({
           <div className="p-6 flex flex-col gap-6">
             <div className="flex items-center justify-between gap-4 p-4 border border-[#E2E4E9] rounded-lg bg-[#F9FAFB]">
               <div>
-                <h3 className="font-semibold text-[#1C1F23] text-sm">Full Screen Support Ticket View</h3>
-                <p className="text-xs text-[#8E9299] mt-0.5">When clicked, support tickets will open in a beautiful, distraction-free full screen layout showing all metadata, description, files, and updates in a single unified scroll view.</p>
+                <h3 className="font-semibold text-[#1C1F23] text-sm">Full Screen Project View</h3>
+                <p className="text-xs text-[#8E9299] mt-0.5">When enabled, clicking any project or ticket in any workspace will open a beautiful, distraction-free full screen layout showing all metadata, description, files, and updates in a single unified scroll view.</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer select-none">
                 <input 
