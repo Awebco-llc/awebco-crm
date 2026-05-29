@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -355,7 +355,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0 }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -370,28 +370,30 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
 
   return (
     <tr 
-      ref={isSubRow ? undefined : setNodeRef}
+      ref={setNodeRef}
       style={style}
       onClick={() => setEditingRowId(row.id)}
       onContextMenu={(e) => onContextMenu?.(e, row.id, isSubRow)}
-      className={`hover:bg-gray-50 transition-colors cursor-pointer group ${isSubRow ? 'bg-[#FAFAFA]' : ''} ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : ''}`}
+      className={`hover:bg-gray-50 transition-colors cursor-pointer group ${isSubRow ? 'bg-[#FAFAFA]' : ''} ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : ''} ${isNestTarget ? 'outline outline-2 outline-[#1061E3] outline-offset-[-2px] !bg-blue-50/40' : ''}`}
     >
-      <td style={{ width: '70px', minWidth: '70px', maxWidth: '70px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] select-none" onClick={(e) => e.stopPropagation()}>
+      <td style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] select-none" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
-          {!isSubRow && (
-            <input 
-              type="checkbox"
-              checked={isSelected || false}
-              onChange={() => onToggleSelect?.()}
-              className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
-            />
-          )}
-          {!isSubRow && (
-            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
-              <GripVertical className="w-4 h-4" />
-            </div>
-          )}
-          {isSubRow && <div className="w-9" />}
+          {isSubRow && <div className="w-5 shrink-0" />}
+          <input 
+            type="checkbox"
+            checked={isSelected || false}
+            onChange={() => onToggleSelect?.(false)}
+            onMouseDown={(e) => { if (e.shiftKey) { e.preventDefault(); onToggleSelect?.(true); } }}
+            className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
+          />
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23] relative shrink-0">
+            <GripVertical className="w-4 h-4" />
+            {isDragging && isSelected && selectedCount > 1 && (
+              <span className="absolute -top-2 -right-2.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm pointer-events-none z-10">
+                {selectedCount}
+              </span>
+            )}
+          </div>
         </div>
       </td>
       {columns.map((col: any) => (
@@ -578,7 +580,8 @@ function GroupHeader({
   dragHandleProps, 
   isCollapsed, 
   onToggleCollapse,
-  allowDeletingGroups = false
+  allowDeletingGroups = false,
+  planNotes,
 }: { 
   group: { id: string, name: string }, 
   onUpdate: (id: string, name: string) => void, 
@@ -586,10 +589,24 @@ function GroupHeader({
   dragHandleProps?: any, 
   isCollapsed?: boolean, 
   onToggleCollapse?: () => void,
-  allowDeletingGroups?: boolean
+  allowDeletingGroups?: boolean,
+  planNotes?: string,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(group.name);
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const notesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isNotesOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (notesRef.current && !notesRef.current.contains(e.target as Node)) {
+        setIsNotesOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isNotesOpen]);
 
   const save = () => {
     setIsEditing(false);
@@ -630,6 +647,46 @@ function GroupHeader({
             >
               {group.name}
             </h2>
+            {planNotes && (
+              <div className="relative" ref={notesRef}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setIsNotesOpen(p => !p); }}
+                  className={`p-1 rounded-full transition-all flex items-center gap-1 text-xs font-semibold ${
+                    isNotesOpen
+                      ? 'bg-[#1061E3] text-white shadow-sm'
+                      : 'bg-blue-50 text-[#1061E3] hover:bg-blue-100'
+                  }`}
+                  title="View SEO plan notes"
+                >
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  <span className="pr-0.5">Plan Notes</span>
+                </button>
+                {isNotesOpen && (
+                  <div
+                    className="absolute left-0 top-full mt-2 z-50 w-80 bg-white rounded-xl shadow-2xl border border-[#E2E4E9] overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-4 py-2.5 bg-[#F9FAFB] border-b border-[#E2E4E9] flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5 text-[#1061E3]" />
+                        <span className="text-xs font-bold text-[#1C1F23] uppercase tracking-wide">SEO Plan Notes</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsNotesOpen(false)}
+                        className="p-0.5 text-[#8E9299] hover:text-[#1C1F23] rounded transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="p-4 text-sm text-[#4A4D53] leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+                      {planNotes}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <button 
               onClick={() => setIsEditing(true)}
               className="p-1 opacity-0 group-hover/header:opacity-100 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-all"
@@ -798,6 +855,16 @@ export default function WorkspaceProjectView({
   const [activeBulkAssigneeDropdown, setActiveBulkAssigneeDropdown] = useState(false);
   const [sheetsSyncStatus, setSheetsSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
 
+  // Nest-as-subtask drag state
+  const [nestHighlightId, setNestHighlightId] = useState<string | null>(null);
+  const nestTargetIdRef = useRef<string | null>(null);
+  const nestHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nestLastOverIdRef = useRef<string | null>(null);
+  const nestClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Shift-click range selection
+  const lastCheckedRowId = useRef<string | null>(null);
+
   // Always-fresh ref so the debounced sync uses latest data
   const dataRef = React.useRef(data);
   const groupsRef = React.useRef(groups);
@@ -834,13 +901,45 @@ export default function WorkspaceProjectView({
     }, 2000);
   }, [projectType, teamMembers]);
 
-  const handleToggleSelectRow = (id: string) => {
+  const handleToggleSelectRow = (id: string, shiftKey: boolean = false) => {
+    if (shiftKey && lastCheckedRowId.current && lastCheckedRowId.current !== id) {
+      // Build ordered list of currently visible rows in DOM to detect range
+      const orderedIds: string[] = [];
+      const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
+      const visibleData = data.filter(r => rowMatchesStatus(r));
+      for (const group of groups) {
+        const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
+        for (const row of groupRows) {
+          orderedIds.push(row.id);
+          if (expandedIds.has(row.id)) {
+            const subRows = visibleData.filter((sub: any) => sub.parentId === row.id);
+            for (const sub of subRows) {
+              orderedIds.push(sub.id);
+            }
+          }
+        }
+      }
+      const from = orderedIds.indexOf(lastCheckedRowId.current);
+      const to = orderedIds.indexOf(id);
+      if (from !== -1 && to !== -1) {
+        const [start, end] = from < to ? [from, to] : [to, from];
+        const range = orderedIds.slice(start, end + 1);
+        setSelectedRowIds(prev => {
+          const next = new Set(prev);
+          range.forEach(rid => next.add(rid));
+          return next;
+        });
+        lastCheckedRowId.current = id;
+        return;
+      }
+    }
     setSelectedRowIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+    lastCheckedRowId.current = id;
   };
 
   const handleClearSelection = () => {
@@ -1311,68 +1410,220 @@ export default function WorkspaceProjectView({
 
   const handleDragOver = async (event: DragOverEvent) => {
     const { active, over } = event;
-    if (!over) return;
-    
+
+    if (!over) {
+      if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
+      if (nestTargetIdRef.current && !nestClearTimerRef.current) {
+        nestClearTimerRef.current = setTimeout(() => {
+          nestTargetIdRef.current = null;
+          setNestHighlightId(null);
+          nestClearTimerRef.current = null;
+        }, 300);
+      }
+      return;
+    }
+
     if (String(active.id).startsWith('row-')) {
-       let targetGroupId: string | null = null;
-       if (String(over.id).startsWith('row-')) {
-         const overIdStr = String(over.id).replace('row-', '');
-         const overData = data.find(r => r.id === overIdStr);
-         if (overData) targetGroupId = getRowGroupId(overData);
-       } else if (String(over.id).startsWith('group-container-')) {
-         targetGroupId = String(over.id).replace('group-container-', '');
-       }
-       
-       if (targetGroupId) {
-          const activeIdStr = String(active.id).replace('row-', '');
-          const activeData = data.find(r => r.id === activeIdStr);
-          if (activeData && getRowGroupId(activeData) !== targetGroupId) {
-            await handleUpdateRow(activeIdStr, { groupId: targetGroupId });
+      const activeIdStr = String(active.id).replace('row-', '');
+      const activeData = data.find(r => r.id === activeIdStr);
+
+      // --- Nest-as-subtask gesture (200ms hover over a top-level row) ---
+      if (String(over.id).startsWith('row-') && activeData && !activeData.parentId) {
+        const overIdStr = String(over.id).replace('row-', '');
+        const overData = data.find(r => r.id === overIdStr);
+        if (overData && !overData.parentId && overIdStr !== activeIdStr) {
+          if (nestClearTimerRef.current) {
+            clearTimeout(nestClearTimerRef.current);
+            nestClearTimerRef.current = null;
           }
-       }
+
+          if (nestLastOverIdRef.current !== overIdStr) {
+            nestLastOverIdRef.current = overIdStr;
+            if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
+            const capturedId = overIdStr;
+            nestHoverTimerRef.current = setTimeout(() => {
+              nestTargetIdRef.current = capturedId;
+              setNestHighlightId(capturedId);
+              nestHoverTimerRef.current = null;
+              if (nestClearTimerRef.current) {
+                clearTimeout(nestClearTimerRef.current);
+                nestClearTimerRef.current = null;
+              }
+            }, 200); // Trigger quickly (200ms) so snapping doesn't reset it easily
+          }
+        } else {
+          nestLastOverIdRef.current = null;
+          if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
+          if (nestTargetIdRef.current && !nestClearTimerRef.current) {
+            nestClearTimerRef.current = setTimeout(() => {
+              nestTargetIdRef.current = null;
+              setNestHighlightId(null);
+              nestClearTimerRef.current = null;
+            }, 300); // 300ms cooldown to keep highlight active if snapping occurs
+          }
+        }
+      } else {
+        nestLastOverIdRef.current = null;
+        if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
+        if (nestTargetIdRef.current && !nestClearTimerRef.current) {
+          nestClearTimerRef.current = setTimeout(() => {
+            nestTargetIdRef.current = null;
+            setNestHighlightId(null);
+            nestClearTimerRef.current = null;
+          }, 300);
+        }
+      }
+
+      // --- Existing cross-group move ---
+      let targetGroupId: string | null = null;
+      if (String(over.id).startsWith('row-')) {
+        const overIdStr = String(over.id).replace('row-', '');
+        const overData = data.find(r => r.id === overIdStr);
+        if (overData) targetGroupId = getRowGroupId(overData);
+      } else if (String(over.id).startsWith('group-container-')) {
+        targetGroupId = String(over.id).replace('group-container-', '');
+      }
+      if (targetGroupId && activeData && getRowGroupId(activeData) !== targetGroupId) {
+        const patch: any = { groupId: targetGroupId };
+        if (activeData.parentId) {
+          patch.parentId = null;
+        }
+        await handleUpdateRow(activeIdStr, patch);
+      }
     }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+
+    // Clean up nest gesture state
+    if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
+    if (nestClearTimerRef.current) { clearTimeout(nestClearTimerRef.current); nestClearTimerRef.current = null; }
+    const nestTarget = nestTargetIdRef.current;
+    nestTargetIdRef.current = null;
+    nestLastOverIdRef.current = null;
+    setNestHighlightId(null);
+
+    if (String(active.id).startsWith('row-')) {
+      const activeId = String(active.id).replace('row-', '');
+      const activeRowData = data.find(r => r.id === activeId);
+
+      // Feature 1: Nest as subtask when hover-hold triggered (checked FIRST before returning)
+      if (nestTarget && activeRowData && !activeRowData.parentId) {
+        const targetRow = data.find(r => r.id === nestTarget);
+        if (targetRow) {
+          await handleUpdateRow(activeId, { parentId: nestTarget, groupId: getRowGroupId(targetRow) });
+          setExpandedIds(prev => new Set(prev).add(nestTarget));
+          return;
+        }
+      }
+    }
+
     if (!over || active.id === over.id) return;
 
     if (String(active.id).startsWith('row-')) {
       const activeId = String(active.id).replace('row-', '');
+      const activeRowData = data.find(r => r.id === activeId);
       const overId = String(over.id).replace('row-', '');
-      
-      const oldIndex = data.findIndex((r) => r.id === activeId);
-      const newIndex = data.findIndex((r) => r.id === overId);
-      
-      const newItems = arrayMove(data, oldIndex, newIndex);
-      // Update orders in Firestore
-      // For simplicity, we'll just update the moved item's order to be between neighbors
-      const prevItem = newItems[newIndex - 1];
-      const nextItem = newItems[newIndex + 1];
+      const overRowData = data.find(r => r.id === overId);
+      if (!activeRowData || !overRowData) return;
+
+      const newParentId = overRowData.parentId || null;
+      const newGroupId = overRowData ? getRowGroupId(overRowData) : (activeRowData ? getRowGroupId(activeRowData) : undefined);
+
+      // Build ordered list of currently visible rows in DOM to detect direction
+      const orderedIds: string[] = [];
+      const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
+      const visibleData = data.filter(r => rowMatchesStatus(r));
+      for (const group of groups) {
+        const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
+        for (const row of groupRows) {
+          orderedIds.push(row.id);
+          if (expandedIds.has(row.id)) {
+            const subRows = visibleData.filter((sub: any) => sub.parentId === row.id);
+            for (const sub of subRows) {
+              orderedIds.push(sub.id);
+            }
+          }
+        }
+      }
+
+      const flatActiveIdx = orderedIds.indexOf(activeId);
+      const flatOverIdx = orderedIds.indexOf(overId);
+
+      // Find siblings at target location (excluding the active row itself)
+      const siblings = data
+        .filter(r => (r.parentId || null) === (newParentId || null) && getRowGroupId(r) === newGroupId && r.id !== activeId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+      const overIdx = siblings.findIndex(r => r.id === overId);
       let newOrder = 0;
-      if (!prevItem && nextItem) newOrder = (nextItem.order || 0) - 1;
-      else if (prevItem && !nextItem) newOrder = (prevItem.order || 0) + 1;
-      else if (prevItem && nextItem) newOrder = ((prevItem.order || 0) + (nextItem.order || 0)) / 2;
-      
-      await handleUpdateRow(activeId, { order: newOrder });
+
+      if (overIdx !== -1) {
+        const dragDown = flatActiveIdx !== -1 && flatOverIdx !== -1 && flatActiveIdx < flatOverIdx;
+        let prevSibling = null;
+        let nextSibling = null;
+
+        if (dragDown) {
+          prevSibling = overRowData;
+          nextSibling = overIdx + 1 < siblings.length ? siblings[overIdx + 1] : null;
+        } else {
+          prevSibling = overIdx - 1 >= 0 ? siblings[overIdx - 1] : null;
+          nextSibling = overRowData;
+        }
+
+        if (!prevSibling && nextSibling) {
+          newOrder = (nextSibling.order || 0) - 1;
+        } else if (prevSibling && !nextSibling) {
+          newOrder = (prevSibling.order || 0) + 1;
+        } else if (prevSibling && nextSibling) {
+          newOrder = ((prevSibling.order || 0) + (nextSibling.order || 0)) / 2;
+        }
+      } else {
+        const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(r => r.order || 0)) : 0;
+        newOrder = maxOrder + 1;
+      }
+
+      // Feature 3: Multi-drag — move all selected rows to same destination
+      if (selectedRowIds.has(activeId) && selectedRowIds.size > 1) {
+        await handleUpdateRow(activeId, { 
+          order: newOrder, 
+          parentId: newParentId,
+          ...(newGroupId ? { groupId: newGroupId } : {})
+        });
+        const otherIds = Array.from(selectedRowIds).filter(id => id !== activeId);
+        for (let i = 0; i < otherIds.length; i++) {
+          const otherId = otherIds[i];
+          const otherRowData = data.find(r => r.id === otherId);
+          if (otherRowData) {
+            await handleUpdateRow(otherId, {
+              order: newOrder + (i + 1) * 0.001,
+              parentId: newParentId,
+              ...(newGroupId ? { groupId: newGroupId } : {})
+            });
+          }
+        }
+        return;
+      }
+
+      await handleUpdateRow(activeId, { 
+        order: newOrder,
+        parentId: newParentId,
+        ...(newGroupId ? { groupId: newGroupId } : {})
+      });
     } else if (String(active.id).startsWith('group-sortable-')) {
       const activeId = String(active.id).replace('group-sortable-', '');
       const overId = String(over.id).replace('group-sortable-', '');
-      
-      const oldIndex = groups.findIndex((g) => g.id === activeId);
-      const newIndex = groups.findIndex((g) => g.id === overId);
+
+      const oldIndex = groups.findIndex(g => g.id === activeId);
+      const newIndex = groups.findIndex(g => g.id === overId);
       if (oldIndex !== -1 && newIndex !== -1) {
         const newGroups = arrayMove(groups, oldIndex, newIndex);
         setRawGroups(newGroups);
-        
         try {
           if (isDefaultGroups) {
             for (let i = 0; i < newGroups.length; i++) {
-              await createGroupWithId(newGroups[i].id, {
-                name: newGroups[i].name,
-                workspace: projectType,
-                order: i
-              });
+              await createGroupWithId(newGroups[i].id, { name: newGroups[i].name, workspace: projectType, order: i });
             }
           } else {
             for (let i = 0; i < newGroups.length; i++) {
@@ -1384,9 +1635,9 @@ export default function WorkspaceProjectView({
         }
       }
     } else {
-      setColumns((items) => {
-        const oldIndex = items.findIndex((col) => col.id === active.id);
-        const newIndex = items.findIndex((col) => col.id === over.id);
+      setColumns(items => {
+        const oldIndex = items.findIndex(col => col.id === active.id);
+        const newIndex = items.findIndex(col => col.id === over.id);
         return arrayMove(items, oldIndex, newIndex);
       });
     }
@@ -1703,8 +1954,15 @@ export default function WorkspaceProjectView({
             {isAddingGroup ? 'Adding...' : 'Add Group'}
           </button>
         </div>
-      </div>      <div className="flex-grow px-6 pb-6 overflow-auto">
-        <DndContext id="websites-dnd-context" sensors={sensors} collisionDetection={closestCenter} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+      </div>      <div className="flex-grow px-6 pb-6 overflow-auto">
+        <DndContext id="websites-dnd-context" sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => {
+            // Clear any stale nest state when a new drag starts
+            if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
+            if (nestClearTimerRef.current) { clearTimeout(nestClearTimerRef.current); nestClearTimerRef.current = null; }
+            nestTargetIdRef.current = null;
+            nestLastOverIdRef.current = null;
+            setNestHighlightId(null);
+          }} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
           <SortableContext items={groups.map(g => `group-sortable-${g.id}`)} strategy={verticalListSortingStrategy}>
             {groups.map((group) => {
               const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
@@ -1727,13 +1985,17 @@ export default function WorkspaceProjectView({
                       });
                     }}
                     allowDeletingGroups={allowDeletingGroups}
+                    planNotes={projectType === 'SEO' && group.companyId
+                      ? companies.find(c => c.id === group.companyId)?.seoNotes || undefined
+                      : undefined
+                    }
                   />
                   {!isCollapsed && (
                     <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
                       <table className="w-full border-collapse text-left table-fixed">
                         <thead className="sticky top-0 z-10 shadow-sm">
                           <tr>
-                            <th style={{ width: '70px', minWidth: '70px', maxWidth: '70px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
+                            <th style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
                               <div className="flex items-center pl-1">
                                 <input 
                                   type="checkbox"
@@ -1802,8 +2064,10 @@ export default function WorkspaceProjectView({
                                   }}
                                   subtaskCount={visibleData.filter(r => r.parentId === row.id).length}
                                   isSelected={selectedRowIds.has(row.id)}
-                                  onToggleSelect={() => handleToggleSelectRow(row.id)}
+                                  onToggleSelect={(shiftKey?: boolean) => handleToggleSelectRow(row.id, shiftKey)}
                                   onCommentsClick={handleCommentsButtonClick}
+                                  isNestTarget={nestHighlightId === row.id}
+                                  selectedCount={selectedRowIds.size}
                                 />
                                 {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
                                   <SortableRow 
@@ -1821,9 +2085,11 @@ export default function WorkspaceProjectView({
                                       e.preventDefault();
                                       setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
                                     }}
-                                    isSelected={false}
-                                    onToggleSelect={undefined}
+                                    isSelected={selectedRowIds.has(subRow.id)}
+                                    onToggleSelect={(shiftKey?: boolean) => handleToggleSelectRow(subRow.id, shiftKey)}
                                     onCommentsClick={handleCommentsButtonClick}
+                                    isNestTarget={nestHighlightId === subRow.id}
+                                    selectedCount={selectedRowIds.size}
                                   />
                                 ))}
                               </React.Fragment>
