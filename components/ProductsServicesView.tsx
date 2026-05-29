@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Search, Plus, X, GripVertical, Trash2, Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, Plus, X, GripVertical, Trash2, Upload, Loader2, CheckCircle2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -181,6 +181,25 @@ export default function ProductsServicesView({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+  };
+
   // Form State
   const [formData, setFormData] = useState<Partial<ProductService>>({});
 
@@ -339,11 +358,42 @@ export default function ProductsServicesView({
   };
 
   const filteredItems = useMemo(() => {
-    return products.filter(i => 
+    const list = products.filter(i => 
       i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       i.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [products, searchQuery]);
+
+    if (!sortConfig) return list;
+
+    return [...list].sort((a, b) => {
+      let aVal = '';
+      let bVal = '';
+
+      if (sortConfig.column === 'name') {
+        aVal = a.name;
+        bVal = b.name;
+      } else if (sortConfig.column === 'price') {
+        const numA = Number(a.price.replace(/[$,\s]/g, '')) || 0;
+        const numB = Number(b.price.replace(/[$,\s]/g, '')) || 0;
+        return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+      } else if (sortConfig.column === 'description') {
+        aVal = a.description || '';
+        bVal = b.description || '';
+      } else if (sortConfig.column === 'url') {
+        aVal = a.url || '';
+        bVal = b.url || '';
+      } else if (sortConfig.column === 'sku') {
+        aVal = a.sku || '';
+        bVal = b.sku || '';
+      } else if (sortConfig.column === 'type') {
+        aVal = a.type || '';
+        bVal = b.type || '';
+      }
+
+      const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+  }, [products, searchQuery, sortConfig]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -485,15 +535,63 @@ export default function ProductsServicesView({
           onDragEnd={handleDragEnd}
         >
           <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
-            <thead className="sticky top-0 z-10 shadow-sm">
+            <thead className="sticky top-0 z-10 shadow-sm select-none">
               <tr>
                 <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-                <th className="w-[220px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ITEM</th>
-                <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRICE</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DESCRIPTION</th>
-                <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">URL</th>
-                <th className="w-[100px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">SKU</th>
-                <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">TYPE</th>
+                <th 
+                  onClick={() => handleSort('name')}
+                  className="w-[220px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>ITEM</span>
+                    <SortIcon column="name" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('price')}
+                  className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>PRICE</span>
+                    <SortIcon column="price" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('description')}
+                  className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>DESCRIPTION</span>
+                    <SortIcon column="description" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('url')}
+                  className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>URL</span>
+                    <SortIcon column="url" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('sku')}
+                  className="w-[100px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>SKU</span>
+                    <SortIcon column="sku" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('type')}
+                  className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>TYPE</span>
+                    <SortIcon column="type" />
+                  </div>
+                </th>
                 <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  Search, Plus, ChevronDown, X, Mail, GripVertical, Bell,
+  Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
   FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload
@@ -275,7 +275,9 @@ function SortableGroupSection({
   setEditingGroupColor,
   handleSaveContactGroup,
   isCollapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  sortConfig,
+  onSort
 }: { 
   group: ContactGroup & { contacts: Contact[] }; 
   onImport: () => void;
@@ -295,6 +297,8 @@ function SortableGroupSection({
   handleSaveContactGroup: (id: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: (id: string) => void;
+  sortConfig: { column: string; direction: 'asc' | 'desc' } | null;
+  onSort: (column: string) => void;
 }) {
   const {
     attributes,
@@ -400,29 +404,118 @@ function SortableGroupSection({
           companies={companies} 
           onEmailClick={onEmailClick} 
           onDeleteContact={onDeleteContact} 
+          sortConfig={sortConfig}
+          onSort={onSort}
         />
       )}
     </div>
   );
 }
 
-function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers, companies, onEmailClick, onDeleteContact }: { id: string; contacts: Contact[]; onRowClick: (c: Contact) => void; onUpdateContact: (id: string, field: keyof Contact, value: any) => void; teamMembers: TeamMember[], companies: Company[], onEmailClick: (contact: Contact) => void; onDeleteContact: (id: string) => void }) {
+function DroppableTable({ 
+  id, 
+  contacts, 
+  onRowClick, 
+  onUpdateContact, 
+  teamMembers, 
+  companies, 
+  onEmailClick, 
+  onDeleteContact,
+  sortConfig,
+  onSort
+}: { 
+  id: string; 
+  contacts: Contact[]; 
+  onRowClick: (c: Contact) => void; 
+  onUpdateContact: (id: string, field: keyof Contact, value: any) => void; 
+  teamMembers: TeamMember[], 
+  companies: Company[], 
+  onEmailClick: (contact: Contact) => void; 
+  onDeleteContact: (id: string) => void;
+  sortConfig: { column: string; direction: 'asc' | 'desc' } | null;
+  onSort: (column: string) => void;
+}) {
   const { setNodeRef } = useDroppable({ id });
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+  };
 
   return (
     <SortableContext id={id} items={contacts.map(c => c.id)} strategy={verticalListSortingStrategy}>
       <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left">
-        <thead className="sticky top-0 z-10 shadow-sm">
+        <thead className="sticky top-0 z-10 shadow-sm select-none">
           <tr>
             <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-            <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">FIRST NAME</th>
-            <th className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">LAST NAME</th>
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">TITLE</th>
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PHONE</th>
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
+            <th 
+              onClick={() => onSort('firstName')}
+              className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>FIRST NAME</span>
+                <SortIcon column="firstName" />
+              </div>
+            </th>
+            <th 
+              onClick={() => onSort('lastName')}
+              className="w-[120px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>LAST NAME</span>
+                <SortIcon column="lastName" />
+              </div>
+            </th>
+            <th 
+              onClick={() => onSort('title')}
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>TITLE</span>
+                <SortIcon column="title" />
+              </div>
+            </th>
+            <th 
+              onClick={() => onSort('phone')}
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>PHONE</span>
+                <SortIcon column="phone" />
+              </div>
+            </th>
+            <th 
+              onClick={() => onSort('companyId')}
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>COMPANY</span>
+                <SortIcon column="companyId" />
+              </div>
+            </th>
 
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">EMAIL</th>
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
+            <th 
+              onClick={() => onSort('email')}
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>EMAIL</span>
+                <SortIcon column="email" />
+              </div>
+            </th>
+            <th 
+              onClick={() => onSort('status')}
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>STATUS</span>
+                <SortIcon column="status" />
+              </div>
+            </th>
             <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
           </tr>
         </thead>
@@ -439,6 +532,7 @@ function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers
     </SortableContext>
   );
 }
+
 
 export default function Page() {
   const { user, profile, loading: authLoading, logout: firebaseLogout } = useAuth();
@@ -827,6 +921,16 @@ export default function Page() {
     })
   );
 
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  };
+
   const filteredContacts = useMemo(() => {
     return contacts.filter(c => {
       const company = companies.find(comp => comp.id === c.companyId);
@@ -840,11 +944,53 @@ export default function Page() {
   const contactsByGroup = useMemo(() => {
     const fallbackGroupId = contactGroups[0]?.id || '';
 
-    return contactGroups.map(group => ({
+    const grouped = contactGroups.map(group => ({
       ...group,
       contacts: filteredContacts.filter(contact => (contact.groupId || fallbackGroupId) === group.id),
     }));
-  }, [contactGroups, filteredContacts]);
+
+    if (!sortConfig) return grouped;
+
+    return grouped.map(group => {
+      const sortedContacts = [...group.contacts].sort((a, b) => {
+        let aVal = '';
+        let bVal = '';
+
+        if (sortConfig.column === 'firstName') {
+          aVal = a.firstName;
+          bVal = b.firstName;
+        } else if (sortConfig.column === 'lastName') {
+          aVal = a.lastName;
+          bVal = b.lastName;
+        } else if (sortConfig.column === 'title') {
+          aVal = a.title || '';
+          bVal = b.title || '';
+        } else if (sortConfig.column === 'phone') {
+          aVal = a.phone || '';
+          bVal = b.phone || '';
+        } else if (sortConfig.column === 'companyId') {
+          const compA = companies.find(c => c.id === a.companyId);
+          const compB = companies.find(c => c.id === b.companyId);
+          aVal = compA ? compA.name : '';
+          bVal = compB ? compB.name : '';
+        } else if (sortConfig.column === 'email') {
+          aVal = a.email || '';
+          bVal = b.email || '';
+        } else if (sortConfig.column === 'status') {
+          aVal = a.status || '';
+          bVal = b.status || '';
+        }
+
+        const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      });
+
+      return {
+        ...group,
+        contacts: sortedContacts,
+      };
+    });
+  }, [contactGroups, filteredContacts, sortConfig, companies]);
 
   const handleCreateContactGroup = async () => {
     const colors = ['#D32F2F', '#10B981', '#1061E3', '#8B5CF6', '#F59E0B', '#0D9488'];
@@ -1471,6 +1617,8 @@ export default function Page() {
                       handleSaveContactGroup={handleSaveContactGroup}
                       isCollapsed={collapsedGroups.has(group.id)}
                       onToggleCollapse={toggleGroupCollapse}
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
                     />
                   ))}
                 </SortableContext>

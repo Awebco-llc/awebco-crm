@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Company, Contact, TeamMember, Ticket } from './Shared';
 import { subscribeAllTickets } from '@/lib/crmStore';
+import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 const WORKSPACE_SERVICES: Array<{ key: keyof Company; label: string }> = [
   { key: 'web', label: 'Websites' },
@@ -91,7 +92,57 @@ export default function MyTasksView({
   const activeTickets = assignedTickets.filter(t => !isCompletedStatus(t.status));
   const completedTickets = assignedTickets.filter(t => isCompletedStatus(t.status));
 
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+  };
+
   const displayTickets = activeTab === 'active' ? activeTickets : completedTickets;
+
+  const sortedTickets = useMemo(() => {
+    if (!sortConfig) return displayTickets;
+
+    return [...displayTickets].sort((a, b) => {
+      let aVal = '';
+      let bVal = '';
+
+      if (sortConfig.column === 'projectName') {
+        aVal = a.projectName;
+        bVal = b.projectName;
+      } else if (sortConfig.column === 'workspace') {
+        aVal = a.workspace;
+        bVal = b.workspace;
+      } else if (sortConfig.column === 'status') {
+        aVal = a.status || '';
+        bVal = b.status || '';
+      } else if (sortConfig.column === 'priority') {
+        const priorityWeight: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+        const wA = priorityWeight[(a.priority || '').toLowerCase()] || 0;
+        const wB = priorityWeight[(b.priority || '').toLowerCase()] || 0;
+        return sortConfig.direction === 'asc' ? wA - wB : wB - wA;
+      } else if (sortConfig.column === 'deadline') {
+        aVal = a.deadline || '';
+        bVal = b.deadline || '';
+      }
+
+      const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+  }, [displayTickets, sortConfig]);
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-[#F9FAFB]">
@@ -152,17 +203,57 @@ export default function MyTasksView({
           ) : (
             <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
               <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 z-10 shadow-sm">
+                <thead className="sticky top-0 z-10 shadow-sm select-none">
                   <tr>
-                    <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PROJECT / TASK NAME</th>
-                    <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">WORKSPACE</th>
-                    <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
-                    <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRIORITY</th>
-                    <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEADLINE</th>
+                    <th 
+                      onClick={() => handleSort('projectName')}
+                      className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>PROJECT / TASK NAME</span>
+                        <SortIcon column="projectName" />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('workspace')}
+                      className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>WORKSPACE</span>
+                        <SortIcon column="workspace" />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('status')}
+                      className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>STATUS</span>
+                        <SortIcon column="status" />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('priority')}
+                      className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>PRIORITY</span>
+                        <SortIcon column="priority" />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('deadline')}
+                      className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>DEADLINE</span>
+                        <SortIcon column="deadline" />
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayTickets.map(ticket => {
+                  {sortedTickets.map(ticket => {
                     const isCompleted = isCompletedStatus(ticket.status);
                     const navName = ticket.workspace === 'Support Tickets' ? 'Tickets' : ticket.workspace;
                     const rowId = ticket.id;

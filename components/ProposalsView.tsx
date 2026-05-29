@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft } from 'lucide-react';
+import { Search, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { Company, Contact, TeamMember, ProductService, Proposal, ProposalItem, Deal } from './Shared';
 import { createProposal, updateProposal, deleteProposal } from '@/lib/crmStore';
 
@@ -41,12 +41,59 @@ export default function ProposalsView({
   const [activeView, setActiveView] = useState<'list' | 'edit'>('list');
   const [currentDoc, setCurrentDoc] = useState<Proposal | null>(null);
 
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+  };
+
   const filteredProposals = useMemo(() => {
-    return proposals.filter(p => 
+    const list = proposals.filter(p => 
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       companies.find(c => c.id === p.companyId)?.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [proposals, searchQuery, companies]);
+
+    if (!sortConfig) return list;
+
+    return [...list].sort((a, b) => {
+      let aVal = '';
+      let bVal = '';
+
+      if (sortConfig.column === 'title') {
+        aVal = a.title;
+        bVal = b.title;
+      } else if (sortConfig.column === 'company') {
+        aVal = companies.find(c => c.id === a.companyId)?.name || '';
+        bVal = companies.find(c => c.id === b.companyId)?.name || '';
+      } else if (sortConfig.column === 'date') {
+        aVal = a.date;
+        bVal = b.date;
+      } else if (sortConfig.column === 'total') {
+        const totalA = calculateSubtotal(a.items);
+        const totalB = calculateSubtotal(b.items);
+        return sortConfig.direction === 'asc' ? totalA - totalB : totalB - totalA;
+      } else if (sortConfig.column === 'status') {
+        aVal = a.status;
+        bVal = b.status;
+      }
+
+      const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+  }, [proposals, searchQuery, companies, sortConfig]);
 
   const handleCreateNew = () => {
     setCurrentDoc({
@@ -522,13 +569,53 @@ export default function ProposalsView({
           
           <div className="bg-white border text-left border-[#E2E4E9] rounded-lg shadow-sm">
             <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-10 shadow-sm">
+              <thead className="sticky top-0 z-10 shadow-sm select-none">
                 <tr className="bg-[#F9FAFB] border-b border-[#E2E4E9]">
-                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Title</th>
-                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Company</th>
-                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Date</th>
-                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Total Amount</th>
-                  <th className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide">Status</th>
+                  <th 
+                    onClick={() => handleSort('title')}
+                    className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Title</span>
+                      <SortIcon column="title" />
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('company')}
+                    className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Company</span>
+                      <SortIcon column="company" />
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('date')}
+                    className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Date</span>
+                      <SortIcon column="date" />
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('total')}
+                    className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Total Amount</span>
+                      <SortIcon column="total" />
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('status')}
+                    className="py-3 px-4 sticky top-0 bg-[#F9FAFB] z-10 text-xs font-semibold text-[#8E9299] uppercase tracking-wide cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Status</span>
+                      <SortIcon column="status" />
+                    </div>
+                  </th>
                   <th className="py-3 px-4 w-12 sticky top-0 bg-[#F9FAFB] z-10 border-b border-[#E2E4E9]"></th>
                 </tr>
               </thead>

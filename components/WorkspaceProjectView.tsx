@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -74,7 +74,7 @@ const INITIAL_DATA = [
 
 const SUPPORT_TICKETS_BOARD_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_TICKETS_EMAIL || 'tickets@awebco.com';
 
-function SortableHeader({ column, onDelete, allowDeletingColumns }: { column: Column, onDelete?: (id: string) => void, allowDeletingColumns?: boolean }) {
+function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, onSort }: { column: Column, onDelete?: (id: string) => void, allowDeletingColumns?: boolean, sortConfig: { column: string; direction: 'asc' | 'desc' } | null, onSort: (colId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -90,18 +90,34 @@ function SortableHeader({ column, onDelete, allowDeletingColumns }: { column: Co
   // Core columns cannot be deleted, unless allowDeletingColumns is enabled
   const isDeletable = allowDeletingColumns || !['projectName', 'assignee', 'status', 'updatesCount'].includes(column.id);
 
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+  };
+
   return (
     <th
       ref={setNodeRef}
       style={style}
-      className="sticky top-0 z-10 bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase truncate"
+      onClick={() => onSort(column.id)}
+      className="sticky top-0 z-10 bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase truncate cursor-pointer hover:bg-[#F0F2F5] transition-colors"
     >
       <div className="flex items-center gap-1 justify-between">
-        <div className="flex items-center gap-1">
-          <button {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity text-[#8E9299] hover:text-[#1C1F23]">
+        <div className="flex items-center gap-1 group/th">
+          <button 
+            {...attributes} 
+            {...listeners} 
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity text-[#8E9299] hover:text-[#1C1F23]"
+          >
             <GripHorizontal className="w-3.5 h-3.5" />
           </button>
-          {column.header}
+          <span>{column.header}</span>
+          {column.id !== 'updatesCount' && <SortIcon column={column.id} />}
         </div>
         {isDeletable && onDelete && (
           <button
@@ -1137,8 +1153,18 @@ export default function WorkspaceProjectView({
   });
   const [rawTickets, setRawTickets] = useState<any[]>([]);
 
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  };
+
   const data = React.useMemo(() => {
-    return rawTickets.filter(r => {
+    const filtered = rawTickets.filter(r => {
       if (r.companyId) {
         const company = companies.find(c => c.id === r.companyId);
         if (company && flagKey && company[flagKey] === false) {
@@ -1147,7 +1173,33 @@ export default function WorkspaceProjectView({
       }
       return true;
     });
-  }, [rawTickets, companies, flagKey]);
+
+    if (!sortConfig) return filtered;
+
+    const getAssigneeName = (row: any) => {
+      if (row.assignees && Array.isArray(row.assignees) && row.assignees.length > 0) {
+        return row.assignees.map((id: string) => teamMembers.find(t => t.id === id)?.name || '').join(', ');
+      }
+      return teamMembers.find(t => t.id === row.assignee)?.name || '';
+    };
+
+    return [...filtered].sort((a, b) => {
+      let aVal = '';
+      let bVal = '';
+
+      const colId = sortConfig.column;
+      if (colId === 'assignee') {
+        aVal = getAssigneeName(a);
+        bVal = getAssigneeName(b);
+      } else {
+        aVal = String(a[colId] ?? '');
+        bVal = String(b[colId] ?? '');
+      }
+
+      const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+  }, [rawTickets, companies, flagKey, sortConfig, teamMembers]);
 
   const [rawGroups, setRawGroups] = useState<any[]>([]);
 
@@ -2365,6 +2417,8 @@ export default function WorkspaceProjectView({
                                   column={col}
                                   onDelete={(colId) => setColumns(prev => prev.filter(c => c.id !== colId))}
                                   allowDeletingColumns={allowDeletingColumns}
+                                  sortConfig={sortConfig}
+                                  onSort={handleSort}
                                 />
                               ))}
                             </SortableContext>
