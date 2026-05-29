@@ -170,26 +170,29 @@ interface BillableHoursDropdownProps {
   onChange: (val: string) => void;
   customLabels: string[];
   onCreateLabel: (val: string) => void;
+  isInline?: boolean;
 }
 
-function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel }: BillableHoursDropdownProps) {
+function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, isInline = false }: BillableHoursDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+  
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
+  useEffect(() => {
+    setTempValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
     }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [isOpen]);
+  }, [isEditing]);
 
   const defaultOptions = [
     'No Fee',
@@ -210,152 +213,355 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel }:
   ];
 
   const combined = Array.from(new Set([...defaultOptions, ...customLabels]));
-  const filtered = combined.filter(opt => opt.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = combined.filter(opt => 
+    opt.toLowerCase().includes(tempValue.toLowerCase())
+  );
 
-  return (
-    <div className="relative w-full" ref={containerRef}>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] flex items-center justify-between text-left transition-all hover:border-[#CCCCCC]"
-      >
-        <span className="truncate">{value || 'Select Hours'}</span>
-        <ChevronDown className="w-4 h-4 text-[#8E9299] shrink-0" />
-      </button>
+  const formatLabel = (val: string): string => {
+    const trimmed = val.trim();
+    if (!trimmed) return '';
+    if (!trimmed.toLowerCase().endsWith('/hr') && !trimmed.toLowerCase().endsWith('hr') && !isNaN(Number(trimmed))) {
+      return `${trimmed}/hr`;
+    }
+    return trimmed;
+  };
 
-      {isOpen && (
-        <div 
-          className="absolute left-0 mt-1 w-full min-w-[220px] bg-[#1F2235] border border-[#2C314D] rounded-lg shadow-xl z-[999] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
-        >
-          {/* Selected Option Tag Header */}
-          {value && (
-            <div className="flex flex-wrap gap-1.5 p-2 bg-[#181A2A] border-b border-[#2C314D]">
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-[#0B3C5D] text-[#38BDF8] font-bold">
-                <span>{value}</span>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onChange('');
-                  }}
-                  className="hover:text-white font-bold ml-1 text-sm leading-none"
-                  title="Clear hours"
-                >
-                  &times;
-                </button>
-              </div>
-            </div>
-          )}
+  const saveValue = (rawVal: string) => {
+    const formatted = formatLabel(rawVal);
+    if (formatted) {
+      const isNew = !combined.some(opt => opt.toLowerCase() === formatted.toLowerCase());
+      if (isNew) {
+        onCreateLabel(formatted);
+      }
+      onChange(formatted);
+    } else {
+      onChange('');
+    }
+    setIsOpen(false);
+  };
 
-          {/* Search Box */}
-          <div className="p-2 border-b border-[#2C314D]">
-            <input
-              type="text"
-              placeholder="Find labels"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  const trimmed = searchQuery.trim();
-                  if (trimmed) {
-                    const match = combined.find(o => o.toLowerCase() === trimmed.toLowerCase());
-                    if (match) {
-                      onChange(match);
-                    } else {
-                      let label = trimmed;
-                      if (!label.toLowerCase().endsWith('/hr') && !label.toLowerCase().endsWith('hr') && !isNaN(Number(label))) {
-                        label = `${label}/hr`;
-                      }
-                      onCreateLabel(label);
-                      onChange(label);
-                    }
-                    setSearchQuery('');
-                    setIsOpen(false);
-                  }
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (
+        containerRef.current && !containerRef.current.contains(e.target as Node) &&
+        portalRef.current && !portalRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+        if (isInline) {
+          setIsEditing(false);
+        }
+      }
+    };
+
+    const updatePosition = () => {
+      const el = inputRef.current || containerRef.current;
+      if (isOpen && el) {
+        const rect = el.getBoundingClientRect();
+        setPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+    };
+
+    if (isOpen) {
+      updatePosition();
+      document.addEventListener('mousedown', handleGlobalClick);
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen, isInline]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveValue(tempValue);
+      if (isInline) {
+        setIsEditing(false);
+      }
+      inputRef.current?.blur();
+    } else if (e.key === 'Escape') {
+      setTempValue(value);
+      setIsOpen(false);
+      if (isInline) {
+        setIsEditing(false);
+      }
+      inputRef.current?.blur();
+    }
+  };
+
+  const handleBlur = () => {
+    saveValue(tempValue);
+    if (isInline) {
+      setIsEditing(false);
+    }
+  };
+
+  const portalMenu = isOpen && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={portalRef}
+      onMouseDown={(e) => e.preventDefault()}
+      className="fixed z-[9999] bg-[#1F2235] border border-[#2C314D] rounded-lg shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+      style={{
+        top: position.top,
+        left: position.left,
+        width: position.width,
+        minWidth: '220px'
+      }}
+    >
+      {value && (
+        <div className="flex flex-wrap gap-1.5 p-2 bg-[#181A2A] border-b border-[#2C314D]">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-[#0B3C5D] text-[#38BDF8] font-bold">
+            <span>{value}</span>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setTempValue('');
+                saveValue('');
+                if (isInline) {
+                  setIsEditing(false);
                 }
               }}
-              className="w-full px-2 py-1.5 bg-[#181A2A] text-white text-xs border border-[#2E3456] rounded focus:outline-none focus:border-[#0F83C9] placeholder-[#626C8F]"
-              autoFocus
-            />
-          </div>
-
-          {/* Scrollable Options */}
-          <div className="max-h-[200px] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-slate-700">
-            {/* Create option if query is custom */}
-            {searchQuery.trim() && !combined.some(o => o.toLowerCase() === searchQuery.trim().toLowerCase()) && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  let label = searchQuery.trim();
-                  if (!label.toLowerCase().endsWith('/hr') && !label.toLowerCase().endsWith('hr') && !isNaN(Number(label))) {
-                    label = `${label}/hr`;
-                  }
-                  onCreateLabel(label);
-                  onChange(label);
-                  setSearchQuery('');
-                  setIsOpen(false);
-                }}
-                className="w-full text-left px-3 py-2 rounded text-xs text-[#38BDF8] hover:bg-[#2C314D] font-semibold transition-colors"
-              >
-                + Create label &quot;{searchQuery.trim()}&quot;
-              </button>
-            )}
-
-            {filtered.map(opt => (
-              <button
-                type="button"
-                key={opt}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onChange(opt);
-                  setSearchQuery('');
-                  setIsOpen(false);
-                }}
-                className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors flex items-center justify-between ${
-                  value === opt
-                    ? 'bg-[#2C314D] text-white font-semibold'
-                    : 'text-gray-300 hover:bg-[#2C314D] hover:text-white'
-                }`}
-              >
-                <span>{opt}</span>
-                {value === opt && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]" />
-                )}
-              </button>
-            ))}
-
-            {filtered.length === 0 && !searchQuery.trim() && (
-              <div className="text-center py-4 text-xs text-[#626C8F]">No options found</div>
-            )}
-          </div>
-
-          {/* Bottom helper */}
-          <div className="p-2 border-t border-[#2C314D] text-center bg-[#181A2A]">
-            <span className="text-[10px] text-[#626C8F]">
-              Press enter or click Create to add custom amount
-            </span>
+              className="hover:text-white font-bold ml-1 text-sm leading-none"
+              title="Clear hours"
+            >
+              &times;
+            </button>
           </div>
         </div>
       )}
+
+      <div className="max-h-[200px] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-slate-700">
+        {tempValue.trim() && !combined.some(o => o.toLowerCase() === tempValue.trim().toLowerCase()) && (
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              saveValue(tempValue);
+              if (isInline) {
+                setIsEditing(false);
+              }
+            }}
+            className="w-full text-left px-3 py-2 rounded text-xs text-[#38BDF8] hover:bg-[#2C314D] font-semibold transition-colors border-b border-[#2C314D]/40"
+          >
+            + Create label &quot;{formatLabel(tempValue)}&quot;
+          </button>
+        )}
+
+        {filtered.map(opt => (
+          <button
+            type="button"
+            key={opt}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setTempValue(opt);
+              saveValue(opt);
+              if (isInline) {
+                setIsEditing(false);
+              }
+            }}
+            className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors flex items-center justify-between ${
+              value === opt
+                ? 'bg-[#2C314D] text-white font-semibold'
+                : 'text-gray-300 hover:bg-[#2C314D] hover:text-white'
+            }`}
+          >
+            <span>{opt}</span>
+            {value === opt && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]" />
+            )}
+          </button>
+        ))}
+
+        {filtered.length === 0 && !tempValue.trim() && (
+          <div className="text-center py-4 text-xs text-[#626C8F]">No options found</div>
+        )}
+      </div>
+
+      <div className="p-2 border-t border-[#2C314D] text-center bg-[#181A2A]">
+        <span className="text-[10px] text-[#626C8F]">
+          Press enter or click Create to add custom amount
+        </span>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  if (isInline) {
+    if (!isEditing) {
+      return (
+        <div 
+          className="min-h-[20px] min-w-[50px] truncate hover:bg-gray-100/80 rounded px-1 -mx-1 transition-colors cursor-text flex items-center justify-between group/cell"
+          title={value ? `${value} (Click to edit)` : 'Click to edit'}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsEditing(true);
+            setIsOpen(true);
+          }}
+        >
+          <span>{value || '-'}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-[#8E9299] opacity-0 group-hover/cell:opacity-100 transition-opacity shrink-0 ml-1" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full h-full flex items-center relative" ref={containerRef}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={tempValue}
+          onChange={(e) => {
+            setTempValue(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          className="w-full px-1.5 py-0.5 text-[13px] border border-[#1061E3] rounded outline-none bg-white text-[#1C1F23] focus:ring-1 focus:ring-[#1061E3] font-medium"
+        />
+        {portalMenu}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <div className="relative flex items-center w-full">
+        <input
+          ref={inputRef}
+          type="text"
+          value={tempValue}
+          onChange={(e) => {
+            setTempValue(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          placeholder="Select or type hours"
+          className="w-full pl-3 pr-10 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
+        />
+        <div className="absolute right-2 flex items-center gap-1">
+          {value && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setTempValue('');
+                saveValue('');
+              }}
+              className="text-[#8E9299] hover:text-[#1C1F23] p-1 font-bold text-sm leading-none"
+              title="Clear"
+            >
+              &times;
+            </button>
+          )}
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              if (isOpen) {
+                setIsOpen(false);
+              } else {
+                setIsOpen(true);
+                setTimeout(() => inputRef.current?.focus(), 0);
+              }
+            }}
+            className="text-[#8E9299] hover:text-[#1C1F23] p-1 flex items-center justify-center"
+          >
+            <ChevronDown className="w-4 h-4 shrink-0" />
+          </button>
+        </div>
+      </div>
+
+      {portalMenu}
     </div>
   );
 }
 
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTempValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setIsEditing(false);
+      if (tempValue !== value) {
+        onSave(tempValue);
+      }
+    } else if (e.key === 'Escape') {
+      setTempValue(value);
+      setIsEditing(false);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (tempValue !== value) {
+      onSave(tempValue);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div 
+        className="w-full h-full flex items-center" 
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={tempValue || ''}
+          onChange={(e) => setTempValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          className="w-full px-1.5 py-0.5 text-[13px] border border-[#1061E3] rounded outline-none bg-white text-[#1C1F23] focus:ring-1 focus:ring-[#1061E3] font-medium"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-[20px] min-w-[50px] truncate" title={value || ''}>
+    <div 
+      className="min-h-[20px] min-w-[50px] truncate hover:bg-gray-100/80 rounded px-1 -mx-1 transition-colors cursor-text" 
+      title={value ? `${value} (Click to edit)` : 'Click to edit'}
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsEditing(true);
+      }}
+    >
       {renderValue ? renderValue(value) : (value || '-')}
     </div>
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0 }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -493,23 +699,39 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                 onUpdate(row.id, { [col.id]: newVal });
               }} 
             />
-          ) : col.id === 'url' ? (
+          ) : col.id === 'billableHours' ? (
             <div onClick={(e) => e.stopPropagation()}>
-              {row[col.id] ? (
-                <a
-                  href={/^https?:\/\//i.test(row[col.id]) ? row[col.id] : `https://${row[col.id]}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={row[col.id]}
-                  className="flex items-center gap-1 text-[#1061E3] hover:text-blue-800 hover:underline font-medium truncate max-w-[180px] transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{row[col.id].replace(/^https?:\/\//i, '')}</span>
-                </a>
-              ) : (
-                <span className="text-[#C8CDD5] text-xs">—</span>
-              )}
+              <BillableHoursDropdown 
+                value={row[col.id] || ''}
+                onChange={(newVal) => onUpdate(row.id, { [col.id]: newVal })}
+                customLabels={customBillableHours || []}
+                onCreateLabel={onCreateBillableHour}
+                isInline={true}
+              />
             </div>
+          ) : col.id === 'url' ? (
+            <EditableCell
+              value={row[col.id] || ''}
+              onSave={(newVal) => {
+                onUpdate(row.id, { [col.id]: newVal });
+              }}
+              renderValue={(v) => {
+                if (!v) return <span className="text-[#C8CDD5] text-xs">—</span>;
+                const url = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+                return (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 text-[#1061E3] hover:text-blue-800 hover:underline font-medium truncate max-w-[180px] transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{v.replace(/^https?:\/\//i, '')}</span>
+                  </a>
+                );
+              }}
+            />
           ) : (
             <div className={`flex items-center gap-2 ${col.id === 'projectName' && isSubRow ? 'pl-6' : ''}`}>
               {col.id === 'projectName' && !isSubRow && (
@@ -2068,6 +2290,8 @@ export default function WorkspaceProjectView({
                                   onCommentsClick={handleCommentsButtonClick}
                                   isNestTarget={nestHighlightId === row.id}
                                   selectedCount={selectedRowIds.size}
+                                  customBillableHours={customBillableHours}
+                                  onCreateBillableHour={handleCreateBillableHour}
                                 />
                                 {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
                                   <SortableRow 
@@ -2090,6 +2314,8 @@ export default function WorkspaceProjectView({
                                     onCommentsClick={handleCommentsButtonClick}
                                     isNestTarget={nestHighlightId === subRow.id}
                                     selectedCount={selectedRowIds.size}
+                                    customBillableHours={customBillableHours}
+                                    onCreateBillableHour={handleCreateBillableHour}
                                   />
                                 ))}
                               </React.Fragment>

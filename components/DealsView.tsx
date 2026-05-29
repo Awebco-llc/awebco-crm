@@ -53,8 +53,69 @@ const DEAL_STATUSES = [
 ];
 
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    setTempValue(value);
+  }, [value]);
+
+  React.useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setIsEditing(false);
+      if (tempValue !== value) {
+        onSave(tempValue);
+      }
+    } else if (e.key === 'Escape') {
+      setTempValue(value);
+      setIsEditing(false);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (tempValue !== value) {
+      onSave(tempValue);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div 
+        className="w-full h-full flex items-center" 
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={tempValue || ''}
+          onChange={(e) => setTempValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          className="w-full px-1.5 py-0.5 text-[13px] border border-[#1061E3] rounded outline-none bg-white text-[#1C1F23] focus:ring-1 focus:ring-[#1061E3] font-medium"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-[20px] truncate" title={value || ''}>
+    <div 
+      className="min-h-[20px] truncate hover:bg-gray-100/80 rounded px-1 -mx-1 transition-colors cursor-text" 
+      title={value ? `${value} (Click to edit)` : 'Click to edit'}
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsEditing(true);
+      }}
+    >
       {renderValue ? renderValue(value) : (value || '-')}
     </div>
   );
