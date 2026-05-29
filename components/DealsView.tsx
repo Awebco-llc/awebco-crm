@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload } from 'lucide-react';
+import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
 import { createDeal, updateDeal, deleteDeal } from '@/lib/crmStore';
@@ -100,7 +100,7 @@ function EditableStatus({ value, onSave }: { value: string, onSave: (val: string
   );
 }
 
-function SortableRow({ deal, onClick, onUpdate, teamMembers, companies, contacts, onDelete, isFaded = false }: { deal: Deal; onClick: () => void; onUpdate: (id: string, field: keyof Deal, value: any) => void; teamMembers: TeamMember[]; companies: Company[]; contacts: Contact[]; onDelete: (id: string) => void; isFaded?: boolean }) {
+function SortableRow({ deal, onClick, onUpdate, teamMembers, companies, contacts, onDelete, isFaded = false, visibleColumns }: { deal: Deal; onClick: () => void; onUpdate: (id: string, field: keyof Deal, value: any) => void; teamMembers: TeamMember[]; companies: Company[]; contacts: Contact[]; onDelete: (id: string) => void; isFaded?: boolean; visibleColumns: string[] }) {
   const {
     attributes,
     listeners,
@@ -123,39 +123,55 @@ function SortableRow({ deal, onClick, onUpdate, teamMembers, companies, contacts
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={deal.name} onSave={v => onUpdate(deal.id, 'name', v)} renderValue={v => <strong>{v}</strong>} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableSelect value={deal.currentStep} options={DEAL_STEPS} onSave={v => onUpdate(deal.id, 'currentStep', v)} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableStatus value={deal.status} onSave={v => onUpdate(deal.id, 'status', v)} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <AssigneeDropdown value={deal.assignedToId} onSave={v => onUpdate(deal.id, 'assignedToId', v)} teamMembers={teamMembers} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={deal.value} onSave={v => onUpdate(deal.id, 'value', v)} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <div className="min-h-[20px] truncate">
-          {companies.find(c => c.id === deal.companyId)?.name || '-'}
-        </div>
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <div className="min-h-[20px] truncate">
-          {(() => {
-            const contact = contacts.find(c => c.id === deal.contactId);
-            return contact ? `${contact.firstName} ${contact.lastName}` : '-';
-          })()}
-        </div>
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <div className="truncate max-w-[150px]" title={deal.notes && deal.notes.length > 0 ? deal.notes[deal.notes.length - 1].text : ''}>
-          {deal.notes && deal.notes.length > 0 ? deal.notes[deal.notes.length - 1].text : '-'}
-        </div>
-      </td>
+      {visibleColumns.includes('name') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableCell value={deal.name} onSave={v => onUpdate(deal.id, 'name', v)} renderValue={v => <strong>{v}</strong>} />
+        </td>
+      )}
+      {visibleColumns.includes('currentStep') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableSelect value={deal.currentStep} options={DEAL_STEPS} onSave={v => onUpdate(deal.id, 'currentStep', v)} />
+        </td>
+      )}
+      {visibleColumns.includes('status') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableStatus value={deal.status} onSave={v => onUpdate(deal.id, 'status', v)} />
+        </td>
+      )}
+      {visibleColumns.includes('assignedToId') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <AssigneeDropdown value={deal.assignedToId} onSave={v => onUpdate(deal.id, 'assignedToId', v)} teamMembers={teamMembers} />
+        </td>
+      )}
+      {visibleColumns.includes('value') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableCell value={deal.value} onSave={v => onUpdate(deal.id, 'value', v)} />
+        </td>
+      )}
+      {visibleColumns.includes('companyId') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <div className="min-h-[20px] truncate">
+            {companies.find(c => c.id === deal.companyId)?.name || '-'}
+          </div>
+        </td>
+      )}
+      {visibleColumns.includes('contactId') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <div className="min-h-[20px] truncate">
+            {(() => {
+              const contact = contacts.find(c => c.id === deal.contactId);
+              return contact ? `${contact.firstName} ${contact.lastName}` : '-';
+            })()}
+          </div>
+        </td>
+      )}
+      {visibleColumns.includes('notes') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <div className="truncate max-w-[150px]" title={deal.notes && deal.notes.length > 0 ? deal.notes[deal.notes.length - 1].text : ''}>
+            {deal.notes && deal.notes.length > 0 ? deal.notes[deal.notes.length - 1].text : '-'}
+          </div>
+        </td>
+      )}
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(deal.id); }}
@@ -183,6 +199,7 @@ export default function DealsView({
   currentUserName,
   currentUserId,
   onMention,
+  allowDeletingColumns = false,
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -193,11 +210,153 @@ export default function DealsView({
   setProposals: React.Dispatch<React.SetStateAction<Proposal[]>>,
   currentUserName: string,
   currentUserId?: string,
-  onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void
+  onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void,
+  allowDeletingColumns?: boolean,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
+
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'currentStep', 'status', 'assignedToId', 'value', 'companyId', 'contactId', 'notes']);
+
+  const renderTableHeaders = () => {
+    return (
+      <thead className="sticky top-0 z-10 shadow-sm select-none">
+        <tr>
+          <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
+          {visibleColumns.includes('name') && (
+            <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>DEAL NAME</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'name')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          {visibleColumns.includes('currentStep') && (
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>CURRENT STEP</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'currentStep')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          {visibleColumns.includes('status') && (
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>STATUS</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'status')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          {visibleColumns.includes('assignedToId') && (
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>ASSIGNED</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'assignedToId')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          {visibleColumns.includes('value') && (
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>DEAL VALUE</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'value')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          {visibleColumns.includes('companyId') && (
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>COMPANY</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'companyId')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          {visibleColumns.includes('contactId') && (
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>CONTACT</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'contactId')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          {visibleColumns.includes('notes') && (
+            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+              <div className="flex items-center justify-between gap-1">
+                <span>NOTES</span>
+                {allowDeletingColumns && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'notes')); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </th>
+          )}
+          <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
+        </tr>
+      </thead>
+    );
+  };
 
   // Form State
   const [formData, setFormData] = useState<Partial<Deal>>({});
@@ -402,6 +561,16 @@ export default function DealsView({
           />
         </div>
         <div className="flex gap-3">
+          {visibleColumns.length < 8 && (
+            <button
+              type="button"
+              onClick={() => setVisibleColumns(['name', 'currentStep', 'status', 'assignedToId', 'value', 'companyId', 'contactId', 'notes'])}
+              className="px-3 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1061E3] hover:bg-blue-50 transition-all flex items-center gap-1.5 active:scale-95 select-none"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Reset Columns
+            </button>
+          )}
           <button 
             onClick={() => setIsImportModalOpen(true)}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors flex items-center gap-2"
@@ -440,20 +609,7 @@ export default function DealsView({
             <span className="text-[#8E9299] text-[13px]">({activeDeals.length})</span>
           </div>
           <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
-            <thead className="sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-                <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEAL NAME</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CURRENT STEP</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEAL VALUE</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CONTACT</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NOTES</th>
-                <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-              </tr>
-            </thead>
+            {renderTableHeaders()}
             <tbody className="min-h-[50px]">
               <SortableContext 
                 items={activeDeals.map(d => d.id)}
@@ -461,7 +617,7 @@ export default function DealsView({
               >
                 {activeDeals.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No active deals found.</td>
+                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No active deals found.</td>
                   </tr>
                 ) : activeDeals.map(deal => (
                   <SortableRow 
@@ -473,6 +629,7 @@ export default function DealsView({
                     companies={companies}
                     contacts={contacts}
                     onDelete={handleDeleteDeal}
+                    visibleColumns={visibleColumns}
                   />
                 ))}
               </SortableContext>
@@ -486,20 +643,7 @@ export default function DealsView({
             <span className="text-[#8E9299] text-[13px]">({wonDeals.length})</span>
           </div>
           <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
-            <thead className="sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-                <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEAL NAME</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CURRENT STEP</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEAL VALUE</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CONTACT</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NOTES</th>
-                <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-              </tr>
-            </thead>
+            {renderTableHeaders()}
             <tbody className="min-h-[50px]">
               <SortableContext 
                 items={wonDeals.map(d => d.id)}
@@ -507,7 +651,7 @@ export default function DealsView({
               >
                 {wonDeals.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No won deals found.</td>
+                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No won deals found.</td>
                   </tr>
                 ) : wonDeals.map(deal => (
                   <SortableRow 
@@ -519,6 +663,7 @@ export default function DealsView({
                     companies={companies}
                     contacts={contacts}
                     onDelete={handleDeleteDeal}
+                    visibleColumns={visibleColumns}
                   />
                 ))}
               </SortableContext>
@@ -532,20 +677,7 @@ export default function DealsView({
             <span className="text-[#8E9299] text-[13px]">({lostDeals.length})</span>
           </div>
           <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
-            <thead className="sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-                <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEAL NAME</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CURRENT STEP</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DEAL VALUE</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">CONTACT</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">NOTES</th>
-                <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-              </tr>
-            </thead>
+            {renderTableHeaders()}
             <tbody className="min-h-[50px]">
               <SortableContext 
                 items={lostDeals.map(d => d.id)}
@@ -553,7 +685,7 @@ export default function DealsView({
               >
                 {lostDeals.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No lost deals found.</td>
+                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No lost deals found.</td>
                   </tr>
                 ) : lostDeals.map(deal => (
                   <SortableRow 
@@ -566,6 +698,7 @@ export default function DealsView({
                     contacts={contacts}
                     onDelete={handleDeleteDeal}
                     isFaded={true}
+                    visibleColumns={visibleColumns}
                   />
                 ))}
               </SortableContext>

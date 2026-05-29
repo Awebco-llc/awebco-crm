@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink } from 'lucide-react';
+import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink, Filter, ChevronDown, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
 import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket } from '@/lib/crmStore';
@@ -49,7 +49,7 @@ function getAvatarColor(name?: string) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, contacts, onDelete }: { company: Company; onClick: () => void; onUpdate: (id: string, field: keyof Company, value: any) => void; toggleService: (e: React.MouseEvent, id: string, field: keyof Company) => void; teamMembers: TeamMember[]; contacts: Contact[]; onDelete: (id: string) => void }) {
+function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, contacts, onDelete, visibleColumns }: { company: Company; onClick: () => void; onUpdate: (id: string, field: keyof Company, value: any) => void; toggleService: (e: React.MouseEvent, id: string, field: keyof Company) => void; teamMembers: TeamMember[]; contacts: Contact[]; onDelete: (id: string) => void; visibleColumns: string[] }) {
   const {
     attributes,
     listeners,
@@ -72,67 +72,90 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={company.name} onSave={v => onUpdate(company.id, 'name', v)} renderValue={v => <strong>{v}</strong>} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell 
-          value={company.domain} 
-          onSave={v => onUpdate(company.id, 'domain', v)} 
-          renderValue={v => {
-            if (!v) return '-';
-            const url = v.startsWith('http://') || v.startsWith('https://') ? v : `https://${v}`;
-            return (
-              <a 
-                href={url} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                onClick={e => e.stopPropagation()} 
-                className="text-[#1061E3] hover:underline inline-flex items-center gap-1 group/link"
-              >
-                <span>{v}</span>
-                <ExternalLink className="w-3.5 h-3.5 text-[#1061E3] opacity-60 group-hover/link:opacity-100 transition-opacity shrink-0" />
-              </a>
-            );
-          }}
-        />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={company.industry} onSave={v => onUpdate(company.id, 'industry', v)} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <ContactDropdown value={company.primaryContactId || ''} onSave={v => onUpdate(company.id, 'primaryContactId', v)} contacts={contacts} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={company.phone} onSave={v => onUpdate(company.id, 'phone', v)} />
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'web')}>
-        {company.web && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'seo')}>
-        {company.seo && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'll')}>
-        {company.ll && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'ppc')}>
-        {company.ppc && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'smm')}>
-        {company.smm && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'sma')}>
-        {company.sma && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'em')}>
-        {company.em && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'dp')}>
-        {company.dp && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
-      </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <AssigneeDropdown value={company.assignedToId} onSave={v => onUpdate(company.id, 'assignedToId', v)} teamMembers={teamMembers} />
-      </td>
+      {visibleColumns.includes('name') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableCell value={company.name} onSave={v => onUpdate(company.id, 'name', v)} renderValue={v => <strong>{v}</strong>} />
+        </td>
+      )}
+      {visibleColumns.includes('domain') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableCell 
+            value={company.domain} 
+            onSave={v => onUpdate(company.id, 'domain', v)} 
+            renderValue={v => {
+              if (!v) return '-';
+              const url = v.startsWith('http://') || v.startsWith('https://') ? v : `https://${v}`;
+              return (
+                <a 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  onClick={e => e.stopPropagation()} 
+                  className="text-[#1061E3] hover:underline inline-flex items-center gap-1 group/link"
+                >
+                  <span>{v}</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-[#1061E3] opacity-60 group-hover/link:opacity-100 transition-opacity shrink-0" />
+                </a>
+              );
+            }}
+          />
+        </td>
+      )}
+      {visibleColumns.includes('industry') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableCell value={company.industry} onSave={v => onUpdate(company.id, 'industry', v)} />
+        </td>
+      )}
+      {visibleColumns.includes('primaryContactId') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <ContactDropdown value={company.primaryContactId || ''} onSave={v => onUpdate(company.id, 'primaryContactId', v)} contacts={contacts} />
+        </td>
+      )}
+      {visibleColumns.includes('phone') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableCell value={company.phone} onSave={v => onUpdate(company.id, 'phone', v)} />
+        </td>
+      )}
+      {visibleColumns.includes('web') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'web')}>
+          {company.web && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
+      {visibleColumns.includes('seo') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'seo')}>
+          {company.seo && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
+      {visibleColumns.includes('ll') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'll')}>
+          {company.ll && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
+      {visibleColumns.includes('ppc') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'ppc')}>
+          {company.ppc && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
+      {visibleColumns.includes('smm') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'smm')}>
+          {company.smm && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
+      {visibleColumns.includes('sma') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'sma')}>
+          {company.sma && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
+      {visibleColumns.includes('em') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'em')}>
+          {company.em && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
+      {visibleColumns.includes('dp') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-center" onClick={(e) => toggleService(e, company.id, 'dp')}>
+          {company.dp && <Check className="w-4 h-4 text-[#10B981] mx-auto" />}
+        </td>
+      )}
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(company.id); }}
@@ -160,11 +183,17 @@ const PLANS_CONFIG = [
 
 type CompanyProfileTab = 'details' | 'description' | 'plans' | 'updates' | 'proposals';
 
-export default function CompaniesView({ teamMembers, companies, setCompanies, contacts, proposals }: { teamMembers: TeamMember[], companies: Company[], setCompanies: React.Dispatch<React.SetStateAction<Company[]>>, contacts: Contact[], proposals: Proposal[] }) {
+export default function CompaniesView({ teamMembers, companies, setCompanies, contacts, proposals, allowDeletingColumns = false }: { teamMembers: TeamMember[], companies: Company[], setCompanies: React.Dispatch<React.SetStateAction<Company[]>>, contacts: Contact[], proposals: Proposal[], allowDeletingColumns?: boolean }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CompanyProfileTab>('details');
+
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [serviceFilterMode, setServiceFilterMode] = useState<'all' | 'any'>('all');
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em', 'dp']);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Company>>({});
@@ -181,12 +210,25 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [confirmAction, setConfirmAction] = useState<{id: string, field: keyof Company} | null>(null);
 
   const filteredCompanies = useMemo(() => {
-    return companies.filter(c => 
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.industry.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [companies, searchQuery]);
+    return companies.filter(c => {
+      const matchesSearch = 
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.industry.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      if (!matchesSearch) return false;
+
+      if (selectedServices.length > 0) {
+        if (serviceFilterMode === 'all') {
+          return selectedServices.every(service => !!c[service as keyof Company]);
+        } else {
+          return selectedServices.some(service => !!c[service as keyof Company]);
+        }
+      }
+
+      return true;
+    });
+  }, [companies, searchQuery, selectedServices, serviceFilterMode]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -507,17 +549,134 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
       <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
-          <Search className="w-4 h-4 text-[#8E9299]" />
-          <input 
-            type="text"
-            placeholder="Search Companies..."
-            className="bg-transparent border-none outline-none text-sm w-full text-[#1C1F23] placeholder:text-[#8E9299]"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="flex items-center gap-3">
+          <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+            <Search className="w-4 h-4 text-[#8E9299]" />
+            <input 
+              type="text"
+              placeholder="Search Companies..."
+              className="bg-transparent border-none outline-none text-sm w-full text-[#1C1F23] placeholder:text-[#8E9299]"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {/* Service Filter Popover Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsFilterDropdownOpen(prev => !prev)}
+              className={`px-3 py-2 rounded-md text-sm font-semibold cursor-pointer border flex items-center gap-2 transition-all duration-200 select-none ${
+                selectedServices.length > 0
+                  ? 'border-blue-500 bg-blue-50/50 text-[#1061E3] hover:bg-blue-50'
+                  : 'border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-[#F0F2F5]'
+              }`}
+            >
+              <Filter className={`w-4 h-4 ${selectedServices.length > 0 ? 'text-[#1061E3]' : 'text-[#8E9299]'}`} />
+              <span>Filter Services</span>
+              {selectedServices.length > 0 && (
+                <span className="bg-[#1061E3] text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {selectedServices.length}
+                </span>
+              )}
+              <ChevronDown className="w-4 h-4 text-[#8E9299]" />
+            </button>
+
+            <AnimatePresence>
+              {isFilterDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsFilterDropdownOpen(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-0 mt-2 z-50 w-64 bg-white border border-[#E2E4E9] rounded-xl shadow-xl overflow-hidden p-3 flex flex-col gap-2.5"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
+                      <span className="text-xs font-bold text-[#1C1F23] uppercase tracking-wider">Filter Services</span>
+                      {selectedServices.length > 0 && (
+                        <button 
+                          type="button"
+                          onClick={() => setSelectedServices([])}
+                          className="text-xs font-semibold text-[#1061E3] hover:text-blue-700 hover:underline"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Mode Selector */}
+                    <div className="flex bg-[#F0F2F5] p-0.5 rounded-lg text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setServiceFilterMode('all')}
+                        className={`flex-1 py-1 rounded-md text-center transition-all ${
+                          serviceFilterMode === 'all' 
+                            ? 'bg-white text-[#1C1F23] shadow-sm font-bold' 
+                            : 'text-[#4A4D53] hover:text-[#1C1F23]'
+                        }`}
+                      >
+                        Match All (AND)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setServiceFilterMode('any')}
+                        className={`flex-1 py-1 rounded-md text-center transition-all ${
+                          serviceFilterMode === 'any' 
+                            ? 'bg-white text-[#1C1F23] shadow-sm font-bold' 
+                            : 'text-[#4A4D53] hover:text-[#1C1F23]'
+                        }`}
+                      >
+                        Match Any (OR)
+                      </button>
+                    </div>
+
+                    {/* Services List */}
+                    <div className="flex flex-col gap-0.5 max-h-60 overflow-y-auto pr-1">
+                      {PLANS_CONFIG.map(plan => {
+                        const isChecked = selectedServices.includes(plan.field);
+                        return (
+                          <button
+                            key={plan.field}
+                            type="button"
+                            onClick={() => {
+                              setSelectedServices(prev => 
+                                isChecked 
+                                  ? prev.filter(f => f !== plan.field)
+                                  : [...prev, plan.field]
+                              );
+                            }}
+                            className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
+                              isChecked 
+                                ? 'bg-blue-50 text-[#1061E3]' 
+                                : 'hover:bg-[#F0F2F5] text-[#4A4D53]'
+                            }`}
+                          >
+                            <span>{plan.name}</span>
+                            {isChecked && <Check className="w-3.5 h-3.5 text-[#1061E3]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
+
         <div className="flex gap-3">
+          {visibleColumns.length < 13 && (
+            <button
+              type="button"
+              onClick={() => setVisibleColumns(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em', 'dp'])}
+              className="px-3 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1061E3] hover:bg-blue-50 transition-all flex items-center gap-1.5 active:scale-95 select-none"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Reset Columns
+            </button>
+          )}
           <button 
             onClick={openAddModal}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -529,10 +688,42 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       </header>
 
       {/* View Header */}
-      <div className="p-6 shrink-0">
-        <div className="flex items-center justify-between mb-4">
+      <div className="p-6 shrink-0 pb-2">
+        <div className="flex items-center justify-between">
           <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">Companies</h1>
         </div>
+
+        {/* Active Filters */}
+        {selectedServices.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <span className="text-xs font-semibold text-[#8E9299]">Active Filters:</span>
+            {selectedServices.map(serviceKey => {
+              const plan = PLANS_CONFIG.find(p => p.field === serviceKey);
+              return (
+                <div 
+                  key={serviceKey}
+                  className="bg-blue-50 border border-blue-100 rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-semibold text-[#1061E3]"
+                >
+                  <span>{plan?.name || serviceKey}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedServices(prev => prev.filter(f => f !== serviceKey))}
+                    className="hover:bg-blue-100 p-0.5 rounded-full text-blue-400 hover:text-[#1061E3] transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setSelectedServices([])}
+              className="text-xs font-semibold text-[#D32F2F] hover:text-red-700 hover:underline ml-1"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table Container */}
@@ -546,20 +737,214 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
             <thead className="sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
-                <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY NAME</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">DOMAIN</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">INDUSTRY</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PRIMARY CONTACT</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PHONE</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">WEB</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SEO</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">LL</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">PPC</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SMM</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">SMA</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">EM</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center">DP</th>
-                <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
+                {visibleColumns.includes('name') && (
+                  <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>COMPANY NAME</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'name')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('domain') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>DOMAIN</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'domain')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('industry') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>INDUSTRY</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'industry')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('primaryContactId') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>PRIMARY CONTACT</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'primaryContactId')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('phone') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>PHONE</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'phone')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('web') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>WEB</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'web')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('seo') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>SEO</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'seo')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('ll') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>LL</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'll')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('ppc') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>PPC</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'ppc')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('smm') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>SMM</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'smm')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('sma') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>SMA</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'sma')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('em') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>EM</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'em')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('dp') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>DP</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'dp')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
                 <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
@@ -570,7 +955,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               >
                 {filteredCompanies.length === 0 ? (
                   <tr>
-                    <td colSpan={16} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
+                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
                   </tr>
                 ) : filteredCompanies.map(company => (
                   <SortableRow 
@@ -582,6 +967,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     teamMembers={teamMembers}
                     contacts={contacts}
                     onDelete={handleDeleteCompany}
+                    visibleColumns={visibleColumns}
                   />
                 ))}
               </SortableContext>

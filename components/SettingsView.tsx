@@ -30,6 +30,8 @@ export default function SettingsView({
   setUseFullScreenUnifiedTicketView,
   allowDeletingGroups = false,
   setAllowDeletingGroups,
+  allowDeletingColumns = false,
+  setAllowDeletingColumns,
 }: {
   teamMembers: TeamMember[],
   setTeamMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>,
@@ -38,6 +40,8 @@ export default function SettingsView({
   setUseFullScreenUnifiedTicketView?: React.Dispatch<React.SetStateAction<boolean>>,
   allowDeletingGroups?: boolean,
   setAllowDeletingGroups?: React.Dispatch<React.SetStateAction<boolean>>,
+  allowDeletingColumns?: boolean,
+  setAllowDeletingColumns?: React.Dispatch<React.SetStateAction<boolean>>,
 }) {
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -464,27 +468,51 @@ export default function SettingsView({
             </div>
 
             {(currentUserRole === 'master_admin' || currentUserRole === 'admin') && (
-              <div className="flex items-center justify-between gap-4 p-4 border border-red-100 rounded-lg bg-red-50/30">
-                <div>
-                  <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Groups (Admin Only)</h3>
-                  <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Enabling this will show a &quot;Remove group&quot; button next to all workspace groups. Deleting a group will permanently delete all task data inside that group!</p>
+              <>
+                <div className="flex items-center justify-between gap-4 p-4 border border-red-100 rounded-lg bg-red-50/30">
+                  <div>
+                    <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Groups (Admin Only)</h3>
+                    <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Enabling this will show a &quot;Remove group&quot; button next to all workspace groups. Deleting a group will permanently delete all task data inside that group!</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={allowDeletingGroups}
+                      onChange={(e) => {
+                        const newVal = e.target.checked;
+                        if (setAllowDeletingGroups) {
+                          setAllowDeletingGroups(newVal);
+                        }
+                        localStorage.setItem('allowDeletingGroups', String(newVal));
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer select-none">
-                  <input 
-                    type="checkbox" 
-                    checked={allowDeletingGroups}
-                    onChange={(e) => {
-                      const newVal = e.target.checked;
-                      if (setAllowDeletingGroups) {
-                        setAllowDeletingGroups(newVal);
-                      }
-                      localStorage.setItem('allowDeletingGroups', String(newVal));
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
-                </label>
-              </div>
+
+                <div className="flex items-center justify-between gap-4 p-4 border border-red-100 rounded-lg bg-red-50/30 mt-3">
+                  <div>
+                    <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Columns (Admin Only)</h3>
+                    <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Enabling this will allow admins to permanently delete/hide columns from tables across the CRM and Workspace boards.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={allowDeletingColumns}
+                      onChange={(e) => {
+                        const newVal = e.target.checked;
+                        if (setAllowDeletingColumns) {
+                          setAllowDeletingColumns(newVal);
+                        }
+                        localStorage.setItem('allowDeletingColumns', String(newVal));
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
+                  </label>
+                </div>
+              </>
             )}
           </div>
         </div>

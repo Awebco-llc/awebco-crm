@@ -74,7 +74,7 @@ const INITIAL_DATA = [
 
 const SUPPORT_TICKETS_BOARD_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_TICKETS_EMAIL || 'tickets@awebco.com';
 
-function SortableHeader({ column, onDelete }: { column: Column, onDelete?: (id: string) => void }) {
+function SortableHeader({ column, onDelete, allowDeletingColumns }: { column: Column, onDelete?: (id: string) => void, allowDeletingColumns?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -87,8 +87,8 @@ function SortableHeader({ column, onDelete }: { column: Column, onDelete?: (id: 
     maxWidth: getColumnWidth(column.id),
   };
 
-  // Core columns cannot be deleted
-  const isDeletable = !['projectName', 'assignee', 'status', 'updatesCount'].includes(column.id);
+  // Core columns cannot be deleted, unless allowDeletingColumns is enabled
+  const isDeletable = allowDeletingColumns || !['projectName', 'assignee', 'status', 'updatesCount'].includes(column.id);
 
   return (
     <th
@@ -684,7 +684,8 @@ export default function WorkspaceProjectView({
   canManageBoardMembers,
   onUpdateMemberPermissions,
   useFullScreenUnifiedTicketView,
-  allowDeletingGroups = false
+  allowDeletingGroups = false,
+  allowDeletingColumns = false
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -698,6 +699,7 @@ export default function WorkspaceProjectView({
   onUpdateMemberPermissions?: (memberId: string, workspaceName: string, hasAccess: boolean) => void,
   useFullScreenUnifiedTicketView?: boolean,
   allowDeletingGroups?: boolean,
+  allowDeletingColumns?: boolean,
 }) {
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
@@ -792,6 +794,8 @@ export default function WorkspaceProjectView({
   const [customBillableHours, setCustomBillableHours] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [activeBulkGroupDropdown, setActiveBulkGroupDropdown] = useState(false);
+  const [activeBulkStatusDropdown, setActiveBulkStatusDropdown] = useState(false);
+  const [activeBulkAssigneeDropdown, setActiveBulkAssigneeDropdown] = useState(false);
   const [sheetsSyncStatus, setSheetsSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
 
   // Always-fresh ref so the debounced sync uses latest data
@@ -852,6 +856,49 @@ export default function WorkspaceProjectView({
       handleClearSelection();
     } catch (err) {
       console.error('Failed to bulk move rows', err);
+    }
+  };
+
+  const handleBulkStatusSelected = async (status: string) => {
+    try {
+      const ids = Array.from(selectedRowIds);
+      for (const id of ids) {
+        const row = data.find(r => r.id === id);
+        const patch: any = { status };
+        if (row) {
+          const currentGroupId = row.groupId || getRowGroupId(row);
+          if (projectType === 'Google Ads') {
+            patch.groupId = status === 'Running' ? 'group-running' : 'group-active';
+          } else if (status === 'Running') {
+            patch.groupId = 'group-running';
+          } else if (status === 'Needs Invoiced') {
+            patch.groupId = 'group-needs-invoiced';
+          } else if (status === 'S14: Launched' || status === 'Launched' || status === 'Done') {
+            patch.groupId = 'group-completed';
+          } else if (currentGroupId === 'group-needs-invoiced' || currentGroupId === 'group-completed' || currentGroupId === 'group-running') {
+            patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
+          }
+        }
+        await handleUpdateRow(id, patch);
+      }
+      handleClearSelection();
+    } catch (err) {
+      console.error('Failed to bulk change status', err);
+    }
+  };
+
+  const handleBulkAssigneeSelected = async (assigneeId: string) => {
+    try {
+      const ids = Array.from(selectedRowIds);
+      for (const id of ids) {
+        await handleUpdateRow(id, {
+          assignee: assigneeId,
+          assignees: assigneeId ? [assigneeId] : []
+        });
+      }
+      handleClearSelection();
+    } catch (err) {
+      console.error('Failed to bulk set assignee', err);
     }
   };
 
@@ -1714,6 +1761,7 @@ export default function WorkspaceProjectView({
                                   key={col.id}
                                   column={col}
                                   onDelete={(colId) => setColumns(prev => prev.filter(c => c.id !== colId))}
+                                  allowDeletingColumns={allowDeletingColumns}
                                 />
                               ))}
                             </SortableContext>
@@ -2919,7 +2967,11 @@ export default function WorkspaceProjectView({
               {/* Move to Group Button with Dropdown Popover */}
               <div className="relative">
                 <button 
-                  onClick={() => setActiveBulkGroupDropdown(prev => !prev)}
+                  onClick={() => {
+                    setActiveBulkGroupDropdown(prev => !prev);
+                    setActiveBulkStatusDropdown(false);
+                    setActiveBulkAssigneeDropdown(false);
+                  }}
                   className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
                 >
                   <ArrowRight className="w-4 h-4 text-blue-400" />
@@ -2950,6 +3002,111 @@ export default function WorkspaceProjectView({
                             className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center justify-between"
                           >
                             <span>{group.name}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Change Status Button with Dropdown Popover */}
+              <div className="relative">
+                <button 
+                  onClick={() => {
+                    setActiveBulkStatusDropdown(prev => !prev);
+                    setActiveBulkGroupDropdown(false);
+                    setActiveBulkAssigneeDropdown(false);
+                  }}
+                  className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  Status
+                </button>
+                
+                <AnimatePresence>
+                  {activeBulkStatusDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setActiveBulkStatusDropdown(false)} />
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
+                      >
+                        <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
+                          Select Status
+                        </div>
+                        {statusOptions.map(opt => (
+                          <button
+                            key={opt}
+                            onClick={() => {
+                              handleBulkStatusSelected(opt);
+                              setActiveBulkStatusDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center justify-between"
+                          >
+                            <span>{opt}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Set Assignee Button with Dropdown Popover */}
+              <div className="relative">
+                <button 
+                  onClick={() => {
+                    setActiveBulkAssigneeDropdown(prev => !prev);
+                    setActiveBulkGroupDropdown(false);
+                    setActiveBulkStatusDropdown(false);
+                  }}
+                  className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                >
+                  <AtSign className="w-4 h-4 text-indigo-400" />
+                  Assignee
+                </button>
+                
+                <AnimatePresence>
+                  {activeBulkAssigneeDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setActiveBulkAssigneeDropdown(false)} />
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
+                      >
+                        <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
+                          Select Assignee
+                        </div>
+                        <button
+                          onClick={() => {
+                            handleBulkAssigneeSelected('');
+                            setActiveBulkAssigneeDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-bold hover:bg-red-500/10 text-red-400 border-b border-white/5 transition-colors"
+                        >
+                          Clear Assignee
+                        </button>
+                        {teamMembers.map(member => (
+                          <button
+                            key={member.id}
+                            onClick={() => {
+                              handleBulkAssigneeSelected(member.id);
+                              setActiveBulkAssigneeDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center gap-2"
+                          >
+                            <div 
+                              className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold shrink-0"
+                              style={{ backgroundColor: member.color }}
+                            >
+                              {member.initials}
+                            </div>
+                            <span className="truncate">{member.name}</span>
                           </button>
                         ))}
                       </motion.div>
