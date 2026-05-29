@@ -457,12 +457,19 @@ export function AssigneeDropdown({
                 }
               }}
             >
-              <div 
-                className="w-5 h-5 rounded-full inline-flex items-center justify-center text-white text-[9px] font-bold shrink-0"
-                style={{ backgroundColor: tm.color }}
-              >
-                {tm.initials}
-              </div>
+              {tm.photoUrl ? (
+                <div
+                  className="w-5 h-5 rounded-full bg-cover bg-center shrink-0 border border-gray-100"
+                  style={{ backgroundImage: `url(${tm.photoUrl})` }}
+                />
+              ) : (
+                <div 
+                  className="w-5 h-5 rounded-full inline-flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                  style={{ backgroundColor: tm.color }}
+                >
+                  {tm.initials}
+                </div>
+              )}
               <span className="truncate flex-grow">{tm.name}</span>
               {isSelected && isMulti && (
                 <div className="w-3.5 h-3.5 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 ml-auto">
@@ -490,14 +497,23 @@ export function AssigneeDropdown({
           <div className="flex -space-x-1.5 overflow-hidden items-center">
             {assignedMembers.length > 0 ? (
               assignedMembers.slice(0, 3).map(tm => (
-                <div
-                  key={tm.id}
-                  className="w-6 h-6 rounded-full ring-2 ring-white flex items-center justify-center text-white text-[9px] font-bold shrink-0"
-                  style={{ backgroundColor: tm.color }}
-                  title={tm.name}
-                >
-                  {tm.initials}
-                </div>
+                tm.photoUrl ? (
+                  <div
+                    key={tm.id}
+                    className="w-6 h-6 rounded-full ring-2 ring-white bg-cover bg-center shrink-0"
+                    style={{ backgroundImage: `url(${tm.photoUrl})` }}
+                    title={tm.name}
+                  />
+                ) : (
+                  <div
+                    key={tm.id}
+                    className="w-6 h-6 rounded-full ring-2 ring-white flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                    style={{ backgroundColor: tm.color }}
+                    title={tm.name}
+                  >
+                    {tm.initials}
+                  </div>
+                )
               ))
             ) : (
               <div className="w-6 h-6 rounded-full bg-gray-100 border border-dashed border-[#D0D5DD] flex items-center justify-center text-[#8E9299] text-xs hover:bg-gray-200 transition-colors" title="Unassigned">
@@ -506,18 +522,26 @@ export function AssigneeDropdown({
             )}
             {assignedMembers.length > 3 && (
               <div className="w-6 h-6 rounded-full bg-[#F0F2F5] ring-2 ring-white flex items-center justify-center text-[#4A4D53] text-[9px] font-bold shrink-0" title={`${assignedMembers.length - 3} more`}>
-                +${assignedMembers.length - 3}
+                +{assignedMembers.length - 3}
               </div>
             )}
           </div>
         ) : member ? (
-          <div 
-            className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold"
-            style={{ backgroundColor: member.color || '#ccc' }}
-            title={member.name}
-          >
-            {member.initials}
-          </div>
+          member.photoUrl ? (
+            <div 
+              className="w-6 h-6 rounded-full bg-cover bg-center shrink-0 border border-gray-100"
+              style={{ backgroundImage: `url(${member.photoUrl})` }}
+              title={member.name}
+            />
+          ) : (
+            <div 
+              className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+              style={{ backgroundColor: member.color || '#ccc' }}
+              title={member.name}
+            >
+              {member.initials}
+            </div>
+          )
         ) : (
           <div className="w-6 h-6 rounded-full bg-gray-100 border border-dashed border-[#D0D5DD] flex items-center justify-center text-[#8E9299] text-xs hover:bg-gray-200 transition-colors" title="Unassigned">
             +
@@ -568,6 +592,7 @@ export function Toggle({ checked, onChange, disabled }: { checked: boolean, onCh
 
 export function EditableDeadline({ value, onSave }: { value: string; onSave: (val: string) => void }) {
   const [isEditing, setIsEditing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -583,6 +608,21 @@ export function EditableDeadline({ value, onSave }: { value: string; onSave: (va
     }
   }, [isEditing]);
 
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsEditing(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isEditing]);
+
   const displayValue = () => {
     if (!value) return '-';
     const date = new Date(`${value}T00:00:00`);
@@ -590,9 +630,19 @@ export function EditableDeadline({ value, onSave }: { value: string; onSave: (va
     return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(date);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
+
   if (isEditing) {
     return (
-      <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+      <div 
+        ref={containerRef}
+        className="relative inline-block" 
+        onClick={(e) => e.stopPropagation()}
+      >
         <input
           ref={inputRef}
           type="date"
@@ -601,7 +651,7 @@ export function EditableDeadline({ value, onSave }: { value: string; onSave: (va
             onSave(e.target.value);
             setIsEditing(false);
           }}
-          onBlur={() => setIsEditing(false)}
+          onKeyDown={handleKeyDown}
           className="px-2 py-1 text-xs border border-[#E2E4E9] rounded-md outline-none bg-white font-medium text-[#1C1F23] focus:ring-2 focus:ring-[#1061E3] focus:border-transparent cursor-pointer"
         />
       </div>

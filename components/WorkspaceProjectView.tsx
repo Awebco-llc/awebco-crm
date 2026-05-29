@@ -492,6 +492,102 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, i
   );
 }
 
+function RowPlanNotes({ notes, projectType }: { notes: string; projectType: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
+          triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isOpen]);
+
+  const updatePosition = () => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: Math.min(rect.left + window.scrollX, window.innerWidth - 330)
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+    }
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen]);
+
+  if (!notes) return <span className="text-[#C8CDD5] text-xs">—</span>;
+
+  const portalMenu = isOpen && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={popoverRef}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="fixed z-[9999] w-80 bg-white rounded-xl shadow-2xl border border-[#E2E4E9] overflow-hidden"
+      style={{
+        top: position.top - window.scrollY,
+        left: position.left - window.scrollX,
+      }}
+    >
+      <div className="px-4 py-2.5 bg-[#F9FAFB] border-b border-[#E2E4E9] flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-[#1061E3]" />
+          <span className="text-xs font-bold text-[#1C1F23] uppercase tracking-wide">{projectType} Plan Notes</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="p-0.5 text-[#8E9299] hover:text-[#1C1F23] rounded transition-colors"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="p-4 text-sm text-[#4A4D53] leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+        {notes}
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setIsOpen(p => !p)}
+        className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1 text-xs font-semibold ${
+          isOpen
+            ? 'bg-[#1061E3] text-white shadow-sm'
+            : 'bg-blue-50 text-[#1061E3] hover:bg-blue-100'
+        }`}
+        title={`View ${projectType} plan notes`}
+      >
+        <Info className="w-3.5 h-3.5 shrink-0" />
+        <span>View Plan</span>
+      </button>
+      {portalMenu}
+    </>
+  );
+}
+
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
@@ -561,7 +657,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour, companies }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -707,6 +803,26 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                 customLabels={customBillableHours || []}
                 onCreateLabel={onCreateBillableHour}
                 isInline={true}
+              />
+            </div>
+          ) : col.id === 'planDescription' ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <RowPlanNotes 
+                notes={row.companyId ? (() => {
+                  const comp = companies?.find((c: any) => c.id === row.companyId);
+                  if (!comp) return '';
+                  switch (projectType) {
+                    case 'Google Ads': return comp.ppcNotes || '';
+                    case 'SEO': return comp.seoNotes || '';
+                    case 'Social Media': return comp.smmNotes || '';
+                    case 'Websites': return comp.webNotes || '';
+                    case 'Local Listings': return comp.llNotes || '';
+                    case 'Design & Print': return comp.dpNotes || '';
+                    case 'Support Tickets': return comp.supportNotes || '';
+                    default: return '';
+                  }
+                })() : ''} 
+                projectType={projectType}
               />
             </div>
           ) : col.id === 'url' ? (
@@ -1004,6 +1120,9 @@ export default function WorkspaceProjectView({
       result = filtered;
     } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
       result = INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
+      if (projectType === 'Google Ads') {
+        result.push({ id: 'planDescription', header: 'Plan Description' });
+      }
     } else {
       result = INITIAL_COLUMNS.filter(c => !['companyName', 'contactName', 'email', 'category'].includes(c.id));
     }
@@ -2292,6 +2411,7 @@ export default function WorkspaceProjectView({
                                   selectedCount={selectedRowIds.size}
                                   customBillableHours={customBillableHours}
                                   onCreateBillableHour={handleCreateBillableHour}
+                                  companies={companies}
                                 />
                                 {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
                                   <SortableRow 
@@ -2316,6 +2436,7 @@ export default function WorkspaceProjectView({
                                     selectedCount={selectedRowIds.size}
                                     customBillableHours={customBillableHours}
                                     onCreateBillableHour={handleCreateBillableHour}
+                                    companies={companies}
                                   />
                                 ))}
                               </React.Fragment>
