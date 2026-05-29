@@ -167,9 +167,7 @@ function SortableRow({ contact, onClick, onUpdate, teamMembers, companies, onEma
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <CompanyDropdown value={contact.companyId} onSave={v => onUpdate(contact.id, 'companyId', v)} companies={companies} />
       </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <AssigneeDropdown value={contact.assignedToId} onSave={v => onUpdate(contact.id, 'assignedToId', v)} teamMembers={teamMembers} />
-      </td>
+
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <div className="flex items-center justify-between group">
           <EditableCell value={contact.email} onSave={v => onUpdate(contact.id, 'email', v)} />
@@ -361,7 +359,7 @@ function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers
             <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">TITLE</th>
             <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">PHONE</th>
             <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">COMPANY</th>
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">ASSIGNED</th>
+
             <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">EMAIL</th>
             <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">STATUS</th>
             <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
@@ -370,7 +368,7 @@ function DroppableTable({ id, contacts, onRowClick, onUpdateContact, teamMembers
         <tbody ref={setNodeRef} className="min-h-[50px]">
           {contacts.length === 0 ? (
             <tr>
-              <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
+              <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
             </tr>
           ) : contacts.map(contact => (
             <SortableRow key={contact.id} contact={contact} onClick={() => onRowClick(contact)} onUpdate={onUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={onEmailClick} onDelete={onDeleteContact} />

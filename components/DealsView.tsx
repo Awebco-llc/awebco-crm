@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
 import { createDeal, updateDeal, deleteDeal } from '@/lib/crmStore';
@@ -218,6 +218,25 @@ export default function DealsView({
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'currentStep', 'status', 'assignedToId', 'value', 'companyId', 'contactId', 'notes']);
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = useCallback((column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  }, []);
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />;
+  };
+
 
   const renderTableHeaders = () => {
     return (
@@ -225,9 +244,15 @@ export default function DealsView({
         <tr>
           <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
           {visibleColumns.includes('name') && (
-            <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+            <th
+              className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+              onClick={() => handleSort('name')}
+            >
               <div className="flex items-center justify-between gap-1">
-                <span>DEAL NAME</span>
+                <div className="flex items-center gap-1">
+                  <span>DEAL NAME</span>
+                  <SortIcon column="name" />
+                </div>
                 {allowDeletingColumns && (
                   <button
                     type="button"
@@ -241,9 +266,15 @@ export default function DealsView({
             </th>
           )}
           {visibleColumns.includes('currentStep') && (
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+            <th
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+              onClick={() => handleSort('currentStep')}
+            >
               <div className="flex items-center justify-between gap-1">
-                <span>CURRENT STEP</span>
+                <div className="flex items-center gap-1">
+                  <span>CURRENT STEP</span>
+                  <SortIcon column="currentStep" />
+                </div>
                 {allowDeletingColumns && (
                   <button
                     type="button"
@@ -257,9 +288,15 @@ export default function DealsView({
             </th>
           )}
           {visibleColumns.includes('status') && (
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+            <th
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+              onClick={() => handleSort('status')}
+            >
               <div className="flex items-center justify-between gap-1">
-                <span>STATUS</span>
+                <div className="flex items-center gap-1">
+                  <span>STATUS</span>
+                  <SortIcon column="status" />
+                </div>
                 {allowDeletingColumns && (
                   <button
                     type="button"
@@ -289,9 +326,15 @@ export default function DealsView({
             </th>
           )}
           {visibleColumns.includes('value') && (
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+            <th
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+              onClick={() => handleSort('value')}
+            >
               <div className="flex items-center justify-between gap-1">
-                <span>DEAL VALUE</span>
+                <div className="flex items-center gap-1">
+                  <span>DEAL VALUE</span>
+                  <SortIcon column="value" />
+                </div>
                 {allowDeletingColumns && (
                   <button
                     type="button"
@@ -305,9 +348,15 @@ export default function DealsView({
             </th>
           )}
           {visibleColumns.includes('companyId') && (
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+            <th
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+              onClick={() => handleSort('companyId')}
+            >
               <div className="flex items-center justify-between gap-1">
-                <span>COMPANY</span>
+                <div className="flex items-center gap-1">
+                  <span>COMPANY</span>
+                  <SortIcon column="companyId" />
+                </div>
                 {allowDeletingColumns && (
                   <button
                     type="button"
@@ -321,9 +370,15 @@ export default function DealsView({
             </th>
           )}
           {visibleColumns.includes('contactId') && (
-            <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group">
+            <th
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+              onClick={() => handleSort('contactId')}
+            >
               <div className="flex items-center justify-between gap-1">
-                <span>CONTACT</span>
+                <div className="flex items-center gap-1">
+                  <span>CONTACT</span>
+                  <SortIcon column="contactId" />
+                </div>
                 {allowDeletingColumns && (
                   <button
                     type="button"
@@ -371,7 +426,7 @@ export default function DealsView({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const filteredDeals = useMemo(() => {
-    return deals.filter(d => {
+    const filtered = deals.filter(d => {
       const companyName = companies.find(c => c.id === d.companyId)?.name || '';
       const contactObj = contacts.find(c => c.id === d.contactId);
       const contactName = contactObj ? `${contactObj.firstName} ${contactObj.lastName}` : '';
@@ -380,7 +435,27 @@ export default function DealsView({
         contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         d.status.toLowerCase().includes(searchQuery.toLowerCase());
     });
-  }, [deals, searchQuery, companies, contacts]);
+
+    if (!sortConfig) return filtered;
+    return [...filtered].sort((a, b) => {
+      let aVal = '';
+      let bVal = '';
+      if (sortConfig.column === 'companyId') {
+        aVal = companies.find(c => c.id === a.companyId)?.name || '';
+        bVal = companies.find(c => c.id === b.companyId)?.name || '';
+      } else if (sortConfig.column === 'contactId') {
+        const ac = contacts.find(c => c.id === a.contactId);
+        const bc = contacts.find(c => c.id === b.contactId);
+        aVal = ac ? `${ac.firstName} ${ac.lastName}` : '';
+        bVal = bc ? `${bc.firstName} ${bc.lastName}` : '';
+      } else {
+        aVal = String(a[sortConfig.column as keyof Deal] ?? '').toLowerCase();
+        bVal = String(b[sortConfig.column as keyof Deal] ?? '').toLowerCase();
+      }
+      const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+  }, [deals, searchQuery, companies, contacts, sortConfig]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),

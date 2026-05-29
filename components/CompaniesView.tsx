@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink, Filter, ChevronDown, RefreshCw } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink, Filter, ChevronDown, RefreshCw, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
 import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket } from '@/lib/crmStore';
@@ -193,7 +193,25 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [serviceFilterMode, setServiceFilterMode] = useState<'all' | 'any'>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em', 'dp']);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em']);
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = useCallback((column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  }, []);
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />;
+  };
 
   // Form State
   const [formData, setFormData] = useState<Partial<Company>>({});
@@ -210,7 +228,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [confirmAction, setConfirmAction] = useState<{id: string, field: keyof Company} | null>(null);
 
   const filteredCompanies = useMemo(() => {
-    return companies.filter(c => {
+    const filtered = companies.filter(c => {
       const matchesSearch = 
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -228,7 +246,16 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
 
       return true;
     });
-  }, [companies, searchQuery, selectedServices, serviceFilterMode]);
+
+    if (!sortConfig) return filtered;
+    return [...filtered].sort((a, b) => {
+      const col = sortConfig.column as keyof Company;
+      const aVal = String(a[col] ?? '').toLowerCase();
+      const bVal = String(b[col] ?? '').toLowerCase();
+      const cmp = aVal.localeCompare(bVal);
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+  }, [companies, searchQuery, selectedServices, serviceFilterMode, sortConfig]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -667,10 +694,10 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         </div>
 
         <div className="flex gap-3">
-          {visibleColumns.length < 13 && (
+          {visibleColumns.length < 12 && (
             <button
               type="button"
-              onClick={() => setVisibleColumns(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em', 'dp'])}
+              onClick={() => setVisibleColumns(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em'])}
               className="px-3 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1061E3] hover:bg-blue-50 transition-all flex items-center gap-1.5 active:scale-95 select-none"
             >
               <RefreshCw className="w-4 h-4" />
@@ -738,9 +765,15 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               <tr>
                 <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
                 {visibleColumns.includes('name') && (
-                  <th className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                  <th
+                    className="w-[200px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+                    onClick={() => handleSort('name')}
+                  >
                     <div className="flex items-center justify-between gap-1">
-                      <span>COMPANY NAME</span>
+                      <div className="flex items-center gap-1">
+                        <span>COMPANY NAME</span>
+                        <SortIcon column="name" />
+                      </div>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -754,9 +787,15 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   </th>
                 )}
                 {visibleColumns.includes('domain') && (
-                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                  <th
+                    className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+                    onClick={() => handleSort('domain')}
+                  >
                     <div className="flex items-center justify-between gap-1">
-                      <span>DOMAIN</span>
+                      <div className="flex items-center gap-1">
+                        <span>DOMAIN</span>
+                        <SortIcon column="domain" />
+                      </div>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -770,9 +809,15 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   </th>
                 )}
                 {visibleColumns.includes('industry') && (
-                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                  <th
+                    className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+                    onClick={() => handleSort('industry')}
+                  >
                     <div className="flex items-center justify-between gap-1">
-                      <span>INDUSTRY</span>
+                      <div className="flex items-center gap-1">
+                        <span>INDUSTRY</span>
+                        <SortIcon column="industry" />
+                      </div>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -802,9 +847,15 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   </th>
                 )}
                 {visibleColumns.includes('phone') && (
-                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none">
+                  <th
+                    className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+                    onClick={() => handleSort('phone')}
+                  >
                     <div className="flex items-center justify-between gap-1">
-                      <span>PHONE</span>
+                      <div className="flex items-center gap-1">
+                        <span>PHONE</span>
+                        <SortIcon column="phone" />
+                      </div>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -929,22 +980,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     </div>
                   </th>
                 )}
-                {visibleColumns.includes('dp') && (
-                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
-                    <div className="flex items-center justify-center gap-1">
-                      <span>DP</span>
-                      {allowDeletingColumns && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'dp')); }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </th>
-                )}
+
                 <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
               </tr>
             </thead>
