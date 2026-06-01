@@ -690,6 +690,8 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
     <tr 
       ref={setNodeRef}
       style={style}
+      {...attributes}
+      {...listeners}
       onClick={() => setEditingRowId(row.id)}
       onContextMenu={(e) => onContextMenu?.(e, row.id, isSubRow)}
       className={`hover:bg-gray-50 transition-colors cursor-pointer group ${isSubRow ? 'bg-[#FAFAFA]' : ''} ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : ''} ${isNestTarget ? 'outline outline-2 outline-[#1061E3] outline-offset-[-2px] !bg-blue-50/40' : ''}`}
@@ -704,7 +706,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
             onMouseDown={(e) => { if (e.shiftKey) { e.preventDefault(); onToggleSelect?.(true); } }}
             className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
           />
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23] relative shrink-0">
+          <div className="text-[#8E9299] group-hover:text-[#1C1F23] relative shrink-0 cursor-grab active:cursor-grabbing">
             <GripVertical className="w-4 h-4" />
             {isDragging && isSelected && selectedCount > 1 && (
               <span className="absolute -top-2 -right-2.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm pointer-events-none z-10">
@@ -1894,7 +1896,12 @@ export default function WorkspaceProjectView({
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
     useSensor(KeyboardSensor)
   );
 

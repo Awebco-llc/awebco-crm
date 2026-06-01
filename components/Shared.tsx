@@ -32,6 +32,8 @@ export interface StorageFile {
   storagePath: string;
   downloadUrl: string;
   uploadedBy: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface TeamMemberPermissions {

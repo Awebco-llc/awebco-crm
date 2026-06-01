@@ -127,9 +127,16 @@ function SortableRow({ item, onClick, onUpdate, onDelete }: { item: ProductServi
   };
 
   return (
-    <tr ref={setNodeRef} style={style} onClick={onClick} className="hover:bg-gray-50 transition-colors cursor-pointer bg-white">
+    <tr 
+      ref={setNodeRef} 
+      style={style} 
+      {...attributes} 
+      {...listeners} 
+      onClick={onClick} 
+      className="hover:bg-gray-50 transition-colors cursor-pointer bg-white"
+    >
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-10">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
+        <div className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
@@ -396,7 +403,12 @@ export default function ProductsServicesView({
   }, [products, searchQuery, sortConfig]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
