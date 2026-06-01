@@ -5,7 +5,7 @@ import {
   Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
-  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload
+  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import WorkspaceProjectView from '@/components/WorkspaceProjectView';
@@ -448,7 +448,8 @@ function DroppableTable({
 
   return (
     <SortableContext id={id} items={contacts.map(c => c.id)} strategy={verticalListSortingStrategy}>
-      <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left">
+      <div className="overflow-x-auto w-full bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
+        <table className="w-full border-collapse text-left min-w-[1000px]" style={{ minWidth: '1000px' }}>
         <thead className="sticky top-0 z-10 shadow-sm select-none">
           <tr>
             <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
@@ -528,7 +529,8 @@ function DroppableTable({
             <SortableRow key={contact.id} contact={contact} onClick={() => onRowClick(contact)} onUpdate={onUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={onEmailClick} onDelete={onDeleteContact} />
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </SortableContext>
   );
 }
@@ -555,6 +557,11 @@ export default function Page() {
     }
     return 'My Tasks';
   });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const handleNavClick = (nav: string) => {
+    setActiveNav(nav);
+    setIsSidebarOpen(false);
+  };
 
   const [useFullScreenUnifiedTicketView, setUseFullScreenUnifiedTicketView] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -1318,8 +1325,25 @@ export default function Page() {
           {dataError}
         </div>
       ) : null}
+      {/* Sidebar Backdrop on Mobile */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
-      <aside className="w-[220px] bg-[#003366] border-r border-[#002244] flex flex-col shrink-0 overflow-y-auto">
+      <aside 
+        className={`fixed inset-y-0 left-0 z-50 w-[220px] bg-[#003366] border-r border-[#002244] flex flex-col shrink-0 overflow-y-auto transition-transform duration-300 md:static md:translate-x-0 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="p-6 flex items-center gap-2.5">
           <img src="/logo.png" alt="Awebco Logo" className="w-8 h-8 object-contain rounded bg-white p-0.5 shadow-sm" />
           <span className="font-bold text-lg tracking-tight text-white">Awebco</span>
@@ -1352,7 +1376,7 @@ export default function Page() {
             return (
               <div 
                 key={item.name}
-                onClick={() => setActiveNav(item.name)}
+                onClick={() => handleNavClick(item.name)}
                 className={`px-5 py-2 text-sm flex items-center justify-between cursor-pointer transition-colors ${
                   activeContentNav === item.name 
                     ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
@@ -1381,7 +1405,7 @@ export default function Page() {
             {NAV_ITEMS_CRM.map(item => (
               <div 
                 key={item.name}
-                onClick={() => setActiveNav(item.name)}
+                onClick={() => handleNavClick(item.name)}
                 className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
                   activeContentNav === item.name 
                     ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
@@ -1403,7 +1427,7 @@ export default function Page() {
             {visibleWorkspaceItems.map(item => (
               <div 
                 key={item.name}
-                onClick={() => setActiveNav(item.name)}
+                onClick={() => handleNavClick(item.name)}
                 className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
                   activeContentNav === item.name 
                     ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
@@ -1421,8 +1445,15 @@ export default function Page() {
       {/* Main Content */}
       <main className="flex-grow flex flex-col overflow-hidden relative bg-[#F7F8FA]">
         {/* Global Top Navigation */}
-        <header className="h-14 bg-white border-b border-[#E2E4E9] flex items-center justify-end px-6 shrink-0 z-20">
-          <div className="flex items-center gap-5">
+        <header className="h-14 bg-white border-b border-[#E2E4E9] flex items-center justify-between md:justify-end px-4 md:px-6 shrink-0 z-20">
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-1 text-[#8E9299] hover:text-[#1C1F23] md:hidden rounded transition-colors mr-2 cursor-pointer"
+            title="Open Sidebar"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-3 md:gap-5">
             <div className="relative" ref={notificationsRef}>
               <button
                 onClick={() => setIsNotificationsOpen(prev => !prev)}
@@ -1468,7 +1499,7 @@ export default function Page() {
                           onClick={() => {
                             markNotificationAsRead(notification.id);
                             if (notification.type === 'message') {
-                              setActiveNav('Inbox');
+                              handleNavClick('Inbox');
                             }
                           }}
                           className={`w-full text-left px-4 py-3 border-b border-[#F0F2F5] hover:bg-[#F9FAFB] transition-colors ${notification.read ? 'bg-white' : 'bg-[#F5F9FF]'}`}
@@ -1502,7 +1533,7 @@ export default function Page() {
               )}
             </div>
             <button 
-              onClick={() => setActiveNav('Settings')} 
+              onClick={() => handleNavClick('Settings')} 
               className={`hover:text-[#1C1F23] transition-colors ${activeContentNav === 'Settings' ? 'text-[#1061E3]' : 'text-[#8E9299]'}`}
               title="Settings"
             >
@@ -1517,7 +1548,7 @@ export default function Page() {
             </button>
             <div className="h-6 w-px bg-[#E2E4E9]"></div>
             <button 
-              onClick={() => setActiveNav('Profile')} 
+              onClick={() => handleNavClick('Profile')} 
               className="w-8 h-8 rounded-full bg-[#003366] text-white flex items-center justify-center font-bold text-xs shrink-0 border-2 border-transparent hover:border-[#1061E3] transition-all cursor-pointer shadow-sm hover:shadow"
               title="Profile"
             >
@@ -1530,8 +1561,8 @@ export default function Page() {
           {canAccessCRM && activeContentNav === 'Contacts' ? (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
             {/* Top Bar */}
-            <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-              <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+            <header className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 md:px-6 gap-3 shrink-0">
+              <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full md:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
                 <Search className="w-4 h-4 text-[#8E9299]" />
                 <input 
                   type="text"
@@ -1541,20 +1572,20 @@ export default function Page() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-end">
                 <button 
                   onClick={() => {
                     setImportTargetGroupId(contactGroups[0]?.id || '');
                     setIsImportModalOpen(true);
                   }}
-                  className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-100 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-100 transition-colors flex items-center gap-2 justify-center"
                 >
                   <Upload className="w-4 h-4" />
                   Import
                 </button>
                 <button 
                   onClick={openAddModal}
-                  className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2 justify-center"
                 >
                   <Plus className="w-4 h-4" />
                   New Contact
@@ -1707,8 +1738,8 @@ export default function Page() {
         ) : (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
             {/* Top Bar */}
-            <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-              <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+            <header className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 md:px-6 gap-3 shrink-0">
+              <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full md:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
                 <Search className="w-4 h-4 text-[#8E9299]" />
                 <input 
                   type="text"
@@ -1716,10 +1747,10 @@ export default function Page() {
                   className="bg-transparent border-none outline-none text-sm w-full text-[#1C1F23] placeholder:text-[#8E9299]"
                 />
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-end">
                 <button 
                   onClick={() => alert('This module is currently under construction.')}
-                  className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2 justify-center w-full md:w-auto"
                 >
                   <Plus className="w-4 h-4" />
                   New {activeContentNav === 'Companies' ? 'Company' : activeContentNav === 'Deals / Sales' ? 'Deal' : activeContentNav.replace(/s$/, '')}

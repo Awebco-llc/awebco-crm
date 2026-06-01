@@ -636,9 +636,9 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
-      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+      <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col lg:flex-row lg:items-center justify-between p-4 lg:px-6 gap-3 shrink-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+          <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full sm:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
             <Search className="w-4 h-4 text-[#8E9299]" />
             <input 
               type="text"
@@ -654,19 +654,21 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
             <button
               type="button"
               onClick={() => setIsFilterDropdownOpen(prev => !prev)}
-              className={`px-3 py-2 rounded-md text-sm font-semibold cursor-pointer border flex items-center gap-2 transition-all duration-200 select-none ${
+              className={`px-3 py-2 rounded-md text-sm font-semibold cursor-pointer border flex items-center gap-2 transition-all duration-200 select-none w-full sm:w-auto justify-between ${
                 selectedServices.length > 0
                   ? 'border-blue-500 bg-blue-50/50 text-[#1061E3] hover:bg-blue-50'
                   : 'border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-[#F0F2F5]'
               }`}
             >
-              <Filter className={`w-4 h-4 ${selectedServices.length > 0 ? 'text-[#1061E3]' : 'text-[#8E9299]'}`} />
-              <span>Filter Services</span>
-              {selectedServices.length > 0 && (
-                <span className="bg-[#1061E3] text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {selectedServices.length}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                <Filter className={`w-4 h-4 ${selectedServices.length > 0 ? 'text-[#1061E3]' : 'text-[#8E9299]'}`} />
+                <span>Filter Services</span>
+                {selectedServices.length > 0 && (
+                  <span className="bg-[#1061E3] text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {selectedServices.length}
+                  </span>
+                )}
+              </div>
               <ChevronDown className="w-4 h-4 text-[#8E9299]" />
             </button>
 
@@ -733,7 +735,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                                 isChecked 
                                   ? prev.filter(f => f !== plan.field)
                                   : [...prev, plan.field]
-                              );
+                                );
                             }}
                             className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
                               isChecked 
@@ -754,7 +756,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {visibleColumns.length < 12 && (
             <button
               type="button"
@@ -821,7 +823,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
+          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8 min-w-[1100px]" style={{ minWidth: '1100px' }}>
             <thead className="sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>

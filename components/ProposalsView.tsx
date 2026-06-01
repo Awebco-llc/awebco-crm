@@ -164,44 +164,44 @@ export default function ProposalsView({
     return (
       <div className="proposal-print-root flex-grow flex flex-col overflow-hidden absolute inset-0 bg-gray-50 z-10 print:bg-white print:static print:h-auto print:overflow-visible">
         {/* Editor Top Bar - Hidden when printing */}
-        <div className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0 print:hidden">
+        <div className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-4 md:px-6 gap-3 shrink-0 print:hidden">
           <button 
             onClick={() => setActiveView('list')}
-            className="flex items-center gap-2 text-[#4A4D53] hover:text-[#1061E3] font-semibold transition-colors"
+            className="flex items-center gap-2 text-[#4A4D53] hover:text-[#1061E3] font-semibold transition-colors justify-center sm:justify-start"
           >
             <ArrowLeft className="w-5 h-5" />
             Back to Proposals
           </button>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
             <button 
               onClick={() => alert('Simulating email sending...')}
-              className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
+              className="px-3 py-2 md:px-4 md:py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2 justify-center"
             >
               <Mail className="w-4 h-4" />
               Email
             </button>
             <button 
               onClick={handlePrint}
-              className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
+              className="px-3 py-2 md:px-4 md:py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2 justify-center"
             >
               <Download className="w-4 h-4" />
-              Print / PDF
+              Print
             </button>
             <button 
               onClick={handleSave}
-              className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-3 py-2 md:px-4 md:py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2 justify-center"
             >
-              Save Proposal
+              Save
             </button>
           </div>
         </div>
 
         {/* Invoice Form Area */}
-        <div className="flex-grow overflow-y-auto p-8 flex justify-center items-start print:p-0 print:overflow-visible">
-          <div className="w-full max-w-4xl bg-white rounded-lg shadow-sm border border-[#E2E4E9] p-8 print:shadow-none print:border-none print:p-0">
+        <div className="flex-grow overflow-y-auto p-4 md:p-8 flex justify-center items-start print:p-0 print:overflow-visible">
+          <div className="w-full max-w-4xl bg-white rounded-lg shadow-sm border border-[#E2E4E9] p-4 md:p-8 print:shadow-none print:border-none print:p-0">
             {/* Header section */}
-            <div className="flex justify-between items-start mb-8 border-b border-[#E2E4E9] pb-8 print:border-b-2 print:border-gray-300">
-              <div className="w-1/2 pr-4">
+            <div className="flex flex-col md:flex-row justify-between items-stretch md:items-start gap-6 mb-8 border-b border-[#E2E4E9] pb-8 print:border-b-2 print:border-gray-300 print:flex-row print:gap-0">
+              <div className="w-full md:w-1/2 md:pr-4 print:w-1/2">
                 <input 
                   type="text" 
                   value={currentDoc.title}
@@ -240,7 +240,7 @@ export default function ProposalsView({
                 </div>
               </div>
               
-              <div className="w-1/3 bg-[#F9FAFB] p-4 rounded-md border border-[#E2E4E9] print:bg-transparent print:border-none print:p-0">
+              <div className="w-full md:w-1/3 bg-[#F9FAFB] p-4 rounded-md border border-[#E2E4E9] print:bg-transparent print:border-none print:p-0 print:w-1/3">
                 <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Bill To</label>
                 <select 
                   value={currentDoc.companyId}
@@ -287,8 +287,8 @@ export default function ProposalsView({
             </div>
 
             {/* Line Items */}
-            <div className="mb-8">
-              <table className="w-full text-left border-collapse">
+            <div className="mb-8 overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[700px] md:min-w-0">
                 <thead>
                   <tr className="border-b-2 border-[#1C1F23]">
                     <th className="py-3 px-2 text-xs font-bold text-[#1C1F23] uppercase tracking-wide">Item & Description</th>
@@ -420,8 +420,8 @@ export default function ProposalsView({
             </div>
 
             {/* Totals & Notes */}
-            <div className="flex justify-between items-start">
-              <div className="w-1/2">
+            <div className="flex flex-col md:flex-row justify-between items-stretch md:items-start gap-6 print:flex-row print:gap-0">
+              <div className="w-full md:w-1/2 print:w-1/2">
                 <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Notes / Terms</label>
                 <textarea 
                   value={currentDoc.notes}
@@ -431,7 +431,7 @@ export default function ProposalsView({
                 />
               </div>
               
-              <div className="w-1/3">
+              <div className="w-full md:w-1/3 print:w-1/3">
                 <div className="flex justify-between py-2 border-b border-[#E2E4E9] print:border-gray-200">
                   <span className="text-sm font-semibold text-[#8E9299]">Subtotal</span>
                   <span className="text-sm font-semibold text-[#1C1F23]">
@@ -450,8 +450,8 @@ export default function ProposalsView({
             <div className="mt-10 print:mt-8">
               <div className="border-t border-[#E2E4E9] pt-8 print:pt-6">
                 <h4 className="text-sm font-bold text-[#1C1F23] mb-4 uppercase tracking-wider">Credit Card Information</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="col-span-1 sm:col-span-2 md:col-span-3">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Cardholder Name</label>
                     <input
                       type="text"
@@ -460,7 +460,7 @@ export default function ProposalsView({
                       className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1 sm:col-span-2 md:col-span-3">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Card Number</label>
                     <input
                       type="text"
@@ -469,7 +469,7 @@ export default function ProposalsView({
                       className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
                     />
                   </div>
-                  <div>
+                  <div className="col-span-1">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Expiry</label>
                     <input
                       type="text"
@@ -479,7 +479,7 @@ export default function ProposalsView({
                       className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
                     />
                   </div>
-                  <div>
+                  <div className="col-span-1">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">CVV</label>
                     <input
                       type="text"
@@ -488,7 +488,7 @@ export default function ProposalsView({
                       className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
                     />
                   </div>
-                  <div>
+                  <div className="col-span-1 sm:col-span-2 md:col-span-1">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Billing Zip</label>
                     <input
                       type="text"
@@ -500,7 +500,7 @@ export default function ProposalsView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-6 mt-8 print:gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 print:grid-cols-3 print:gap-8">
                 <div>
                   <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Today&apos;s Date</label>
                   <input
@@ -541,8 +541,8 @@ export default function ProposalsView({
   // --- List View ---
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
-      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+      <header className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 md:px-6 gap-3 shrink-0">
+        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full md:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
           <Search className="w-4 h-4 text-[#8E9299]" />
           <input 
             type="text"
@@ -552,10 +552,10 @@ export default function ProposalsView({
             className="bg-transparent border-none outline-none text-sm w-full text-[#1C1F23] placeholder:text-[#8E9299]"
           />
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 justify-end">
           <button 
             onClick={handleCreateNew}
-            className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2 justify-center w-full md:w-auto"
           >
             <Plus className="w-4 h-4" />
             New Proposal
@@ -567,8 +567,8 @@ export default function ProposalsView({
         <div className="max-w-6xl mx-auto space-y-4">
           <h2 className="text-xl font-bold text-[#1C1F23] mb-6">Recent Proposals</h2>
           
-          <div className="bg-white border text-left border-[#E2E4E9] rounded-lg shadow-sm">
-            <table className="w-full border-collapse">
+          <div className="bg-white border text-left border-[#E2E4E9] rounded-lg shadow-sm overflow-x-auto">
+            <table className="w-full border-collapse min-w-[900px]">
               <thead className="sticky top-0 z-10 shadow-sm select-none">
                 <tr className="bg-[#F9FAFB] border-b border-[#E2E4E9]">
                   <th 

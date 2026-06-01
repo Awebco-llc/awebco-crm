@@ -146,9 +146,9 @@ export default function MyTasksView({
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-[#F9FAFB]">
-      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center px-6 shrink-0 justify-between">
+      <header className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col sm:flex-row items-stretch sm:items-center px-6 py-3 sm:py-0 shrink-0 justify-between gap-2">
         <h1 className="text-xl font-bold text-[#1C1F23]">My Tasks</h1>
-        <div className="text-xs font-semibold text-[#8E9299] bg-gray-100 px-3 py-1 rounded-full">
+        <div className="text-xs font-semibold text-[#8E9299] bg-gray-100 px-3 py-1 rounded-full w-fit">
           {activeTickets.length} Active Tasks • {completedTickets.length} Completed
         </div>
       </header>
@@ -202,7 +202,7 @@ export default function MyTasksView({
             </div>
           ) : (
             <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[900px]">
                 <thead className="sticky top-0 z-10 shadow-sm select-none">
                   <tr>
                     <th 

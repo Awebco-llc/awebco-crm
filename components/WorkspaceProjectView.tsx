@@ -1124,7 +1124,7 @@ export default function WorkspaceProjectView({
       ];
     } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
       const filtered = INITIAL_COLUMNS.filter(c => {
-        if (projectType !== 'Support Tickets' && ['companyName', 'contactName', 'email', 'category'].includes(c.id)) {
+        if (['companyName', 'contactName', 'email', 'category'].includes(c.id)) {
           return false;
         }
         return c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl';
@@ -2216,8 +2216,8 @@ export default function WorkspaceProjectView({
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
-      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+      <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col lg:flex-row lg:items-center justify-between p-4 lg:px-6 gap-3 shrink-0">
+        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full lg:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
           <Search className="w-4 h-4 text-[#8E9299]" />
           <input 
             type="text"
@@ -2225,7 +2225,7 @@ export default function WorkspaceProjectView({
             className="bg-transparent border-none outline-none text-sm w-full text-[#1C1F23] placeholder:text-[#8E9299]"
           />
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {projectType === 'SEO' && (
             <button
               onClick={() => triggerSheetsSync()}
@@ -2481,8 +2481,8 @@ export default function WorkspaceProjectView({
                     }
                   />
                   {!isCollapsed && (
-                    <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
-                      <table className="w-full border-collapse text-left table-fixed">
+                    <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] overflow-x-auto">
+                      <table className="w-full border-collapse text-left table-fixed min-w-[1200px]" style={{ minWidth: '1200px' }}>
                         <thead className="sticky top-0 z-10 shadow-sm">
                           <tr>
                             <th style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
@@ -3316,7 +3316,21 @@ export default function WorkspaceProjectView({
                 <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
                   {activeEditTab === 'details' && (() => {
                     const editingRow = data.find(r => r.id === editingRowId);
-                    return columns.filter(c => c.id !== 'updatesCount').map(col => (
+                    const displayCols = [...columns.filter(c => c.id !== 'updatesCount')];
+                    if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
+                      const extraFields = [
+                        { id: 'companyName', header: 'Company Name' },
+                        { id: 'contactName', header: 'Contact Name' },
+                        { id: 'email', header: 'Contact Email' },
+                        { id: 'category', header: 'Category' }
+                      ];
+                      extraFields.forEach(f => {
+                        if (!displayCols.some(c => c.id === f.id)) {
+                          displayCols.push(f);
+                        }
+                      });
+                    }
+                    return displayCols.map(col => (
                       <div key={col.id}>
                         <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
                         {col.id === 'status' ? (

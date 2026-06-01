@@ -485,8 +485,8 @@ export default function ProductsServicesView({
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
-      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+      <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col md:flex-row md:items-center justify-between p-4 md:px-6 gap-3 shrink-0">
+        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full md:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
           <Search className="w-4 h-4 text-[#8E9299]" />
           <input 
             type="text"
@@ -496,7 +496,7 @@ export default function ProductsServicesView({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <button 
             onClick={() => {
               setImportSource('options');
@@ -534,7 +534,8 @@ export default function ProductsServicesView({
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
+          <div className="overflow-x-auto w-full bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] mb-8">
+            <table className="w-full border-collapse text-left min-w-[1000px]" style={{ minWidth: '1000px' }}>
             <thead className="sticky top-0 z-10 shadow-sm select-none">
               <tr>
                 <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
@@ -615,7 +616,8 @@ export default function ProductsServicesView({
                 ))}
               </SortableContext>
             </tbody>
-          </table>
+            </table>
+          </div>
         </DndContext>
       </div>
 

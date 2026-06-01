@@ -685,8 +685,8 @@ export default function DealsView({
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
-      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0">
-        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+      <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col md:flex-row md:items-center justify-between p-4 md:px-6 gap-3 shrink-0">
+        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full md:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
           <Search className="w-4 h-4 text-[#8E9299]" />
           <input 
             type="text"
@@ -696,7 +696,7 @@ export default function DealsView({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {visibleColumns.length < 8 && (
             <button
               type="button"
@@ -744,33 +744,35 @@ export default function DealsView({
             <span className="font-bold text-[15px] uppercase tracking-wide text-[#1061E3]">Active Deals</span>
             <span className="text-[#8E9299] text-[13px]">({activeDeals.length})</span>
           </div>
-          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
-            {renderTableHeaders()}
-            <tbody className="min-h-[50px]">
-              <SortableContext 
-                items={activeDeals.map(d => d.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {activeDeals.length === 0 ? (
-                  <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No active deals found.</td>
-                  </tr>
-                ) : activeDeals.map(deal => (
-                  <SortableRow 
-                    key={deal.id} 
-                    deal={deal} 
-                    onClick={() => openEditModal(deal)} 
-                    onUpdate={handleUpdateDeal} 
-                    teamMembers={teamMembers}
-                    companies={companies}
-                    contacts={contacts}
-                    onDelete={handleDeleteDeal}
-                    visibleColumns={visibleColumns}
-                  />
-                ))}
-              </SortableContext>
-            </tbody>
-          </table>
+          <div className="overflow-x-auto w-full bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] mb-8">
+            <table className="w-full border-collapse text-left min-w-[1000px]" style={{ minWidth: '1000px' }}>
+              {renderTableHeaders()}
+              <tbody className="min-h-[50px]">
+                <SortableContext 
+                  items={activeDeals.map(d => d.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {activeDeals.length === 0 ? (
+                    <tr>
+                      <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No active deals found.</td>
+                    </tr>
+                  ) : activeDeals.map(deal => (
+                    <SortableRow 
+                      key={deal.id} 
+                      deal={deal} 
+                      onClick={() => openEditModal(deal)} 
+                      onUpdate={handleUpdateDeal} 
+                      teamMembers={teamMembers}
+                      companies={companies}
+                      contacts={contacts}
+                      onDelete={handleDeleteDeal}
+                      visibleColumns={visibleColumns}
+                    />
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </div>
 
           {/* Won Deals */}
           <div className="flex items-center gap-2 py-3 mb-2">
@@ -778,33 +780,35 @@ export default function DealsView({
             <span className="font-bold text-[15px] uppercase tracking-wide text-[#10B981]">Won Deals</span>
             <span className="text-[#8E9299] text-[13px]">({wonDeals.length})</span>
           </div>
-          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
-            {renderTableHeaders()}
-            <tbody className="min-h-[50px]">
-              <SortableContext 
-                items={wonDeals.map(d => d.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {wonDeals.length === 0 ? (
-                  <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No won deals found.</td>
-                  </tr>
-                ) : wonDeals.map(deal => (
-                  <SortableRow 
-                    key={deal.id} 
-                    deal={deal} 
-                    onClick={() => openEditModal(deal)} 
-                    onUpdate={handleUpdateDeal} 
-                    teamMembers={teamMembers}
-                    companies={companies}
-                    contacts={contacts}
-                    onDelete={handleDeleteDeal}
-                    visibleColumns={visibleColumns}
-                  />
-                ))}
-              </SortableContext>
-            </tbody>
-          </table>
+          <div className="overflow-x-auto w-full bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] mb-8">
+            <table className="w-full border-collapse text-left min-w-[1000px]" style={{ minWidth: '1000px' }}>
+              {renderTableHeaders()}
+              <tbody className="min-h-[50px]">
+                <SortableContext 
+                  items={wonDeals.map(d => d.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {wonDeals.length === 0 ? (
+                    <tr>
+                      <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No won deals found.</td>
+                    </tr>
+                  ) : wonDeals.map(deal => (
+                    <SortableRow 
+                      key={deal.id} 
+                      deal={deal} 
+                      onClick={() => openEditModal(deal)} 
+                      onUpdate={handleUpdateDeal} 
+                      teamMembers={teamMembers}
+                      companies={companies}
+                      contacts={contacts}
+                      onDelete={handleDeleteDeal}
+                      visibleColumns={visibleColumns}
+                    />
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </div>
 
           {/* Lost Deals */}
           <div className="flex items-center gap-2 py-3 mb-2">
@@ -812,34 +816,36 @@ export default function DealsView({
             <span className="font-bold text-[15px] uppercase tracking-wide text-[#D32F2F]">Lost Deals</span>
             <span className="text-[#8E9299] text-[13px]">({lostDeals.length})</span>
           </div>
-          <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8">
-            {renderTableHeaders()}
-            <tbody className="min-h-[50px]">
-              <SortableContext 
-                items={lostDeals.map(d => d.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {lostDeals.length === 0 ? (
-                  <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No lost deals found.</td>
-                  </tr>
-                ) : lostDeals.map(deal => (
-                  <SortableRow 
-                    key={deal.id} 
-                    deal={deal} 
-                    onClick={() => openEditModal(deal)} 
-                    onUpdate={handleUpdateDeal} 
-                    teamMembers={teamMembers}
-                    companies={companies}
-                    contacts={contacts}
-                    onDelete={handleDeleteDeal}
-                    isFaded={true}
-                    visibleColumns={visibleColumns}
-                  />
-                ))}
-              </SortableContext>
-            </tbody>
-          </table>
+          <div className="overflow-x-auto w-full bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] mb-8">
+            <table className="w-full border-collapse text-left min-w-[1000px]" style={{ minWidth: '1000px' }}>
+              {renderTableHeaders()}
+              <tbody className="min-h-[50px]">
+                <SortableContext 
+                  items={lostDeals.map(d => d.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {lostDeals.length === 0 ? (
+                    <tr>
+                      <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No lost deals found.</td>
+                    </tr>
+                  ) : lostDeals.map(deal => (
+                    <SortableRow 
+                      key={deal.id} 
+                      deal={deal} 
+                      onClick={() => openEditModal(deal)} 
+                      onUpdate={handleUpdateDeal} 
+                      teamMembers={teamMembers}
+                      companies={companies}
+                      contacts={contacts}
+                      onDelete={handleDeleteDeal}
+                      isFaded={true}
+                      visibleColumns={visibleColumns}
+                    />
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </div>
         </DndContext>
       </div>
 

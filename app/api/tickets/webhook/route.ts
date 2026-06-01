@@ -178,7 +178,7 @@ export async function POST(req: Request) {
       updatedAt: { timestampValue: nowISO },
       order: { integerValue: String(Date.now()) },
       isManual: { booleanValue: false },
-      notes: { stringValue: `Received via webhook from ${fromEmail || email || 'Unknown'}` },
+      notes: { stringValue: '' },
       files: {
         arrayValue: {
           values: extractedFiles.map(file => ({
