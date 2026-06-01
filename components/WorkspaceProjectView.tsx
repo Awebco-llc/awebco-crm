@@ -766,7 +766,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                 const patch: any = { [col.id]: newVal };
                 if (projectType === 'Google Ads') {
                   patch.groupId = newVal === 'Running' ? 'group-running' : 'group-active';
-                } else if (newVal === 'Running') {
+                } else if (newVal === 'Running' && projectType === 'Local Listings') {
                   patch.groupId = 'group-running';
                 } else if (newVal === 'Needs Invoiced') {
                   patch.groupId = 'group-needs-invoiced';
@@ -1599,7 +1599,7 @@ export default function WorkspaceProjectView({
 
         if (projectType === 'Google Ads') {
           updatedPatch.groupId = status === 'Running' ? 'group-running' : 'group-active';
-        } else if (status === 'Running') {
+        } else if (status === 'Running' && projectType === 'Local Listings') {
           const runningGroup = groups.find((g: any) => g.id === 'group-running' || g.name.toLowerCase().includes('run'));
           updatedPatch.groupId = runningGroup ? runningGroup.id : 'group-running';
         } else if (status === 'Needs Invoiced') {
