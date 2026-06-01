@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface ExtractedFile {
   id: string;
@@ -162,33 +160,65 @@ export async function POST(req: Request) {
     if (!category && textParsed.category) category = textParsed.category;
     if (priority === 'Medium' && textParsed.priority) priority = textParsed.priority;
 
-    // Create the ticket in the 'Support Tickets' workspace
-    const ticketData: any = {
-      projectName: subject,
-      description: textBody || 'No content',
-      status: 'Not Started',
-      priority: priority,
-      assignee: '',
-      assignees: [],
-      assignedToId: '',
-      workspace: 'Support Tickets',
-      companyName: companyName,
-      contactName: contactName,
-      email: email,
-      category: category,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      order: Date.now(),
-      isManual: false,
-      notes: `Received via webhook from ${fromEmail || email || 'Unknown'}`,
-      files: extractedFiles,
+    const nowISO = new Date().toISOString();
+    const fields: any = {
+      projectName: { stringValue: subject },
+      description: { stringValue: textBody || 'No content' },
+      status: { stringValue: 'Not Started' },
+      priority: { stringValue: priority },
+      assignee: { stringValue: '' },
+      assignees: { arrayValue: { values: [] } },
+      assignedToId: { stringValue: '' },
+      workspace: { stringValue: 'Support Tickets' },
+      companyName: { stringValue: companyName },
+      contactName: { stringValue: contactName },
+      email: { stringValue: email },
+      category: { stringValue: category },
+      createdAt: { timestampValue: nowISO },
+      updatedAt: { timestampValue: nowISO },
+      order: { integerValue: String(Date.now()) },
+      isManual: { booleanValue: false },
+      notes: { stringValue: `Received via webhook from ${fromEmail || email || 'Unknown'}` },
+      files: {
+        arrayValue: {
+          values: extractedFiles.map(file => ({
+            mapValue: {
+              fields: {
+                id: { stringValue: file.id },
+                name: { stringValue: file.name },
+                url: { stringValue: file.url },
+                uploadedAt: { timestampValue: file.uploadedAt }
+              }
+            }
+          }))
+        }
+      }
     };
 
-    const docRef = await addDoc(collection(getDb(), 'tickets'), ticketData);
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const databaseId = process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID || '(default)';
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/tickets`;
+
+    const response = await fetch(firestoreUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fields }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Firestore REST API error: ${errText}`);
+    }
+
+    const resJson = await response.json();
+    const docPathParts = resJson.name.split('/');
+    const ticketId = docPathParts[docPathParts.length - 1];
 
     return NextResponse.json({
       success: true,
-      ticketId: docRef.id,
+      ticketId: ticketId,
       message: 'Ticket created successfully'
     });
   } catch (err: any) {
