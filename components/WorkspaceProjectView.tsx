@@ -760,7 +760,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                 : row.parentId
                   ? (projectType === 'Local Listings' || projectType === 'Social Media'
                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
-                    : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
+                    : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(projectType === 'Support Tickets' ? ['Closed'] : [])])
                   : (statusOptions || [])}
               onSave={(newVal) => {
                 const patch: any = { [col.id]: newVal };
@@ -770,7 +770,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                   patch.groupId = 'group-running';
                 } else if (newVal === 'Needs Invoiced') {
                   patch.groupId = 'group-needs-invoiced';
-                } else if (newVal === 'S14: Launched' || newVal === 'Launched' || newVal === 'Done') {
+                } else if (newVal === 'S14: Launched' || newVal === 'Launched' || newVal === 'Done' || newVal === 'Closed') {
                   patch.groupId = 'group-completed';
                 } else if (row.groupId === 'group-needs-invoiced' || row.groupId === 'group-completed' || row.groupId === 'group-running') {
                   patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
@@ -1365,7 +1365,7 @@ export default function WorkspaceProjectView({
             patch.groupId = 'group-running';
           } else if (status === 'Needs Invoiced') {
             patch.groupId = 'group-needs-invoiced';
-          } else if (status === 'S14: Launched' || status === 'Launched' || status === 'Done') {
+          } else if (status === 'S14: Launched' || status === 'Launched' || status === 'Done' || status === 'Closed') {
             patch.groupId = 'group-completed';
           } else if (currentGroupId === 'group-needs-invoiced' || currentGroupId === 'group-completed' || currentGroupId === 'group-running') {
             patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
@@ -1445,16 +1445,49 @@ export default function WorkspaceProjectView({
   }, [openRowId, data]);
 
   const getRowGroupId = (row: any) => {
-    if (row.groupId) return row.groupId;
-    if (row.status === 'Running') return 'group-running';
-    if (projectType === 'Google Ads') return 'group-active';
-    if (row.status === 'Needs Invoiced') return 'group-needs-invoiced';
-    if (row.status === 'S14: Launched' || row.status === 'Launched' || row.status === 'Done') {
-      return 'group-completed';
+    let gid = row.groupId;
+    
+    // If the group ID exists in our groups list, use it
+    if (gid && groups.some((g: any) => g.id === gid)) {
+      return gid;
     }
-    if (projectType === 'Local Listings') return 'group-setup';
-    if (projectType === 'Social Media') return 'group-smm';
-    return 'group-active';
+    
+    // If gid is a default or status is completed, map to the completed group
+    const isCompletedStatus = row.status === 'S14: Launched' || row.status === 'Launched' || row.status === 'Done' || row.status === 'Closed';
+    if (gid === 'group-completed' || isCompletedStatus) {
+      const compGroup = groups.find((g: any) => 
+        g.id === 'group-completed' || 
+        g.name.toLowerCase().includes('clos') || 
+        g.name.toLowerCase().includes('complet') || 
+        g.name.toLowerCase().includes('done')
+      );
+      if (compGroup) return compGroup.id;
+      if (groups.length > 0) return groups[groups.length - 1].id;
+    }
+    
+    if (gid === 'group-running' || row.status === 'Running') {
+      const runningGroup = groups.find((g: any) => g.id === 'group-running' || g.name.toLowerCase().includes('run'));
+      if (runningGroup) return runningGroup.id;
+    }
+    
+    if (gid === 'group-needs-invoiced' || row.status === 'Needs Invoiced') {
+      const invoiceGroup = groups.find((g: any) => g.id === 'group-needs-invoiced' || g.name.toLowerCase().includes('invoice'));
+      if (invoiceGroup) return invoiceGroup.id;
+    }
+
+    if (gid === 'group-active') {
+      const activeGroup = groups.find((g: any) => 
+        g.id === 'group-active' || 
+        g.name.toLowerCase().includes('activ') || 
+        g.name.toLowerCase().includes('setup')
+      );
+      if (activeGroup) return activeGroup.id;
+    }
+
+    // Default fallback to the first group
+    if (groups.length > 0) return groups[0].id;
+    
+    return gid || 'group-active';
   };
 
   const getStatusOptions = () => {
@@ -1489,7 +1522,8 @@ export default function WorkspaceProjectView({
         'Awaiting Customer',
         'Needs Invoiced',
         'On Hold',
-        'Done'
+        'Done',
+        ...(projectType === 'Support Tickets' ? ['Closed'] : [])
       ];
     }
     return [
@@ -1555,7 +1589,70 @@ export default function WorkspaceProjectView({
 
   const handleUpdateRow = async (id: string, patch: any) => {
     try {
-      await updateTicket(id, patch);
+      const updatedPatch = { ...patch };
+
+      // Map status change to the correct groupId dynamically if status is changed
+      if (updatedPatch.status) {
+        const status = updatedPatch.status;
+        const row = data.find(r => r.id === id);
+        const currentGroupId = row ? (row.groupId || getRowGroupId(row)) : 'group-active';
+
+        if (projectType === 'Google Ads') {
+          updatedPatch.groupId = status === 'Running' ? 'group-running' : 'group-active';
+        } else if (status === 'Running') {
+          const runningGroup = groups.find((g: any) => g.id === 'group-running' || g.name.toLowerCase().includes('run'));
+          updatedPatch.groupId = runningGroup ? runningGroup.id : 'group-running';
+        } else if (status === 'Needs Invoiced') {
+          const invoiceGroup = groups.find((g: any) => g.id === 'group-needs-invoiced' || g.name.toLowerCase().includes('invoice'));
+          updatedPatch.groupId = invoiceGroup ? invoiceGroup.id : 'group-needs-invoiced';
+        } else if (status === 'S14: Launched' || status === 'Launched' || status === 'Done' || status === 'Closed') {
+          const compGroup = groups.find((g: any) => 
+            g.id === 'group-completed' || 
+            g.name.toLowerCase().includes('clos') || 
+            g.name.toLowerCase().includes('complet') || 
+            g.name.toLowerCase().includes('done')
+          );
+          updatedPatch.groupId = compGroup ? compGroup.id : 'group-completed';
+        } else if (currentGroupId === 'group-needs-invoiced' || currentGroupId === 'group-completed' || currentGroupId === 'group-running') {
+          const activeGroup = groups.find((g: any) => 
+            g.id === 'group-active' || 
+            g.name.toLowerCase().includes('activ') || 
+            g.name.toLowerCase().includes('setup')
+          );
+          updatedPatch.groupId = activeGroup ? activeGroup.id : 'group-active';
+        }
+      } else if (updatedPatch.groupId) {
+        // If groupId is specifically set (e.g. from inline status changes calling handleUpdateRow with a hardcoded groupId like 'group-completed'),
+        // resolve it if that group ID does not exist in groups.
+        const gid = updatedPatch.groupId;
+        if (!groups.some((g: any) => g.id === gid)) {
+          if (gid === 'group-completed') {
+            const compGroup = groups.find((g: any) => 
+              g.id === 'group-completed' || 
+              g.name.toLowerCase().includes('clos') || 
+              g.name.toLowerCase().includes('complet') || 
+              g.name.toLowerCase().includes('done')
+            );
+            if (compGroup) updatedPatch.groupId = compGroup.id;
+            else if (groups.length > 0) updatedPatch.groupId = groups[groups.length - 1].id;
+          } else if (gid === 'group-running') {
+            const runningGroup = groups.find((g: any) => g.id === 'group-running' || g.name.toLowerCase().includes('run'));
+            if (runningGroup) updatedPatch.groupId = runningGroup.id;
+          } else if (gid === 'group-needs-invoiced') {
+            const invoiceGroup = groups.find((g: any) => g.id === 'group-needs-invoiced' || g.name.toLowerCase().includes('invoice'));
+            if (invoiceGroup) updatedPatch.groupId = invoiceGroup.id;
+          } else if (gid === 'group-active') {
+            const activeGroup = groups.find((g: any) => 
+              g.id === 'group-active' || 
+              g.name.toLowerCase().includes('activ') || 
+              g.name.toLowerCase().includes('setup')
+            );
+            if (activeGroup) updatedPatch.groupId = activeGroup.id;
+          }
+        }
+      }
+
+      await updateTicket(id, updatedPatch);
       triggerSheetsSync();
     } catch (err) {
       console.error('Failed to update ticket', err);
