@@ -117,7 +117,8 @@ function parseFieldsFromText(text: string) {
 export async function POST(req: Request) {
   try {
     const url = new URL(req.url);
-    const secret = url.searchParams.get('secret');
+    const querySecret = url.searchParams.get('secret') || url.search.slice(1);
+    const secret = querySecret || req.headers.get('x-webhook-secret') || req.headers.get('X-Webhook-Secret');
     const expectedSecret = process.env.WEBHOOK_SECRET;
 
     if (!expectedSecret || secret !== expectedSecret) {
