@@ -3,7 +3,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import type { FirebaseStorage } from 'firebase/storage';
 import { getStorage } from 'firebase/storage';
 
@@ -55,9 +55,15 @@ function initFirebaseClient() {
   );
 
   const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+  
+  const isServer = typeof window === 'undefined';
+  const db = isServer 
+    ? initializeFirestore(app, { experimentalForceLongPolling: true }, firestoreDatabaseId)
+    : getFirestore(app, firestoreDatabaseId);
+
   cached = {
     app,
-    db: getFirestore(app, firestoreDatabaseId),
+    db,
     auth: getAuth(app),
     googleProvider: new GoogleAuthProvider(),
     storage: getStorage(app),
