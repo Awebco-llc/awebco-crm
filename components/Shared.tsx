@@ -191,6 +191,7 @@ export interface Company {
   em: boolean;
   dp?: boolean;
   support?: boolean;
+  awebco?: boolean;
   primaryContactId?: string;
   deadline?: string;
   description?: string;
@@ -203,6 +204,7 @@ export interface Company {
   emNotes?: string;
   dpNotes?: string;
   supportNotes?: string;
+  awebcoNotes?: string;
   updates?: Array<{
     id: string;
     author?: string;

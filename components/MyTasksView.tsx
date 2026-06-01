@@ -6,6 +6,7 @@ import { subscribeAllTickets } from '@/lib/crmStore';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 const WORKSPACE_SERVICES: Array<{ key: keyof Company; label: string }> = [
+  { key: 'awebco', label: 'Awebco' },
   { key: 'web', label: 'Websites' },
   { key: 'dp', label: 'Design & Print' },
   { key: 'seo', label: 'SEO' },

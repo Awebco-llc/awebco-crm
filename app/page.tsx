@@ -5,7 +5,7 @@ import {
   Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
-  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu
+  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu, Rocket
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import WorkspaceProjectView from '@/components/WorkspaceProjectView';
@@ -65,6 +65,7 @@ const NAV_ITEMS_CRM = [
 ];
 const CRM_NAV_NAMES = NAV_ITEMS_CRM.map(item => item.name);
 const NAV_ITEMS_WORKSPACE = [
+  { name: 'Awebco', icon: Rocket },
   { name: 'Support Tickets', icon: Ticket },
   { name: 'Websites', icon: Globe },
   { name: 'Design & Print', icon: Palette },
@@ -602,7 +603,7 @@ export default function Page() {
         const decodedNav = decodeURIComponent(navParam);
         const allNavs = [
           'My Tasks', 'Inbox', 'Contacts', 'Companies', 'Deals / Sales', 
-          'Proposals', 'Price Catalog', 'Files', 'Support Tickets', 'Websites', 
+          'Proposals', 'Price Catalog', 'Files', 'Awebco', 'Support Tickets', 'Websites', 
           'Design & Print', 'SEO', 'Local Listings', 'Google Ads', 'Social Media', 
           'Settings', 'Profile'
         ];
@@ -1697,6 +1698,8 @@ export default function Page() {
           <MyTasksView teamMembers={teamMembers} companies={companies} contacts={contacts} currentUserId={currentTeamMember?.id} onOpenTask={handleOpenTask} />
         ) : activeContentNav === 'Inbox' ? (
           <InboxView teamMembers={teamMembers} currentUserId={currentTeamMember?.id} messages={chatMessages} />
+        ) : activeContentNav === 'Awebco' ? (
+          <WorkspaceProjectView key={`awebco-${workspaceOpenRequest?.navName === 'Awebco' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Awebco" flagKey="awebco" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Awebco' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingGroups={allowDeletingGroups} allowDeletingColumns={allowDeletingColumns} />
         ) : activeContentNav === 'Websites' ? (
           <WorkspaceProjectView key={`web-${workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Websites" flagKey="web" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Websites' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingGroups={allowDeletingGroups} allowDeletingColumns={allowDeletingColumns} />
         ) : activeContentNav === 'Design & Print' ? (

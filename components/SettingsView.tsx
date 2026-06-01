@@ -13,6 +13,7 @@ const formatRole = (role?: TeamMember['role']) => {
 };
 
 const ALL_WORKSPACES = [
+  'Awebco',
   'Support Tickets',
   'Websites',
   'Design & Print',
