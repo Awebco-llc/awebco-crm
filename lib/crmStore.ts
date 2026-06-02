@@ -466,3 +466,34 @@ export async function markMessageAsRead(id: string): Promise<void> {
     read: true,
   });
 }
+
+export async function updateFileMetadata(id: string, patch: any): Promise<void> {
+  const db = getDb();
+  await updateDoc(doc(db, 'files', id), patch);
+}
+
+export function subscribeFolders(onChange: (folders: any[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const db = getDb();
+  const q = query(collection(db, 'folders'), orderBy('name'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    },
+    (e) => onError?.(e),
+  );
+}
+
+export async function createFolder(name: string): Promise<string> {
+  const db = getDb();
+  const ref = await addDoc(collection(db, 'folders'), {
+    name,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  const db = getDb();
+  await deleteDoc(doc(db, 'folders', id));
+}

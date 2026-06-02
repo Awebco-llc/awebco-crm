@@ -287,7 +287,27 @@ export default function DealsView({
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'currentStep', 'status', 'assignedToId', 'value', 'companyId', 'contactId', 'notes']);
-  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('awebco_deals_sort_config');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return null;
+  });
+
+  React.useEffect(() => {
+    if (sortConfig) {
+      localStorage.setItem('awebco_deals_sort_config', JSON.stringify(sortConfig));
+    } else {
+      localStorage.removeItem('awebco_deals_sort_config');
+    }
+  }, [sortConfig]);
 
   const handleSort = useCallback((column: string) => {
     setSortConfig(prev => {

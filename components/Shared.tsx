@@ -32,6 +32,7 @@ export interface StorageFile {
   storagePath: string;
   downloadUrl: string;
   uploadedBy: string;
+  folderId?: string;
   createdAt?: any;
   updatedAt?: any;
 }

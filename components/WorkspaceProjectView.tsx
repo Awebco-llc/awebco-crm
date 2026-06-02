@@ -1163,7 +1163,29 @@ export default function WorkspaceProjectView({
   });
   const [rawTickets, setRawTickets] = useState<any[]>([]);
 
-  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const storageKey = `awebco_workspace_sort_config_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    const storageKey = `awebco_workspace_sort_config_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+    if (sortConfig) {
+      localStorage.setItem(storageKey, JSON.stringify(sortConfig));
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  }, [sortConfig, projectType]);
 
   const handleSort = (column: string) => {
     setSortConfig(prev => {

@@ -45,7 +45,27 @@ export default function ProposalsView({
   const [activeView, setActiveView] = useState<'list' | 'edit'>('list');
   const [currentDoc, setCurrentDoc] = useState<Proposal | null>(null);
 
-  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('awebco_proposals_sort_config');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return null;
+  });
+
+  React.useEffect(() => {
+    if (sortConfig) {
+      localStorage.setItem('awebco_proposals_sort_config', JSON.stringify(sortConfig));
+    } else {
+      localStorage.removeItem('awebco_proposals_sort_config');
+    }
+  }, [sortConfig]);
 
   const handleSort = (column: string) => {
     setSortConfig(prev => {

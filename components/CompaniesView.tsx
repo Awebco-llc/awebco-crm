@@ -264,7 +264,27 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em']);
-  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('awebco_companies_sort_config');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return null;
+  });
+
+  React.useEffect(() => {
+    if (sortConfig) {
+      localStorage.setItem('awebco_companies_sort_config', JSON.stringify(sortConfig));
+    } else {
+      localStorage.removeItem('awebco_companies_sort_config');
+    }
+  }, [sortConfig]);
 
   const handleSort = useCallback((column: string) => {
     setSortConfig(prev => {

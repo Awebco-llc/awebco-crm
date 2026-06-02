@@ -56,7 +56,27 @@ export default function MyTasksView({
 }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
-  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('awebco_tasks_sort_config');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (sortConfig) {
+      localStorage.setItem('awebco_tasks_sort_config', JSON.stringify(sortConfig));
+    } else {
+      localStorage.removeItem('awebco_tasks_sort_config');
+    }
+  }, [sortConfig]);
 
   useEffect(() => {
     if (!currentUserId) return;
