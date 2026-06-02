@@ -635,6 +635,7 @@ export function EditableDeadline({ value, onSave }: { value: string; onSave: (va
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === 'Enter' || e.key === 'Escape') {
       setIsEditing(false);
     }

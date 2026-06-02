@@ -69,6 +69,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   }, [isEditing]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === 'Enter') {
       setIsEditing(false);
       if (tempValue !== value) {

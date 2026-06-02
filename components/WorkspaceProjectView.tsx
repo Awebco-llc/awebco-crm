@@ -296,6 +296,7 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, i
   }, [isOpen, isInline]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === 'Enter') {
       e.preventDefault();
       saveValue(tempValue);
@@ -622,6 +623,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   }, [isEditing]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === 'Enter') {
       setIsEditing(false);
       if (tempValue !== value) {
@@ -767,16 +769,18 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                   : (statusOptions || [])}
               onSave={(newVal) => {
                 const patch: any = { [col.id]: newVal };
-                if (projectType === 'Google Ads') {
-                  patch.groupId = newVal === 'Running' ? 'group-running' : 'group-active';
-                } else if (newVal === 'Running' && projectType === 'Local Listings') {
-                  patch.groupId = 'group-running';
-                } else if (newVal === 'Needs Invoiced') {
-                  patch.groupId = 'group-needs-invoiced';
-                } else if (newVal === 'S14: Launched' || newVal === 'Launched' || newVal === 'Done' || newVal === 'Closed') {
-                  patch.groupId = 'group-completed';
-                } else if (row.groupId === 'group-needs-invoiced' || row.groupId === 'group-completed' || row.groupId === 'group-running') {
-                  patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
+                if (projectType !== 'SEO') {
+                  if (projectType === 'Google Ads') {
+                    patch.groupId = newVal === 'Running' ? 'group-running' : 'group-active';
+                  } else if (newVal === 'Running' && projectType === 'Local Listings') {
+                    patch.groupId = 'group-running';
+                  } else if (newVal === 'Needs Invoiced') {
+                    patch.groupId = 'group-needs-invoiced';
+                  } else if (newVal === 'S14: Launched' || newVal === 'Launched' || newVal === 'Done' || newVal === 'Closed') {
+                    patch.groupId = 'group-completed';
+                  } else if (row.groupId === 'group-needs-invoiced' || row.groupId === 'group-completed' || row.groupId === 'group-running') {
+                    patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
+                  }
                 }
                 onUpdate(row.id, patch);
               }} 
@@ -992,7 +996,10 @@ function GroupHeader({
             value={name}
             onChange={e => setName(e.target.value)}
             onBlur={save}
-            onKeyDown={e => e.key === 'Enter' && save()}
+            onKeyDown={e => {
+              e.stopPropagation();
+              if (e.key === 'Enter') save();
+            }}
             className="text-lg font-bold text-[#1C1F23] bg-transparent border-b border-[#1061E3] outline-none px-1 py-0 w-full max-w-sm"
           />
         ) : (
@@ -1360,7 +1367,7 @@ export default function WorkspaceProjectView({
       for (const id of ids) {
         const row = data.find(r => r.id === id);
         const patch: any = { status };
-        if (row) {
+        if (row && projectType !== 'SEO') {
           const currentGroupId = row.groupId || getRowGroupId(row);
           if (projectType === 'Google Ads') {
             patch.groupId = status === 'Running' ? 'group-running' : 'group-active';
@@ -1456,7 +1463,7 @@ export default function WorkspaceProjectView({
     }
     
     // If gid is a default or status is completed, map to the completed group
-    const isCompletedStatus = row.status === 'S14: Launched' || row.status === 'Launched' || row.status === 'Done' || row.status === 'Closed';
+    const isCompletedStatus = projectType !== 'SEO' && (row.status === 'S14: Launched' || row.status === 'Launched' || row.status === 'Done' || row.status === 'Closed');
     if (gid === 'group-completed' || isCompletedStatus) {
       const compGroup = groups.find((g: any) => 
         g.id === 'group-completed' || 
@@ -1595,7 +1602,7 @@ export default function WorkspaceProjectView({
       const updatedPatch = { ...patch };
 
       // Map status change to the correct groupId dynamically if status is changed
-      if (updatedPatch.status) {
+      if (updatedPatch.status && projectType !== 'SEO') {
         const status = updatedPatch.status;
         const row = data.find(r => r.id === id);
         const currentGroupId = row ? (row.groupId || getRowGroupId(row)) : 'group-active';
@@ -2873,14 +2880,16 @@ export default function WorkspaceProjectView({
                                   value={editingRow.status ?? ''}
                                   onChange={e => {
                                     const patch: any = { status: e.target.value };
-                                    if (e.target.value === 'Running') {
-                                      patch.groupId = 'group-running';
-                                    } else if (e.target.value === 'Needs Invoiced') {
-                                      patch.groupId = 'group-needs-invoiced';
-                                    } else if (e.target.value === 'Done' || e.target.value === 'Launched' || e.target.value === 'S14: Launched') {
-                                      patch.groupId = 'group-completed';
-                                    } else {
-                                      patch.groupId = 'group-active';
+                                    if (projectType !== 'SEO') {
+                                      if (e.target.value === 'Running') {
+                                        patch.groupId = 'group-running';
+                                      } else if (e.target.value === 'Needs Invoiced') {
+                                        patch.groupId = 'group-needs-invoiced';
+                                      } else if (e.target.value === 'Done' || e.target.value === 'Launched' || e.target.value === 'S14: Launched') {
+                                        patch.groupId = 'group-completed';
+                                      } else {
+                                        patch.groupId = 'group-active';
+                                      }
                                     }
                                     handleUpdateRow(editingRowId, patch);
                                   }}
@@ -3346,16 +3355,18 @@ export default function WorkspaceProjectView({
                             value={editingRow?.[col.id] ?? ''}
                             onChange={e => {
                               const patch: any = { [col.id]: e.target.value };
-                              if (projectType === 'Google Ads') {
-                                patch.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
-                              } else if (e.target.value === 'Running') {
-                                patch.groupId = 'group-running';
-                              } else if (e.target.value === 'Needs Invoiced') {
-                                patch.groupId = 'group-needs-invoiced';
-                              } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
-                                patch.groupId = 'group-completed';
-                              } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
-                                patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
+                              if (projectType !== 'SEO') {
+                                if (projectType === 'Google Ads') {
+                                  patch.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
+                                } else if (e.target.value === 'Running') {
+                                  patch.groupId = 'group-running';
+                                } else if (e.target.value === 'Needs Invoiced') {
+                                  patch.groupId = 'group-needs-invoiced';
+                                } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
+                                  patch.groupId = 'group-completed';
+                                } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
+                                  patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
+                                }
                               }
                               handleUpdateRow(editingRowId, patch);
                             }}

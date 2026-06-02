@@ -132,6 +132,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   }, [isEditing]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === 'Enter') {
       setIsEditing(false);
       if (tempValue !== value) {
@@ -343,6 +344,7 @@ function SortableGroupSection({
               value={editingGroupName}
               onChange={(e) => setEditingGroupName(e.target.value)}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === 'Enter') handleSaveContactGroup(group.id);
                 if (e.key === 'Escape') onEdit();
               }}
