@@ -26,6 +26,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket, EditableDeadline } from '@/components/Shared';
 import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour, createGroupWithId } from '@/lib/crmStore';
 import TicketImportModal from './TicketImportModal';
+import RichTextEditor from './RichTextEditor';
 
 interface Column {
   id: string;
@@ -2997,11 +2998,11 @@ export default function WorkspaceProjectView({
                         {/* Card 2: Description */}
                         <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm overflow-hidden p-6 md:p-8">
                           <h3 className="text-base font-bold text-[#1C1F23] mb-4">Description</h3>
-                          <textarea
+                          <RichTextEditor
                             value={editingRow.description ?? ''}
-                            onChange={e => handleUpdateRow(editingRowId, { description: e.target.value })}
+                            onChange={val => handleUpdateRow(editingRowId, { description: val })}
                             placeholder="Add a detailed description..."
-                            className="w-full px-4 py-3 border border-[#E2E4E9] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[160px] resize-y"
+                            minHeight="160px"
                           />
                         </div>
 
@@ -3426,13 +3427,13 @@ export default function WorkspaceProjectView({
                     return (
                       <div>
                         <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Description</label>
-                        <textarea
+                        <RichTextEditor
                           value={editingRow?.description ?? ''}
-                          onChange={e => {
-                            handleUpdateRow(editingRowId, { description: e.target.value });
+                          onChange={val => {
+                            handleUpdateRow(editingRowId, { description: val });
                           }}
                           placeholder={`Add a description for this ${projectType.toLowerCase()} project...`}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[280px] resize-y"
+                          minHeight="280px"
                         />
                       </div>
                     );

@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink, Filter, ChevronDown, RefreshCw, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
+import RichTextEditor from './RichTextEditor';
 import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket } from '@/lib/crmStore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase';
@@ -1303,11 +1304,11 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   {activeTab === 'description' && (
                     <div>
                       <h4 className="text-sm font-bold text-[#1C1F23] mb-3 uppercase tracking-wider">Description</h4>
-                      <textarea
+                      <RichTextEditor
                         value={formData.description || ''}
-                        onChange={e => updateForm('description', e.target.value)}
-                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[320px] resize-y"
+                        onChange={val => updateForm('description', val)}
                         placeholder="Add a company description..."
+                        minHeight="320px"
                       />
                     </div>
                   )}

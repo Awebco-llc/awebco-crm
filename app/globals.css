@@ -22,3 +22,139 @@
     margin: 0 !important;
   }
 }
+
+/* Rich Text Editor Formatting & Preview Styles */
+.rich-editor-content,
+.rich-text-content {
+  line-height: 1.6;
+}
+
+.rich-editor-content:empty::before {
+  content: attr(data-placeholder);
+  color: #8E9299;
+  font-style: normal;
+  pointer-events: none;
+  display: block;
+}
+
+.rich-editor-content h2,
+.rich-text-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: #1C1F23;
+}
+
+.rich-editor-content h3,
+.rich-text-content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.375rem;
+  color: #1C1F23;
+}
+
+.rich-editor-content p,
+.rich-text-content p {
+  margin-bottom: 0.5rem;
+}
+
+.rich-editor-content ul,
+.rich-text-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.rich-editor-content ol,
+.rich-text-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.rich-editor-content li,
+.rich-text-content li {
+  margin-bottom: 0.25rem;
+}
+
+.rich-editor-content input[type="checkbox"],
+.rich-text-content input[type="checkbox"] {
+  cursor: pointer;
+  margin-right: 0.5rem;
+  margin-top: 0.25rem;
+  vertical-align: top;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.rich-checklist-row,
+.rich-editor-content *:has(> input[type="checkbox"]),
+.rich-text-content *:has(> input[type="checkbox"]) {
+  display: flex !important;
+  align-items: flex-start !important;
+  margin-top: 0.375rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+/* Custom Checklist List formatting */
+.rich-editor-content ul.rich-checklist,
+.rich-text-content ul.rich-checklist,
+.rich-editor-content ul.rich-checklist ul,
+.rich-text-content ul.rich-checklist ul {
+  list-style-type: none !important;
+  padding-left: 1.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.rich-editor-content ul.rich-checklist li,
+.rich-text-content ul.rich-checklist li {
+  position: relative !important;
+  padding-left: 0.25rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+/* Custom checkbox marker using ::before pseudo-element */
+.rich-editor-content ul.rich-checklist li::before,
+.rich-text-content ul.rich-checklist li::before {
+  content: '' !important;
+  position: absolute !important;
+  left: -1.25rem !important;
+  top: 0.225rem !important;
+  width: 0.95rem !important;
+  height: 0.95rem !important;
+  border: 1.5px solid #D2D4D9 !important;
+  border-radius: 4px !important;
+  background-color: #fff !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+/* Hover effect on checkbox */
+.rich-editor-content ul.rich-checklist li:hover::before {
+  border-color: #1061E3 !important;
+}
+
+/* Checked state background color */
+.rich-editor-content ul.rich-checklist li.checked::before,
+.rich-text-content ul.rich-checklist li.checked::before {
+  background-color: #1061E3 !important;
+  border-color: #1061E3 !important;
+}
+
+/* Checked state checkmark inside box */
+.rich-editor-content ul.rich-checklist li.checked::after,
+.rich-text-content ul.rich-checklist li.checked::after {
+  content: '' !important;
+  position: absolute !important;
+  left: -0.925rem !important;
+  top: 0.325rem !important;
+  width: 0.3rem !important;
+  height: 0.55rem !important;
+  border: solid white !important;
+  border-width: 0 1.5px 1.5px 0 !important;
+  transform: rotate(45deg) !important;
+}
+

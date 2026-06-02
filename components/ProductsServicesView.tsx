@@ -25,6 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 import { ProductService } from './Shared';
 import { createProduct, updateProduct, deleteProduct } from '@/lib/crmStore';
+import RichTextEditor from './RichTextEditor';
 
 function formatCatalogPrice(value: string) {
   const trimmedValue = value.trim();
@@ -39,6 +40,10 @@ function formatCatalogPrice(value: string) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function stripHtml(html: string) {
+  return html ? html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') : '';
 }
 
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
@@ -147,7 +152,7 @@ function SortableRow({ item, onClick, onUpdate, onDelete }: { item: ProductServi
         <EditableCell value={formatCatalogPrice(item.price)} onSave={v => onUpdate(item.id, 'price', v)} />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableCell value={item.description} onSave={v => onUpdate(item.id, 'description', v)} />
+        <EditableCell value={item.description} onSave={v => onUpdate(item.id, 'description', v)} renderValue={v => stripHtml(v) || '—'} />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         {item.url ? (
@@ -685,7 +690,12 @@ export default function ProductsServicesView({
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Description</label>
-                    <textarea value={formData.description || ''} onChange={e => updateForm('description', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] min-h-[100px]" />
+                    <RichTextEditor
+                      value={formData.description || ''}
+                      onChange={val => updateForm('description', val)}
+                      placeholder="Add an item description..."
+                      minHeight="120px"
+                    />
                   </div>
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">

@@ -423,7 +423,7 @@ export function AssigneeDropdown({
       onClick={e => e.stopPropagation()}
     >
       <div className="px-3 py-2 text-xs font-semibold text-[#8E9299] bg-[#F9FAFB] border-b border-[#E2E4E9]">
-        Select Assignee${isMulti ? 's' : ''}
+        Select Assignee{isMulti ? 's' : ''}
       </div>
       <div className="max-h-48 overflow-y-auto pt-1">
         <button
