@@ -314,8 +314,21 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
                               <img src={file.downloadUrl} alt={file.name} className="w-full h-full object-cover" />
                             </div>
                           ) : isPdf(file.type, file.name) ? (
-                            <div className="w-8 h-8 rounded border border-[#FFEBEE] flex items-center justify-center bg-[#FFEBEE] text-[#D32F2F] font-bold text-[9px] shrink-0" title="PDF File">
-                              PDF
+                            <div className="w-8 h-8 rounded border border-[#E2E4E9] overflow-hidden bg-white shrink-0 relative pointer-events-none select-none">
+                              <iframe 
+                                src={`${file.downloadUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                                className="absolute border-none"
+                                style={{
+                                  width: 'calc(100% + 17px)',
+                                  height: 'calc(100% + 17px)',
+                                  top: 0,
+                                  left: 0,
+                                  pointerEvents: 'none',
+                                }}
+                                scrolling="no"
+                                loading="lazy"
+                                title={file.name}
+                              />
                             </div>
                           ) : (
                             <div className="w-8 h-8 rounded border border-[#E2E4E9] flex items-center justify-center bg-gray-50 text-[#8E9299] shrink-0">
