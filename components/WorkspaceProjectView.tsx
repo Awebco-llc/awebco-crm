@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket, EditableDeadline } from '@/components/Shared';
-import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour, createGroupWithId } from '@/lib/crmStore';
+import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour, createGroupWithId, createMessage } from '@/lib/crmStore';
 import TicketImportModal from './TicketImportModal';
 import RichTextEditor from './RichTextEditor';
 
@@ -1115,7 +1115,15 @@ export default function WorkspaceProjectView({
   currentUserName: string,
   currentUserId?: string,
   openRowId?: string,
-  onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void,
+  onMention?: (
+    text: string, 
+    sourceLabel: string, 
+    sourceTitle: string, 
+    actorName: string, 
+    actorId?: string,
+    workspaceName?: string,
+    rowId?: string
+  ) => void,
   canManageBoardMembers: boolean,
   onUpdateMemberPermissions?: (memberId: string, workspaceName: string, hasAccess: boolean) => void,
   useFullScreenUnifiedTicketView?: boolean,
@@ -1684,6 +1692,26 @@ export default function WorkspaceProjectView({
         }
       }
 
+      if (updatedPatch.assignees !== undefined) {
+        const row = data.find(r => r.id === id);
+        const oldAssignees = row?.assignees || (row?.assignee ? [row.assignee] : []);
+        const newAssignees = updatedPatch.assignees || [];
+        const addedAssignees = newAssignees.filter((uid: string) => uid && !oldAssignees.includes(uid));
+
+        if (addedAssignees.length > 0 && currentUserId) {
+          const taskName = row?.projectName || 'Unnamed Task';
+          for (const recipientId of addedAssignees) {
+            if (recipientId === currentUserId) continue;
+            const messageText = `I assigned you to the task: "${taskName}" (task:${projectType}:${id})`;
+            createMessage({
+              senderId: currentUserId,
+              receiverId: recipientId,
+              text: messageText,
+            }).catch(e => console.error('Failed to send assignee message', e));
+          }
+        }
+      }
+
       await updateTicket(id, updatedPatch);
       triggerSheetsSync();
     } catch (err) {
@@ -1753,16 +1781,18 @@ export default function WorkspaceProjectView({
     const trimmedText = newUpdateText.trim();
 
     if (trimmedText) {
-      onMention?.(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId);
+      onMention?.(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId, projectType, rowId);
     }
     
-    const newUpdate = {
+    const newUpdate: any = {
       id: `update-${Date.now()}`,
       author,
       text: trimmedText,
-      timestamp: new Date().toISOString(),
-      attachment: attachedFile ? attachedFile.name : undefined
+      timestamp: new Date().toISOString()
     };
+    if (attachedFile) {
+      newUpdate.attachment = attachedFile.name;
+    }
     
     const updates = row.updates ? [...row.updates, newUpdate] : [newUpdate];
     await handleUpdateRow(rowId, { updates });
@@ -1796,7 +1826,7 @@ export default function WorkspaceProjectView({
     const trimmedText = quickUpdateText.trim();
 
     if (onMention && trimmedText) {
-      onMention(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId);
+      onMention(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId, projectType, rowId);
     }
     
     const newUpdate = {

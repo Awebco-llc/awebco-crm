@@ -22,7 +22,7 @@ import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
 import ImportModal from '@/components/ImportModal';
 import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup } from '@/components/Shared';
-import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages } from '@/lib/crmStore';
+import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages, createMessage } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getAuthClient } from '@/lib/firebase';
@@ -90,6 +90,8 @@ interface AppNotification {
   createdAt: string;
   read: boolean;
   type?: 'mention' | 'message';
+  workspace?: string;
+  rowId?: string;
 }
 
 interface WorkspaceOpenRequest {
@@ -102,6 +104,18 @@ type WorkspaceBoardMemberships = Record<string, string[]>;
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseTaskLink(text: string) {
+  const match = text.match(/\(task:([^:]+):([^)]+)\)/);
+  if (match) {
+    return {
+      workspace: match[1],
+      taskId: match[2],
+      cleanText: text.replace(/\(task:[^:]+:[^)]+\)/, '').trim()
+    };
+  }
+  return null;
 }
 
 function createInitialBoardMemberships(teamMembers: TeamMember[]): WorkspaceBoardMemberships {
@@ -707,6 +721,15 @@ export default function Page() {
   const [workspaceOpenRequest, setWorkspaceOpenRequest] = useState<WorkspaceOpenRequest | null>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
+  const handleOpenTask = (navName: string, rowId: string) => {
+    setWorkspaceOpenRequest({
+      navName,
+      rowId,
+      requestId: Date.now(),
+    });
+    setActiveNav(navName);
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
@@ -746,6 +769,9 @@ export default function Page() {
         const sender = teamMembers.find((t) => t.id === latestMessage.senderId);
         const senderName = sender?.name || 'Someone';
 
+        const parsed = parseTaskLink(latestMessage.text);
+        const previewText = parsed ? parsed.cleanText : latestMessage.text;
+
         // Add to bell notifications list if not already present
         const notificationId = `msg-${latestMessage.id}`;
         setTimeout(() => {
@@ -756,12 +782,14 @@ export default function Page() {
                 id: notificationId,
                 recipientId: profile.id,
                 actorName: senderName,
-                sourceLabel: 'Inbox',
-                sourceTitle: 'New Message',
-                preview: latestMessage.text,
+                sourceLabel: parsed ? parsed.workspace : 'Inbox',
+                sourceTitle: parsed ? (parsed.workspace === 'Deals / Sales' ? 'Deal Notification' : 'Task Notification') : 'New Message',
+                preview: previewText,
                 createdAt: latestMessage.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
                 read: false,
-                type: 'message' as const
+                type: 'message' as const,
+                workspace: parsed?.workspace,
+                rowId: parsed?.taskId,
               },
               ...prev
             ];
@@ -770,12 +798,16 @@ export default function Page() {
 
         // Trigger browser push notification
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          const notification = new Notification(`New message from ${senderName}`, {
-            body: latestMessage.text,
+          const notification = new Notification(`Notification from ${senderName}`, {
+            body: previewText,
           });
           notification.onclick = () => {
             window.focus();
-            setActiveNav('Inbox');
+            if (parsed) {
+              handleOpenTask(parsed.workspace, parsed.taskId);
+            } else {
+              setActiveNav('Inbox');
+            }
           };
         }
       }
@@ -844,7 +876,15 @@ export default function Page() {
 
   const unreadNotificationCount = userNotifications.filter(notification => !notification.read).length;
 
-  const createMentionNotifications = (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => {
+  const createMentionNotifications = (
+    text: string, 
+    sourceLabel: string, 
+    sourceTitle: string, 
+    actorName: string, 
+    actorId?: string,
+    workspaceName?: string,
+    rowId?: string
+  ) => {
     const trimmedText = text.trim();
     if (!trimmedText) return;
 
@@ -860,21 +900,22 @@ export default function Page() {
 
     const uniqueMentionedMemberIds = [...new Set(mentionedMemberIds)];
     const preview = trimmedText.length > 120 ? `${trimmedText.slice(0, 117)}...` : trimmedText;
-    const createdAt = new Date().toISOString();
 
-    setNotifications(prev => [
-      ...uniqueMentionedMemberIds.map(recipientId => ({
-        id: `${recipientId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        recipientId,
-        actorName,
-        sourceLabel,
-        sourceTitle,
-        preview,
-        createdAt,
-        read: false,
-      })),
-      ...prev,
-    ]);
+    // Send a real-time chat message to each mentioned user's inbox
+    uniqueMentionedMemberIds.forEach(async (recipientId) => {
+      const linkText = workspaceName && rowId ? ` (task:${workspaceName}:${rowId})` : '';
+      const messageText = `I mentioned you in ${sourceTitle}: "${preview}"${linkText}`;
+      
+      try {
+        await createMessage({
+          senderId: actorId || '',
+          receiverId: recipientId,
+          text: messageText,
+        });
+      } catch (err) {
+        console.error('Failed to create mention message:', err);
+      }
+    });
   };
 
   const markNotificationAsRead = (notificationId: string) => {
@@ -892,15 +933,6 @@ export default function Page() {
         notification.recipientId === currentTeamMember.id ? { ...notification, read: true } : notification
       )
     );
-  };
-
-  const handleOpenTask = (navName: string, rowId: string) => {
-    setWorkspaceOpenRequest({
-      navName,
-      rowId,
-      requestId: Date.now(),
-    });
-    setActiveNav(navName);
   };
 
   // New Contact Form State
@@ -1508,7 +1540,9 @@ export default function Page() {
                           key={notification.id}
                           onClick={() => {
                             markNotificationAsRead(notification.id);
-                            if (notification.type === 'message') {
+                            if (notification.workspace && notification.rowId) {
+                              handleOpenTask(notification.workspace, notification.rowId);
+                            } else if (notification.type === 'message') {
                               handleNavClick('Inbox');
                             }
                           }}
@@ -1706,7 +1740,12 @@ export default function Page() {
         ) : activeContentNav === 'My Tasks' ? (
           <MyTasksView teamMembers={teamMembers} companies={companies} contacts={contacts} currentUserId={currentTeamMember?.id} onOpenTask={handleOpenTask} />
         ) : activeContentNav === 'Inbox' ? (
-          <InboxView teamMembers={teamMembers} currentUserId={currentTeamMember?.id} messages={chatMessages} />
+          <InboxView 
+            teamMembers={teamMembers} 
+            currentUserId={currentTeamMember?.id} 
+            messages={chatMessages} 
+            onNavigateTask={handleOpenTask}
+          />
         ) : activeContentNav === 'Awebco' ? (
           <WorkspaceProjectView key={`awebco-${workspaceOpenRequest?.navName === 'Awebco' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Awebco" flagKey="awebco" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Awebco' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingGroups={allowDeletingGroups} allowDeletingColumns={allowDeletingColumns} />
         ) : activeContentNav === 'Websites' ? (
@@ -1726,7 +1765,20 @@ export default function Page() {
         ) : canAccessCRM && activeContentNav === 'Companies' ? (
           <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} allowDeletingColumns={allowDeletingColumns} />
         ) : canAccessCRM && activeContentNav === 'Deals / Sales' ? (
-          <DealsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} setDeals={setDeals} proposals={proposals} setProposals={setProposals} currentUserName={currentUserName} currentUserId={currentTeamMember?.id} onMention={createMentionNotifications} allowDeletingColumns={allowDeletingColumns} />
+          <DealsView 
+            teamMembers={teamMembers} 
+            companies={companies} 
+            contacts={contacts} 
+            deals={deals} 
+            setDeals={setDeals} 
+            proposals={proposals} 
+            setProposals={setProposals} 
+            currentUserName={currentUserName} 
+            currentUserId={currentTeamMember?.id} 
+            onMention={createMentionNotifications} 
+            allowDeletingColumns={allowDeletingColumns} 
+            openRowId={workspaceOpenRequest?.navName === 'Deals / Sales' ? workspaceOpenRequest.rowId : undefined}
+          />
         ) : canAccessCRM && activeContentNav === 'Proposals' ? (
           <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} products={products} proposals={proposals} setProposals={setProposals} />
         ) : canAccessCRM && activeContentNav === 'Price Catalog' ? (

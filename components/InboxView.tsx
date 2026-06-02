@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { TeamMember } from './Shared';
-import { Search, Send } from 'lucide-react';
+import { Search, Send, ExternalLink } from 'lucide-react';
 import { createMessage, markMessageAsRead } from '@/lib/crmStore';
 
 interface ChatMessage {
@@ -14,14 +14,28 @@ interface ChatMessage {
   read: boolean;
 }
 
+function parseTaskLink(text: string) {
+  const match = text.match(/\(task:([^:]+):([^)]+)\)/);
+  if (match) {
+    return {
+      workspace: match[1],
+      taskId: match[2],
+      cleanText: text.replace(/\(task:[^:]+:[^)]+\)/, '').trim()
+    };
+  }
+  return null;
+}
+
 export default function InboxView({ 
   teamMembers, 
   currentUserId,
-  messages
+  messages,
+  onNavigateTask
 }: { 
   teamMembers: TeamMember[], 
   currentUserId: string | undefined,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  onNavigateTask?: (workspace: string, taskId: string) => void
 }) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -204,6 +218,9 @@ export default function InboxView({
                     const isMine = msg.senderId === currentUserId;
                     const showAvatar = index === 0 || currentChatMessages[index - 1].senderId !== msg.senderId;
                     
+                    const parsed = parseTaskLink(msg.text);
+                    const displayText = parsed ? parsed.cleanText : msg.text;
+                    
                     return (
                       <div key={msg.id} className={`flex gap-3 max-w-[70%] ${isMine ? 'self-end flex-row-reverse' : 'self-start'}`}>
                         {showAvatar ? (
@@ -220,12 +237,26 @@ export default function InboxView({
                         ) : (
                           <div className="w-8 shrink-0"></div>
                         )}
-                        <div className={`p-3 rounded-lg text-[13px] shadow-sm ${
+                        <div className={`p-3 rounded-lg text-[13px] shadow-sm flex flex-col items-start ${
                           isMine 
                             ? 'bg-[#1061E3] text-white rounded-tr-none' 
                             : 'bg-white border border-[#E2E4E9] text-[#1C1F23] rounded-tl-none'
                         }`}>
-                          {msg.text}
+                          <span>{displayText}</span>
+                          {parsed && onNavigateTask && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateTask(parsed.workspace, parsed.taskId)}
+                              className={`mt-2 px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1 transition-colors ${
+                                isMine
+                                  ? 'bg-white/20 hover:bg-white/30 text-white'
+                                  : 'bg-[#1061E3] hover:bg-blue-700 text-white shadow-sm'
+                              }`}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              View {parsed.workspace === 'Deals / Sales' ? 'Deal' : 'Task'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

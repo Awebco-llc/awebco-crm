@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
-import { createDeal, updateDeal, deleteDeal } from '@/lib/crmStore';
+import { createDeal, updateDeal, deleteDeal, createMessage } from '@/lib/crmStore';
 import DealImportModal from '@/components/DealImportModal';
 import {
   DndContext,
@@ -269,6 +269,7 @@ export default function DealsView({
   currentUserId,
   onMention,
   allowDeletingColumns = false,
+  openRowId,
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -279,12 +280,33 @@ export default function DealsView({
   setProposals: React.Dispatch<React.SetStateAction<Proposal[]>>,
   currentUserName: string,
   currentUserId?: string,
-  onMention?: (text: string, sourceLabel: string, sourceTitle: string, actorName: string, actorId?: string) => void,
+  onMention?: (
+    text: string, 
+    sourceLabel: string, 
+    sourceTitle: string, 
+    actorName: string, 
+    actorId?: string,
+    workspaceName?: string,
+    rowId?: string
+  ) => void,
   allowDeletingColumns?: boolean,
+  openRowId?: string,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
+
+  // Auto-open deal details if openRowId is provided
+  useEffect(() => {
+    if (openRowId) {
+      const dealToOpen = deals.find(d => d.id === openRowId);
+      if (dealToOpen) {
+        setTimeout(() => {
+          setEditingDealId(dealToOpen.id);
+        }, 0);
+      }
+    }
+  }, [openRowId, deals]);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'currentStep', 'status', 'assignedToId', 'value', 'companyId', 'contactId', 'notes']);
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
@@ -593,6 +615,20 @@ export default function DealsView({
   const handleUpdateDeal = async (id: string, field: keyof Deal, value: any) => {
     setDeals(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d));
     try {
+      if (field === 'assignedToId') {
+        const deal = deals.find(d => d.id === id);
+        const oldAssignee = deal?.assignedToId;
+        const newAssignee = value;
+        if (newAssignee && newAssignee !== oldAssignee && currentUserId && newAssignee !== currentUserId) {
+          const dealName = deal?.name || 'Unnamed Deal';
+          const messageText = `I assigned you to the deal: "${dealName}" (task:Deals / Sales:${id})`;
+          createMessage({
+            senderId: currentUserId,
+            receiverId: newAssignee,
+            text: messageText,
+          }).catch(e => console.error('Failed to send deal assignee message', e));
+        }
+      }
       await updateDeal(id, { [field]: value });
     } catch (e) {
       console.error('Failed to update deal in Firebase', e);
@@ -651,12 +687,7 @@ export default function DealsView({
     const newNotes = updatedNotes.filter(note => !existingNoteIds.has(note.id));
     const sourceTitle = formData.name || existingDeal?.name || 'Untitled Deal';
 
-    newNotes.forEach(note => {
-      if (note.text.trim()) {
-        onMention?.(note.text, 'Deal Comment', sourceTitle, note.author || currentUserName, currentUserId);
-      }
-    });
-
+    let dealId = editingDealId;
     if (editingDealId) {
       try {
         await updateDeal(editingDealId, { ...formData, notes: updatedNotes });
@@ -676,10 +707,18 @@ export default function DealsView({
         order: deals.length,
       };
       try {
-        await createDeal(newDealData);
+        dealId = await createDeal(newDealData);
       } catch (err) {
         console.error('Failed to create deal', err);
       }
+    }
+
+    if (dealId) {
+      newNotes.forEach(note => {
+        if (note.text.trim()) {
+          onMention?.(note.text, 'Deal Comment', sourceTitle, note.author || currentUserName, currentUserId, 'Deals / Sales', dealId);
+        }
+      });
     }
     
     setIsAddModalOpen(false);

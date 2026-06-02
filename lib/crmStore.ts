@@ -341,10 +341,31 @@ export function subscribeAllTickets(onChange: (tickets: Ticket[]) => void, onErr
   }, (e) => onError?.(e));
 }
 
+function cleanUndefined(obj: any): any {
+  if (obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefined(item));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const proto = Object.getPrototypeOf(obj);
+    const isPlainObject = proto === Object.prototype || proto === null;
+    if (!isPlainObject) {
+      return obj;
+    }
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        result[key] = cleanUndefined(val);
+      }
+    }
+    return result;
+  }
+  return obj;
+}
+
 export async function createTicket(input: Omit<Ticket, 'id'>): Promise<string> {
-  const cleanInput = Object.fromEntries(
-    Object.entries(input).filter(([_, v]) => v !== undefined)
-  );
+  const cleanInput = cleanUndefined(input);
   const ref = await addDoc(collection(getDb(), 'tickets'), {
     ...cleanInput, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   });
@@ -352,9 +373,7 @@ export async function createTicket(input: Omit<Ticket, 'id'>): Promise<string> {
 }
 
 export async function updateTicket(id: string, patch: Partial<Omit<Ticket, 'id'>>): Promise<void> {
-  const cleanPatch = Object.fromEntries(
-    Object.entries(patch).filter(([_, v]) => v !== undefined)
-  );
+  const cleanPatch = cleanUndefined(patch);
   await setDoc(doc(getDb(), 'tickets', id), { ...cleanPatch, updatedAt: serverTimestamp() }, { merge: true });
 }
 
