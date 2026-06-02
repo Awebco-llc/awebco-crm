@@ -243,10 +243,18 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
                       <img src={file.downloadUrl} alt={file.name} className="w-full h-full object-cover rounded-sm" />
                     </div>
                   ) : isPdf(file.type, file.name) ? (
-                    <div className="w-full h-full relative bg-white select-none pointer-events-none">
+                    <div className="w-full h-full relative bg-white select-none pointer-events-none overflow-hidden">
                       <iframe 
                         src={`${file.downloadUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                        className="w-full h-full border-none"
+                        className="absolute border-none"
+                        style={{
+                          width: 'calc(100% + 17px)',
+                          height: 'calc(100% + 17px)',
+                          top: 0,
+                          left: 0,
+                          pointerEvents: 'none',
+                        }}
+                        scrolling="no"
                         loading="lazy"
                         title={file.name}
                       />
