@@ -20,6 +20,10 @@ function formatCatalogPrice(value: string) {
   });
 }
 
+function calculateSubtotal(items: ProposalItem[]) {
+  return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+}
+
 export default function ProposalsView({
   teamMembers,
   companies,
@@ -51,7 +55,7 @@ export default function ProposalsView({
     });
   };
 
-  const SortIcon = ({ column }: { column: string }) => {
+  const renderSortIcon = (column: string) => {
     if (sortConfig?.column === column) {
       return sortConfig.direction === 'asc'
         ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
@@ -152,9 +156,7 @@ export default function ProposalsView({
     window.print();
   };
 
-  const calculateSubtotal = (items: ProposalItem[]) => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-  };
+
 
   if (activeView === 'edit' && currentDoc) {
     const subtotal = calculateSubtotal(currentDoc.items);
@@ -577,7 +579,7 @@ export default function ProposalsView({
                   >
                     <div className="flex items-center gap-1">
                       <span>Title</span>
-                      <SortIcon column="title" />
+                      {renderSortIcon('title')}
                     </div>
                   </th>
                   <th 
@@ -586,7 +588,7 @@ export default function ProposalsView({
                   >
                     <div className="flex items-center gap-1">
                       <span>Company</span>
-                      <SortIcon column="company" />
+                      {renderSortIcon('company')}
                     </div>
                   </th>
                   <th 
@@ -595,7 +597,7 @@ export default function ProposalsView({
                   >
                     <div className="flex items-center gap-1">
                       <span>Date</span>
-                      <SortIcon column="date" />
+                      {renderSortIcon('date')}
                     </div>
                   </th>
                   <th 
@@ -604,7 +606,7 @@ export default function ProposalsView({
                   >
                     <div className="flex items-center gap-1">
                       <span>Total Amount</span>
-                      <SortIcon column="total" />
+                      {renderSortIcon('total')}
                     </div>
                   </th>
                   <th 
@@ -613,7 +615,7 @@ export default function ProposalsView({
                   >
                     <div className="flex items-center gap-1">
                       <span>Status</span>
-                      <SortIcon column="status" />
+                      {renderSortIcon('status')}
                     </div>
                   </th>
                   <th className="py-3 px-4 w-12 sticky top-0 bg-[#F9FAFB] z-10 border-b border-[#E2E4E9]"></th>

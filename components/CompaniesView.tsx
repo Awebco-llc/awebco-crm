@@ -274,7 +274,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     });
   }, []);
 
-  const SortIcon = ({ column }: { column: string }) => {
+  const renderSortIcon = (column: string) => {
     if (sortConfig?.column === column) {
       return sortConfig.direction === 'asc'
         ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
@@ -849,7 +849,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1">
                         <span>COMPANY NAME</span>
-                        <SortIcon column="name" />
+                        {renderSortIcon('name')}
                       </div>
                       {allowDeletingColumns && (
                         <button
@@ -871,7 +871,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1">
                         <span>DOMAIN</span>
-                        <SortIcon column="domain" />
+                        {renderSortIcon('domain')}
                       </div>
                       {allowDeletingColumns && (
                         <button
@@ -893,7 +893,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1">
                         <span>INDUSTRY</span>
-                        <SortIcon column="industry" />
+                        {renderSortIcon('industry')}
                       </div>
                       {allowDeletingColumns && (
                         <button
@@ -931,7 +931,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1">
                         <span>PHONE</span>
-                        <SortIcon column="phone" />
+                        {renderSortIcon('phone')}
                       </div>
                       {allowDeletingColumns && (
                         <button

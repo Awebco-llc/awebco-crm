@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -91,8 +91,8 @@ function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, on
   // Core columns cannot be deleted, unless allowDeletingColumns is enabled
   const isDeletable = allowDeletingColumns || !['projectName', 'assignee', 'status', 'updatesCount'].includes(column.id);
 
-  const SortIcon = ({ column }: { column: string }) => {
-    if (sortConfig?.column === column) {
+  const renderSortIcon = (columnId: string) => {
+    if (sortConfig?.column === columnId) {
       return sortConfig.direction === 'asc'
         ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
         : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
@@ -118,7 +118,7 @@ function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, on
             <GripHorizontal className="w-3.5 h-3.5" />
           </button>
           <span>{column.header}</span>
-          {column.id !== 'updatesCount' && <SortIcon column={column.id} />}
+          {column.id !== 'updatesCount' && renderSortIcon(column.id)}
         </div>
         {isDeletable && onDelete && (
           <button
@@ -531,7 +531,7 @@ function RowPlanNotes({ notes, projectType }: { notes: string; projectType: stri
     };
   }, [isOpen]);
 
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       setPosition({
@@ -539,7 +539,7 @@ function RowPlanNotes({ notes, projectType }: { notes: string; projectType: stri
         left: Math.min(rect.left + window.scrollX, window.innerWidth - 330)
       });
     }
-  };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -551,7 +551,7 @@ function RowPlanNotes({ notes, projectType }: { notes: string; projectType: stri
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   if (!notes) return <span className="text-[#C8CDD5] text-xs">—</span>;
 

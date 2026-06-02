@@ -204,7 +204,7 @@ export default function ProductsServicesView({
     });
   };
 
-  const SortIcon = ({ column }: { column: string }) => {
+  const renderSortIcon = (column: string) => {
     if (sortConfig?.column === column) {
       return sortConfig.direction === 'asc'
         ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
@@ -563,7 +563,7 @@ export default function ProductsServicesView({
                 >
                   <div className="flex items-center gap-1">
                     <span>ITEM</span>
-                    <SortIcon column="name" />
+                    {renderSortIcon('name')}
                   </div>
                 </th>
                 <th 
@@ -572,7 +572,7 @@ export default function ProductsServicesView({
                 >
                   <div className="flex items-center gap-1">
                     <span>PRICE</span>
-                    <SortIcon column="price" />
+                    {renderSortIcon('price')}
                   </div>
                 </th>
                 <th 
@@ -581,7 +581,7 @@ export default function ProductsServicesView({
                 >
                   <div className="flex items-center gap-1">
                     <span>DESCRIPTION</span>
-                    <SortIcon column="description" />
+                    {renderSortIcon('description')}
                   </div>
                 </th>
                 <th 
@@ -590,7 +590,7 @@ export default function ProductsServicesView({
                 >
                   <div className="flex items-center gap-1">
                     <span>URL</span>
-                    <SortIcon column="url" />
+                    {renderSortIcon('url')}
                   </div>
                 </th>
                 <th 
@@ -599,7 +599,7 @@ export default function ProductsServicesView({
                 >
                   <div className="flex items-center gap-1">
                     <span>SKU</span>
-                    <SortIcon column="sku" />
+                    {renderSortIcon('sku')}
                   </div>
                 </th>
                 <th 
@@ -608,7 +608,7 @@ export default function ProductsServicesView({
                 >
                   <div className="flex items-center gap-1">
                     <span>TYPE</span>
-                    <SortIcon column="type" />
+                    {renderSortIcon('type')}
                   </div>
                 </th>
                 <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>

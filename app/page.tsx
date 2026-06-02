@@ -442,7 +442,7 @@ function DroppableTable({
 }) {
   const { setNodeRef } = useDroppable({ id });
 
-  const SortIcon = ({ column }: { column: string }) => {
+  const renderSortIcon = (column: string) => {
     if (sortConfig?.column === column) {
       return sortConfig.direction === 'asc'
         ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
@@ -464,7 +464,7 @@ function DroppableTable({
             >
               <div className="flex items-center gap-1">
                 <span>FIRST NAME</span>
-                <SortIcon column="firstName" />
+                {renderSortIcon('firstName')}
               </div>
             </th>
             <th 
@@ -473,7 +473,7 @@ function DroppableTable({
             >
               <div className="flex items-center gap-1">
                 <span>LAST NAME</span>
-                <SortIcon column="lastName" />
+                {renderSortIcon('lastName')}
               </div>
             </th>
             <th 
@@ -482,7 +482,7 @@ function DroppableTable({
             >
               <div className="flex items-center gap-1">
                 <span>TITLE</span>
-                <SortIcon column="title" />
+                {renderSortIcon('title')}
               </div>
             </th>
             <th 
@@ -491,7 +491,7 @@ function DroppableTable({
             >
               <div className="flex items-center gap-1">
                 <span>PHONE</span>
-                <SortIcon column="phone" />
+                {renderSortIcon('phone')}
               </div>
             </th>
             <th 
@@ -500,7 +500,7 @@ function DroppableTable({
             >
               <div className="flex items-center gap-1">
                 <span>COMPANY</span>
-                <SortIcon column="companyId" />
+                {renderSortIcon('companyId')}
               </div>
             </th>
 
@@ -510,7 +510,7 @@ function DroppableTable({
             >
               <div className="flex items-center gap-1">
                 <span>EMAIL</span>
-                <SortIcon column="email" />
+                {renderSortIcon('email')}
               </div>
             </th>
             <th 
@@ -519,7 +519,7 @@ function DroppableTable({
             >
               <div className="flex items-center gap-1">
                 <span>STATUS</span>
-                <SortIcon column="status" />
+                {renderSortIcon('status')}
               </div>
             </th>
             <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
@@ -612,7 +612,9 @@ export default function Page() {
           'Settings', 'Profile'
         ];
         if (allNavs.includes(decodedNav)) {
-          setActiveNav(decodedNav);
+          setTimeout(() => {
+            setActiveNav(decodedNav);
+          }, 0);
           
           urlParams.delete('nav');
           const newSearch = urlParams.toString();
@@ -1285,6 +1287,7 @@ export default function Page() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#F7F8FA] text-[#1C1F23]">
         <form onSubmit={login} className="bg-white p-8 rounded-lg border border-[#E2E4E9] shadow-sm max-w-sm w-full">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Awebco Logo" className="w-12 h-12 mx-auto mb-4 object-contain" />
           <h1 className="text-xl font-bold mb-2 text-center">Welcome to Awebco</h1>
           <p className="text-sm text-[#8E9299] mb-6 text-center">Log in with your team account.</p>
@@ -1351,6 +1354,7 @@ export default function Page() {
         }`}
       >
         <div className="p-6 flex items-center gap-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Awebco Logo" className="w-8 h-8 object-contain rounded bg-white p-0.5 shadow-sm" />
           <span className="font-bold text-lg tracking-tight text-white">Awebco</span>
         </div>

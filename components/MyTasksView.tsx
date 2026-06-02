@@ -56,6 +56,7 @@ export default function MyTasksView({
 }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -69,48 +70,24 @@ export default function MyTasksView({
     return () => unsub();
   }, [currentUserId]);
 
-  if (!currentUserId) {
-    return (
-      <div className="flex-grow flex items-center justify-center bg-gray-50">
-        <div className="p-8 bg-white rounded-lg border border-[#E2E4E9] text-center max-w-sm">
-          <h2 className="text-xl font-bold text-[#1C1F23] mb-2">No Matching Profile</h2>
-          <p className="text-sm text-[#8E9299]">
-            Your email doesn&apos;t match any team member in the system. Contact an admin to add you.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // Filter tickets where user is listed in assignees array OR in legacy assignee string
-  const assignedTickets = tickets.filter(t => {
-    if (t.assignees && Array.isArray(t.assignees)) {
-      return t.assignees.includes(currentUserId);
-    }
-    return t.assignee === currentUserId;
-  });
-
-  const activeTickets = assignedTickets.filter(t => !isCompletedStatus(t.status));
-  const completedTickets = assignedTickets.filter(t => isCompletedStatus(t.status));
-
-  const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
-
-  const handleSort = (column: string) => {
-    setSortConfig(prev => {
-      if (prev?.column !== column) return { column, direction: 'asc' };
-      if (prev.direction === 'asc') return { column, direction: 'desc' };
-      return null;
+  const assignedTickets = useMemo(() => {
+    if (!currentUserId) return [];
+    return tickets.filter(t => {
+      if (t.assignees && Array.isArray(t.assignees)) {
+        return t.assignees.includes(currentUserId);
+      }
+      return t.assignee === currentUserId;
     });
-  };
+  }, [tickets, currentUserId]);
 
-  const SortIcon = ({ column }: { column: string }) => {
-    if (sortConfig?.column === column) {
-      return sortConfig.direction === 'asc'
-        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
-        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
-    }
-    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
-  };
+  const activeTickets = useMemo(() => {
+    return assignedTickets.filter(t => !isCompletedStatus(t.status));
+  }, [assignedTickets]);
+
+  const completedTickets = useMemo(() => {
+    return assignedTickets.filter(t => isCompletedStatus(t.status));
+  }, [assignedTickets]);
 
   const displayTickets = activeTab === 'active' ? activeTickets : completedTickets;
 
@@ -144,6 +121,36 @@ export default function MyTasksView({
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
   }, [displayTickets, sortConfig]);
+
+  const handleSort = (column: string) => {
+    setSortConfig(prev => {
+      if (prev?.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  };
+
+  const renderSortIcon = (column: string) => {
+    if (sortConfig?.column === column) {
+      return sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />
+        : <ChevronDown className="w-3.5 h-3.5 text-[#1061E3] shrink-0" />;
+    }
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-[#C8CDD5] shrink-0 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+  };
+
+  if (!currentUserId) {
+    return (
+      <div className="flex-grow flex items-center justify-center bg-gray-50">
+        <div className="p-8 bg-white rounded-lg border border-[#E2E4E9] text-center max-w-sm">
+          <h2 className="text-xl font-bold text-[#1C1F23] mb-2">No Matching Profile</h2>
+          <p className="text-sm text-[#8E9299]">
+            Your email doesn&apos;t match any team member in the system. Contact an admin to add you.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-[#F9FAFB]">
@@ -212,7 +219,7 @@ export default function MyTasksView({
                     >
                       <div className="flex items-center gap-1">
                         <span>PROJECT / TASK NAME</span>
-                        <SortIcon column="projectName" />
+                        {renderSortIcon('projectName')}
                       </div>
                     </th>
                     <th 
@@ -221,7 +228,7 @@ export default function MyTasksView({
                     >
                       <div className="flex items-center gap-1">
                         <span>WORKSPACE</span>
-                        <SortIcon column="workspace" />
+                        {renderSortIcon('workspace')}
                       </div>
                     </th>
                     <th 
@@ -230,7 +237,7 @@ export default function MyTasksView({
                     >
                       <div className="flex items-center gap-1">
                         <span>STATUS</span>
-                        <SortIcon column="status" />
+                        {renderSortIcon('status')}
                       </div>
                     </th>
                     <th 
@@ -239,7 +246,7 @@ export default function MyTasksView({
                     >
                       <div className="flex items-center gap-1">
                         <span>PRIORITY</span>
-                        <SortIcon column="priority" />
+                        {renderSortIcon('priority')}
                       </div>
                     </th>
                     <th 
@@ -248,7 +255,7 @@ export default function MyTasksView({
                     >
                       <div className="flex items-center gap-1">
                         <span>DEADLINE</span>
-                        <SortIcon column="deadline" />
+                        {renderSortIcon('deadline')}
                       </div>
                     </th>
                   </tr>

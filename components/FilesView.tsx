@@ -132,6 +132,9 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
   };
 
   const isImage = (type: string) => type.startsWith('image/');
+  const isPdf = (type: string, name: string) => {
+    return type === 'application/pdf' || name.toLowerCase().endsWith('.pdf');
+  };
 
   const filteredFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -233,14 +236,29 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
                 className="group relative bg-white border border-[#E2E4E9] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer aspect-square flex flex-col"
                 onClick={() => window.open(file.downloadUrl, '_blank')}
               >
-                <div className="h-2/3 bg-gray-50 border-b border-[#E2E4E9] flex items-center justify-center p-2 relative overflow-hidden">
+                <div className="h-2/3 bg-gray-50 border-b border-[#E2E4E9] flex items-center justify-center relative overflow-hidden">
                   {isImage(file.type) ? (
-                    <>
+                    <div className="w-full h-full p-2 flex items-center justify-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={file.downloadUrl} alt={file.name} className="w-full h-full object-cover" />
-                    </>
+                      <img src={file.downloadUrl} alt={file.name} className="w-full h-full object-cover rounded-sm" />
+                    </div>
+                  ) : isPdf(file.type, file.name) ? (
+                    <div className="w-full h-full relative bg-white select-none pointer-events-none">
+                      <iframe 
+                        src={`${file.downloadUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                        className="w-full h-full border-none"
+                        loading="lazy"
+                        title={file.name}
+                      />
+                      <div className="absolute inset-0 bg-transparent" />
+                      <span className="absolute bottom-2 left-2 bg-[#D32F2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm">
+                        PDF
+                      </span>
+                    </div>
                   ) : (
-                    <File className="w-12 h-12 text-[#8E9299]" />
+                    <div className="w-full h-full p-2 flex items-center justify-center">
+                      <File className="w-12 h-12 text-[#8E9299]" />
+                    </div>
                   )}
                   <button 
                     onClick={(e) => removeFile(file.id, file.storagePath, e)}
@@ -286,6 +304,10 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
                             <div className="w-8 h-8 rounded border border-[#E2E4E9] overflow-hidden bg-gray-50 shrink-0">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={file.downloadUrl} alt={file.name} className="w-full h-full object-cover" />
+                            </div>
+                          ) : isPdf(file.type, file.name) ? (
+                            <div className="w-8 h-8 rounded border border-[#FFEBEE] flex items-center justify-center bg-[#FFEBEE] text-[#D32F2F] font-bold text-[9px] shrink-0" title="PDF File">
+                              PDF
                             </div>
                           ) : (
                             <div className="w-8 h-8 rounded border border-[#E2E4E9] flex items-center justify-center bg-gray-50 text-[#8E9299] shrink-0">

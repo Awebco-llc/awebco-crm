@@ -38,8 +38,10 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
 
   useEffect(() => {
     if (!isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      reset();
+      const timer = setTimeout(() => {
+        reset();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

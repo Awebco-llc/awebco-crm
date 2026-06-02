@@ -40,7 +40,10 @@ export default function DealImportModal({ isOpen, onClose, teamMembers, companie
 
   useEffect(() => {
     if (!isOpen) {
-      reset();
+      const timer = setTimeout(() => {
+        reset();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
