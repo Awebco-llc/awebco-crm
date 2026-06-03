@@ -1271,6 +1271,10 @@ export default function WorkspaceProjectView({
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionIndex, setMentionIndex] = useState(-1);
+  const [showQuickMentionMenu, setShowQuickMentionMenu] = useState(false);
+  const [quickMentionFilter, setQuickMentionFilter] = useState('');
+  const [quickMentionIndex, setQuickMentionIndex] = useState(-1);
+  const quickUpdateTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [activeEditTab, setActiveEditTab] = useState<EditTab>('details');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1861,6 +1865,14 @@ export default function WorkspaceProjectView({
         document.removeEventListener('click', handleGlobalClick);
         document.removeEventListener('keydown', handleGlobalKeydown);
       };
+    }
+  }, [activeCommentsRowId]);
+
+  useEffect(() => {
+    if (!activeCommentsRowId) {
+      setShowQuickMentionMenu(false);
+      setQuickMentionFilter('');
+      setQuickMentionIndex(-1);
     }
   }, [activeCommentsRowId]);
 
@@ -4031,21 +4043,92 @@ export default function WorkspaceProjectView({
               </div>
             )}
 
-            <textarea
-              autoFocus
-              value={quickUpdateText}
-              onChange={(e) => setQuickUpdateText(e.target.value)}
-              placeholder="Type an update or comment..."
-              className="w-full border border-[#E2E4E9] rounded-lg p-2.5 text-xs text-[#1C1F23] placeholder:text-[#8E9299] min-h-[60px] focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent resize-none"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleQuickAddUpdate(row.id);
-                } else if (e.key === 'Escape') {
-                  setActiveCommentsRowId(null);
-                }
-              }}
-            />
+            <div className="relative">
+              <textarea
+                ref={quickUpdateTextareaRef}
+                autoFocus
+                value={quickUpdateText}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuickUpdateText(val);
+                  
+                  // Mentions logic
+                  const cursorP = e.target.selectionStart;
+                  const textToCursor = val.slice(0, cursorP);
+                  const match = textToCursor.match(/@(\w*)$/);
+                  if (match) {
+                    setQuickMentionFilter(match[1]);
+                    setShowQuickMentionMenu(true);
+                    setQuickMentionIndex(0);
+                  } else {
+                    setShowQuickMentionMenu(false);
+                  }
+                }}
+                placeholder="Type an update or comment (use @ to mention)..."
+                className="w-full border border-[#E2E4E9] rounded-lg p-2.5 text-xs text-[#1C1F23] placeholder:text-[#8E9299] min-h-[60px] focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent resize-none"
+                onKeyDown={(e) => {
+                  if (showQuickMentionMenu) {
+                    const filteredMembers = teamMembers.filter(m => m.name.toLowerCase().includes(quickMentionFilter.toLowerCase()));
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setQuickMentionIndex(prev => (prev + 1) % filteredMembers.length);
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setQuickMentionIndex(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (filteredMembers.length > 0) {
+                        const member = filteredMembers[quickMentionIndex];
+                        const cursorP = quickUpdateTextareaRef.current?.selectionStart || 0;
+                        const textToCursor = quickUpdateText.slice(0, cursorP);
+                        const textAfterCursor = quickUpdateText.slice(cursorP);
+                        const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
+                        setQuickUpdateText(newText);
+                        setShowQuickMentionMenu(false);
+                        quickUpdateTextareaRef.current?.focus();
+                      }
+                    } else if (e.key === 'Escape') {
+                      setShowQuickMentionMenu(false);
+                    }
+                  } else if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleQuickAddUpdate(row.id);
+                  } else if (e.key === 'Escape') {
+                    setActiveCommentsRowId(null);
+                  }
+                }}
+              />
+              {/* Quick Mention Menu */}
+              {showQuickMentionMenu && (
+                <div className="absolute z-[10000] bottom-full mb-1 left-0 w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden py-1">
+                  {teamMembers.filter(m => m.name.toLowerCase().includes(quickMentionFilter.toLowerCase())).length > 0 ? (
+                    teamMembers.filter(m => m.name.toLowerCase().includes(quickMentionFilter.toLowerCase())).map((member, i) => (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => {
+                          const cursorP = quickUpdateTextareaRef.current?.selectionStart || 0;
+                          const textToCursor = quickUpdateText.slice(0, cursorP);
+                          const textAfterCursor = quickUpdateText.slice(cursorP);
+                          const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
+                          setQuickUpdateText(newText);
+                          setShowQuickMentionMenu(false);
+                          quickUpdateTextareaRef.current?.focus();
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${i === quickMentionIndex ? 'bg-[#F0F2F5] text-[#1061E3]' : 'text-[#1C1F23] hover:bg-gray-50'}`}
+                      >
+                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
+                          {member.name.charAt(0)}
+                        </div>
+                        {member.name}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-xs text-[#8E9299]">No members found</div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="flex justify-end gap-2">
               <button
