@@ -10,7 +10,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
-import type { Contact, Company, TeamMember, ProductService, Proposal, Deal, ContactGroup, StorageFile, Ticket } from '@/components/Shared';
+import type { Contact, Company, TeamMember, ProductService, Proposal, Deal, ContactGroup, StorageFile, Ticket, ContactActivity } from '@/components/Shared';
 import { getDb, getFirebaseConfig } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
 import { initializeApp, getApps } from 'firebase/app';
@@ -461,6 +461,7 @@ export function subscribeMessages(onChange: (messages: any[]) => void, onError?:
             text: data.text,
             timestamp: data.timestamp?.toDate?.() ? data.timestamp.toDate().toISOString() : data.timestamp || new Date().toISOString(),
             read: data.read ?? false,
+            reacts: data.reacts || {},
           };
         }),
       );
@@ -484,6 +485,11 @@ export async function markMessageAsRead(id: string): Promise<void> {
   await updateDoc(doc(db, 'messages', id), {
     read: true,
   });
+}
+
+export async function updateMessage(id: string, patch: any): Promise<void> {
+  const db = getDb();
+  await updateDoc(doc(db, 'messages', id), patch);
 }
 
 export async function updateFileMetadata(id: string, patch: any): Promise<void> {
@@ -515,4 +521,51 @@ export async function createFolder(name: string): Promise<string> {
 export async function deleteFolder(id: string): Promise<void> {
   const db = getDb();
   await deleteDoc(doc(db, 'folders', id));
+}
+
+// Activities
+export function subscribeActivities(contactId: string, onChange: (activities: ContactActivity[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const db = getDb();
+  const q = query(
+    collection(db, 'activities'),
+    where('contactId', '==', contactId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          contactId: data.contactId,
+          type: data.type,
+          subject: data.subject,
+          body: data.body,
+          senderEmail: data.senderEmail,
+          recipientEmail: data.recipientEmail,
+          timestamp: data.timestamp?.toDate?.() ? data.timestamp.toDate().toISOString() : data.timestamp || new Date().toISOString(),
+          attachments: data.attachments,
+          authorName: data.authorName,
+        } as ContactActivity;
+      });
+      // Sort in-memory to avoid requiring a Firestore composite index
+      list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      onChange(list);
+    },
+    (e) => onError?.(e),
+  );
+}
+
+export async function createActivity(input: Omit<ContactActivity, 'id'>): Promise<string> {
+  const db = getDb();
+  const ref = await addDoc(collection(db, 'activities'), {
+    ...input,
+    timestamp: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function deleteActivity(id: string): Promise<void> {
+  const db = getDb();
+  await deleteDoc(doc(db, 'activities', id));
 }

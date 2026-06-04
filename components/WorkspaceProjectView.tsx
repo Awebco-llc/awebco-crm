@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -1285,6 +1285,57 @@ export default function WorkspaceProjectView({
   const [copiedBoardEmail, setCopiedBoardEmail] = useState(false);
   const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const handleExportSelected = () => {
+    if (selectedRowIds.size === 0) return;
+    
+    // Get the selected rows from the data array
+    const selectedRows = data.filter(row => selectedRowIds.has(row.id));
+    
+    // Build CSV headers based on active columns
+    const csvHeaders = columns.map(col => col.header);
+    
+    // Build CSV rows
+    const csvRows = selectedRows.map(row => {
+      return columns.map(col => {
+        let val = '';
+        if (col.id === 'assignee') {
+          if (row.assignees && Array.isArray(row.assignees) && row.assignees.length > 0) {
+            val = row.assignees.map((id: string) => teamMembers.find(t => t.id === id)?.name || '').join(', ');
+          } else {
+            val = teamMembers.find(t => t.id === row.assignee)?.name || '';
+          }
+        } else if (col.id === 'companyName') {
+          val = companies.find(c => c.id === row.companyId)?.name || '';
+        } else {
+          val = row[col.id] || '';
+        }
+        return val;
+      });
+    });
+    
+    const escapeCsvCell = (cell: any) => {
+      if (cell === null || cell === undefined) return '';
+      const str = String(cell);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    const csvContent = [
+      csvHeaders.map(escapeCsvCell).join(','),
+      ...csvRows.map(row => row.map(escapeCsvCell).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${projectType}_Selected_Projects.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   const [customBillableHours, setCustomBillableHours] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [activeBulkGroupDropdown, setActiveBulkGroupDropdown] = useState(false);
@@ -2467,11 +2518,20 @@ export default function WorkspaceProjectView({
               <option key={status} value={status}>{status}</option>
             ))}
           </select>
+          {selectedRowIds.size > 0 && (
+            <button 
+              onClick={handleExportSelected}
+              className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Export Selected ({selectedRowIds.size})
+            </button>
+          )}
           <button 
             onClick={() => setIsImportModalOpen(true)}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
-            <Upload className="w-4 h-4" />
+            <Download className="w-4 h-4" />
             Import
           </button>
           <button 

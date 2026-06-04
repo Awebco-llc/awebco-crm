@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { TeamMember } from './Shared';
-import { Search, Send, ExternalLink } from 'lucide-react';
-import { createMessage, markMessageAsRead } from '@/lib/crmStore';
+import { Search, Send, ExternalLink, Smile } from 'lucide-react';
+import { createMessage, markMessageAsRead, updateMessage } from '@/lib/crmStore';
 
 interface ChatMessage {
   id: string;
@@ -12,6 +12,7 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   read: boolean;
+  reacts?: { [userId: string]: string };
 }
 
 function parseTaskLink(text: string) {
@@ -42,6 +43,35 @@ export default function InboxView({
   const [searchQuery, setSearchQuery] = useState('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeReactionPickerId, setActiveReactionPickerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      setActiveReactionPickerId(null);
+    };
+    document.addEventListener('click', handleDocumentClick);
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, []);
+
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    if (!currentUserId) return;
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    const currentReacts = msg.reacts || {};
+    const updatedReacts = { ...currentReacts };
+    if (updatedReacts[currentUserId] === emoji) {
+      delete updatedReacts[currentUserId];
+    } else {
+      updatedReacts[currentUserId] = emoji;
+    }
+    try {
+      await updateMessage(messageId, { reacts: updatedReacts });
+    } catch (err) {
+      console.error('Failed to toggle message reaction:', err);
+    }
+  };
 
   // Auto select first user if none selected
   useEffect(() => {
@@ -221,6 +251,24 @@ export default function InboxView({
                     const parsed = parseTaskLink(msg.text);
                     const displayText = parsed ? parsed.cleanText : msg.text;
                     
+                    const currentReacts = msg.reacts || {};
+                    const reactionGroupsMap: { [emoji: string]: { users: string[]; userNames: string[] } } = {};
+                    Object.entries(currentReacts).forEach(([uid, emoji]) => {
+                      if (!reactionGroupsMap[emoji]) {
+                        reactionGroupsMap[emoji] = { users: [], userNames: [] };
+                      }
+                      reactionGroupsMap[emoji].users.push(uid);
+                      const userName = teamMembers.find(t => t.id === uid)?.name || 'Unknown';
+                      reactionGroupsMap[emoji].userNames.push(userName);
+                    });
+                    const reactionGroups = Object.entries(reactionGroupsMap).map(([emoji, data]) => ({
+                      emoji,
+                      count: data.users.length,
+                      users: data.users,
+                      userNames: data.userNames,
+                      hasReacted: currentUserId ? data.users.includes(currentUserId) : false,
+                    }));
+
                     return (
                       <div key={msg.id} className={`flex gap-3 max-w-[70%] ${isMine ? 'self-end flex-row-reverse' : 'self-start'}`}>
                         {showAvatar ? (
@@ -237,26 +285,98 @@ export default function InboxView({
                         ) : (
                           <div className="w-8 shrink-0"></div>
                         )}
-                        <div className={`p-3 rounded-lg text-[13px] shadow-sm flex flex-col items-start ${
-                          isMine 
-                            ? 'bg-[#1061E3] text-white rounded-tr-none' 
-                            : 'bg-white border border-[#E2E4E9] text-[#1C1F23] rounded-tl-none'
-                        }`}>
-                          <span>{displayText}</span>
-                          {parsed && onNavigateTask && (
+                        <div className={`relative group/msg flex items-center gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
+                          <div className="flex flex-col">
+                            <div className={`p-3 rounded-lg text-[13px] shadow-sm flex flex-col items-start ${
+                              isMine 
+                                ? 'bg-[#1061E3] text-white rounded-tr-none' 
+                                : 'bg-white border border-[#E2E4E9] text-[#1C1F23] rounded-tl-none'
+                            }`}>
+                              <span>{displayText}</span>
+                              {parsed && onNavigateTask && (
+                                <button
+                                  type="button"
+                                  onClick={() => onNavigateTask(parsed.workspace, parsed.taskId)}
+                                  className={`mt-2 px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1 transition-colors ${
+                                    isMine
+                                      ? 'bg-white/20 hover:bg-white/30 text-white'
+                                      : 'bg-[#1061E3] hover:bg-blue-700 text-white shadow-sm'
+                                  }`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  View {parsed.workspace === 'Deals / Sales' ? 'Deal' : 'Task'}
+                                </button>
+                              )}
+                            </div>
+                            
+                            {/* Reactions Display */}
+                            {reactionGroups.length > 0 && (
+                              <div className={`flex flex-wrap gap-1 mt-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                                {reactionGroups.map(({ emoji, count, userNames, hasReacted }) => (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleReaction(msg.id, emoji);
+                                    }}
+                                    title={`Reacted by: ${userNames.join(', ')}`}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-all ${
+                                      hasReacted 
+                                        ? 'bg-blue-50 border-blue-200 text-blue-700' 
+                                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    <span>{emoji}</span>
+                                    <span className="font-semibold text-[10px]">{count}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Hover Smile Trigger & Reaction Picker */}
+                          <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity flex items-center relative shrink-0">
                             <button
                               type="button"
-                              onClick={() => onNavigateTask(parsed.workspace, parsed.taskId)}
-                              className={`mt-2 px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1 transition-colors ${
-                                isMine
-                                  ? 'bg-white/20 hover:bg-white/30 text-white'
-                                  : 'bg-[#1061E3] hover:bg-blue-700 text-white shadow-sm'
-                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveReactionPickerId(activeReactionPickerId === msg.id ? null : msg.id);
+                              }}
+                              className="p-1 hover:bg-[#F0F2F5] rounded-full text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Add reaction"
                             >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              View {parsed.workspace === 'Deals / Sales' ? 'Deal' : 'Task'}
+                              <Smile className="w-4 h-4" />
                             </button>
-                          )}
+
+                            {activeReactionPickerId === msg.id && (
+                              <div 
+                                onClick={(e) => e.stopPropagation()}
+                                className={`absolute z-30 bottom-full mb-1 flex items-center gap-1.5 bg-white border border-[#E2E4E9] shadow-lg rounded-full px-2 py-1 ${
+                                  isMine ? 'right-0' : 'left-0'
+                                }`}
+                              >
+                                {['👍', '✅', '❤️', '😄'].map(emoji => {
+                                  const hasReacted = currentReacts[currentUserId || ''] === emoji;
+                                  return (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => {
+                                        handleToggleReaction(msg.id, emoji);
+                                        setActiveReactionPickerId(null);
+                                      }}
+                                      className={`text-base p-1 hover:scale-125 transition-transform rounded-full hover:bg-gray-50 leading-none ${
+                                        hasReacted ? 'bg-blue-50' : ''
+                                      }`}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );

@@ -32,16 +32,37 @@ export default function EmailModal({ contact, onClose }: EmailModalProps) {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSending(true);
     
-    // Simulate network request
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contactId: contact.id,
+          to: contact.email,
+          subject,
+          body,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to send email');
+      }
+
       setIsSending(false);
-      alert(`Email sent to ${contact.email}!`);
+      alert(`Email sent to ${contact.email} and logged in CRM!`);
       onClose();
-    }, 1000);
+    } catch (err: any) {
+      console.error('Failed to send email:', err);
+      alert(`Error sending email: ${err.message}`);
+      setIsSending(false);
+    }
   };
 
   return (

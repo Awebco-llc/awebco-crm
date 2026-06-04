@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
-  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu, Rocket
+  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu, Rocket, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import WorkspaceProjectView from '@/components/WorkspaceProjectView';
@@ -21,8 +21,9 @@ import MyTasksView from '@/components/MyTasksView';
 import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
 import ImportModal from '@/components/ImportModal';
-import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup } from '@/components/Shared';
-import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages, createMessage } from '@/lib/crmStore';
+import ContactTimelinePane from '@/components/ContactTimelinePane';
+import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup, ContactActivity } from '@/components/Shared';
+import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages, createMessage, subscribeActivities, createActivity, deleteActivity } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getAuthClient } from '@/lib/firebase';
@@ -199,7 +200,27 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ contact, onClick, onUpdate, teamMembers, companies, onEmailClick, onDelete }: { contact: Contact; onClick: () => void; onUpdate: (id: string, field: keyof Contact, value: any) => void; teamMembers: TeamMember[], companies: Company[], onEmailClick: (contact: Contact) => void; onDelete: (id: string) => void }) {
+function SortableRow({ 
+  contact, 
+  onClick, 
+  onUpdate, 
+  teamMembers, 
+  companies, 
+  onEmailClick, 
+  onDelete,
+  isSelected,
+  onToggleSelect
+}: { 
+  contact: Contact; 
+  onClick: () => void; 
+  onUpdate: (id: string, field: keyof Contact, value: any) => void; 
+  teamMembers: TeamMember[], 
+  companies: Company[], 
+  onEmailClick: (contact: Contact) => void; 
+  onDelete: (id: string) => void;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+}) {
   const {
     attributes,
     listeners,
@@ -226,6 +247,14 @@ function SortableRow({ contact, onClick, onUpdate, teamMembers, companies, onEma
       onClick={onClick}
       className="hover:bg-gray-50 transition-colors cursor-pointer bg-white"
     >
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-10" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(contact.id)}
+          className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4"
+        />
+      </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-10">
         <div className="text-[#8E9299] hover:text-[#1C1F23] cursor-grab active:cursor-grabbing">
           <GripVertical className="w-4 h-4" />
@@ -295,7 +324,10 @@ function SortableGroupSection({
   isCollapsed,
   onToggleCollapse,
   sortConfig,
-  onSort
+  onSort,
+  selectedContactIds,
+  onToggleSelectContact,
+  onToggleSelectGroupContacts
 }: { 
   group: ContactGroup & { contacts: Contact[] }; 
   onImport: () => void;
@@ -317,6 +349,9 @@ function SortableGroupSection({
   onToggleCollapse: (id: string) => void;
   sortConfig: { column: string; direction: 'asc' | 'desc' } | null;
   onSort: (column: string) => void;
+  selectedContactIds: Set<string>;
+  onToggleSelectContact: (id: string) => void;
+  onToggleSelectGroupContacts: (contactIds: string[], checked: boolean) => void;
 }) {
   const {
     attributes,
@@ -396,7 +431,7 @@ function SortableGroupSection({
               onClick={onImport}
               title="Import to this group"
             >
-              <Upload className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5" />
             </button>
             <button 
               className="opacity-0 group-hover:opacity-100 p-1 text-[#8E9299] hover:text-[#1061E3] transition-colors ml-1"
@@ -425,6 +460,9 @@ function SortableGroupSection({
           onDeleteContact={onDeleteContact} 
           sortConfig={sortConfig}
           onSort={onSort}
+          selectedContactIds={selectedContactIds}
+          onToggleSelectContact={onToggleSelectContact}
+          onToggleSelectGroupContacts={onToggleSelectGroupContacts}
         />
       )}
     </div>
@@ -441,7 +479,10 @@ function DroppableTable({
   onEmailClick, 
   onDeleteContact,
   sortConfig,
-  onSort
+  onSort,
+  selectedContactIds,
+  onToggleSelectContact,
+  onToggleSelectGroupContacts
 }: { 
   id: string; 
   contacts: Contact[]; 
@@ -453,6 +494,9 @@ function DroppableTable({
   onDeleteContact: (id: string) => void;
   sortConfig: { column: string; direction: 'asc' | 'desc' } | null;
   onSort: (column: string) => void;
+  selectedContactIds: Set<string>;
+  onToggleSelectContact: (id: string) => void;
+  onToggleSelectGroupContacts: (contactIds: string[], checked: boolean) => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
 
@@ -471,6 +515,17 @@ function DroppableTable({
         <table className="w-full border-collapse text-left min-w-[1000px]" style={{ minWidth: '1000px' }}>
         <thead className="sticky top-0 z-10 shadow-sm select-none">
           <tr>
+            <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
+              <input
+                type="checkbox"
+                checked={contacts.length > 0 && contacts.every(c => selectedContactIds.has(c.id))}
+                onChange={(e) => {
+                  const contactIds = contacts.map(c => c.id);
+                  onToggleSelectGroupContacts(contactIds, e.target.checked);
+                }}
+                className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4"
+              />
+            </th>
             <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
             <th 
               onClick={() => onSort('firstName')}
@@ -542,10 +597,21 @@ function DroppableTable({
         <tbody ref={setNodeRef} className="min-h-[50px]">
           {contacts.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
+              <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
             </tr>
           ) : contacts.map(contact => (
-            <SortableRow key={contact.id} contact={contact} onClick={() => onRowClick(contact)} onUpdate={onUpdateContact} teamMembers={teamMembers} companies={companies} onEmailClick={onEmailClick} onDelete={onDeleteContact} />
+            <SortableRow 
+              key={contact.id} 
+              contact={contact} 
+              onClick={() => onRowClick(contact)} 
+              onUpdate={onUpdateContact} 
+              teamMembers={teamMembers} 
+              companies={companies} 
+              onEmailClick={onEmailClick} 
+              onDelete={onDeleteContact} 
+              isSelected={selectedContactIds.has(contact.id)}
+              onToggleSelect={onToggleSelectContact}
+            />
           ))}
         </tbody>
         </table>
@@ -644,10 +710,108 @@ export default function Page() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importTargetGroupId, setImportTargetGroupId] = useState('');
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [activities, setActivities] = useState<ContactActivity[]>([]);
   const [emailingContact, setEmailingContact] = useState<Contact | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [dataError, setDataError] = useState<string>('');
+
+  const handleToggleSelectContact = useCallback((id: string) => {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectGroupContacts = useCallback((contactIds: string[], checked: boolean) => {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        contactIds.forEach(id => next.add(id));
+      } else {
+        contactIds.forEach(id => next.delete(id));
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExportSelectedContacts = () => {
+    if (selectedContactIds.size === 0) return;
+    
+    const selectedContacts = contacts.filter(c => selectedContactIds.has(c.id));
+    
+    const csvHeaders = ['First Name', 'Last Name', 'Title', 'Phone', 'Company', 'Email', 'Status', 'Group'];
+    
+    const csvRows = selectedContacts.map(c => {
+      const companyName = companies.find(comp => comp.id === c.companyId)?.name || '';
+      const groupName = contactGroups.find(g => g.id === c.groupId)?.name || '';
+      return [
+        c.firstName || '',
+        c.lastName || '',
+        c.title || '',
+        c.phone || '',
+        companyName,
+        c.email || '',
+        c.status || '',
+        groupName
+      ];
+    });
+    
+    const escapeCsvCell = (cell: any) => {
+      if (cell === null || cell === undefined) return '';
+      const str = String(cell);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    const csvContent = [
+      csvHeaders.map(escapeCsvCell).join(','),
+      ...csvRows.map(row => row.map(escapeCsvCell).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Selected_Contacts.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  useEffect(() => {
+    setSelectedContactIds(prev => {
+      const next = new Set<string>();
+      prev.forEach(id => {
+        if (contacts.some(c => c.id === id)) {
+          next.add(id);
+        }
+      });
+      return next;
+    });
+  }, [contacts]);
+
+  useEffect(() => {
+    if (!editingContactId) {
+      setActivities([]);
+      return;
+    }
+    const unsubActivities = subscribeActivities(editingContactId, setActivities, (e: any) => {
+      console.error('Firestore activities subscribe failed', e);
+      alert(`Firestore Activity sync failed: ${e.message || e}`);
+    });
+    return () => {
+      unsubActivities();
+    };
+  }, [editingContactId]);
 
   useEffect(() => {
     const unsubCompanies = subscribeCompanies(setCompanies, (e) => {
@@ -1617,6 +1781,15 @@ export default function Page() {
                 />
               </div>
               <div className="flex gap-3 justify-end">
+                {selectedContactIds.size > 0 && (
+                  <button 
+                    onClick={handleExportSelectedContacts}
+                    className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-100 transition-colors flex items-center gap-2 justify-center"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Export Selected ({selectedContactIds.size})
+                  </button>
+                )}
                 <button 
                   onClick={() => {
                     setImportTargetGroupId(contactGroups[0]?.id || '');
@@ -1624,7 +1797,7 @@ export default function Page() {
                   }}
                   className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-100 transition-colors flex items-center gap-2 justify-center"
                 >
-                  <Upload className="w-4 h-4" />
+                  <Download className="w-4 h-4" />
                   Import
                 </button>
                 <button 
@@ -1694,6 +1867,9 @@ export default function Page() {
                       onToggleCollapse={toggleGroupCollapse}
                       sortConfig={sortConfig}
                       onSort={handleSort}
+                      selectedContactIds={selectedContactIds}
+                      onToggleSelectContact={handleToggleSelectContact}
+                      onToggleSelectGroupContacts={handleToggleSelectGroupContacts}
                     />
                   ))}
                 </SortableContext>
@@ -1861,7 +2037,7 @@ export default function Page() {
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="relative w-full max-w-md bg-white shadow-2xl flex flex-col h-full border-l border-[#E2E4E9]"
+                className={`relative w-full ${editingContactId ? 'max-w-4xl' : 'max-w-md'} bg-white shadow-2xl flex flex-col h-full border-l border-[#E2E4E9]`}
               >
                 <div className="px-6 py-4 border-b border-[#E2E4E9] flex items-center justify-between bg-[#F9FAFB] shrink-0">
                   <h3 className="font-bold text-lg text-[#1C1F23]">
@@ -1872,103 +2048,120 @@ export default function Page() {
                   </button>
                 </div>
                 <form onSubmit={handleSaveContact} className="flex flex-col flex-grow overflow-hidden">
-                  <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">First Name</label>
-                        <input 
-                          required
-                          type="text" 
-                          value={newFirstName || ''}
-                          onChange={e => setNewFirstName(e.target.value)}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
-                          placeholder="e.g. Jane"
-                        />
+                  <div className="flex-grow flex overflow-hidden">
+                    {/* Left Pane: Info fields */}
+                    <div className={`flex-grow md:flex-none ${editingContactId ? 'md:w-[350px] border-r border-[#E2E4E9]' : 'w-full'} overflow-y-auto p-6 flex flex-col gap-4`}>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">First Name</label>
+                          <input 
+                            required
+                            type="text" 
+                            value={newFirstName || ''}
+                            onChange={e => setNewFirstName(e.target.value)}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+                            placeholder="e.g. Jane"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Last Name</label>
+                          <input 
+                            required
+                            type="text" 
+                            value={newLastName || ''}
+                            onChange={e => setNewLastName(e.target.value)}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+                            placeholder="e.g. Doe"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Title</label>
+                          <input 
+                            type="text" 
+                            value={newTitle || ''}
+                            onChange={e => setNewTitle(e.target.value)}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+                            placeholder="e.g. CEO"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Phone</label>
+                          <input 
+                            type="tel" 
+                            value={newPhone || ''}
+                            onChange={e => setNewPhone(e.target.value)}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+                            placeholder="e.g. 555-0123"
+                          />
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Last Name</label>
-                        <input 
-                          required
-                          type="text" 
-                          value={newLastName || ''}
-                          onChange={e => setNewLastName(e.target.value)}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
-                          placeholder="e.g. Doe"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Title</label>
-                        <input 
-                          type="text" 
-                          value={newTitle || ''}
-                          onChange={e => setNewTitle(e.target.value)}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
-                          placeholder="e.g. CEO"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Phone</label>
-                        <input 
-                          type="tel" 
-                          value={newPhone || ''}
-                          onChange={e => setNewPhone(e.target.value)}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
-                          placeholder="e.g. 555-0123"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Company</label>
-                      <select 
-                        value={newCompanyId || ''}
-                        onChange={e => setNewCompanyId(e.target.value)}
-                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
-                      >
-                        <option value="">No Company</option>
-                        {companies.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Email Address</label>
-                      <input 
-                        required
-                        type="email" 
-                        value={newEmail || ''}
-                        onChange={e => setNewEmail(e.target.value)}
-                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
-                        placeholder="jane@acme.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Group</label>
-                      <select
-                        value={newContactGroupId}
-                        onChange={e => setNewContactGroupId(e.target.value)}
-                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                      >
-                        {contactGroups.map(group => (
-                          <option key={group.id} value={group.id}>{group.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Status</label>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Company</label>
                         <select 
-                          value={newStatus || 'Lead'}
-                          onChange={e => setNewStatus(e.target.value as Status)}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                          value={newCompanyId || ''}
+                          onChange={e => setNewCompanyId(e.target.value)}
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
                         >
-                          <option value="Lead">Lead</option>
-                          <option value="Active">Active</option>
+                          <option value="">No Company</option>
+                          {companies.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
                         </select>
                       </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Email Address</label>
+                        <input 
+                          required
+                          type="email" 
+                          value={newEmail || ''}
+                          onChange={e => setNewEmail(e.target.value)}
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
+                          placeholder="jane@acme.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Group</label>
+                        <select
+                          value={newContactGroupId}
+                          onChange={e => setNewContactGroupId(e.target.value)}
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                        >
+                          {contactGroups.map(group => (
+                            <option key={group.id} value={group.id}>{group.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Status</label>
+                          <select 
+                            value={newStatus || 'Lead'}
+                            onChange={e => setNewStatus(e.target.value as Status)}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                          >
+                            <option value="Lead">Lead</option>
+                            <option value="Active">Active</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Right Pane: Timeline */}
+                    {editingContactId && (
+                      <div className="flex-grow h-full overflow-hidden">
+                        <ContactTimelinePane
+                          contactId={editingContactId}
+                          activities={activities}
+                          contactName={`${newFirstName} ${newLastName}`}
+                          contactEmail={newEmail}
+                          currentTeamMember={currentTeamMember}
+                        />
+                      </div>
+                    )}
                   </div>
+
                   <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-end gap-3 shrink-0">
                     {editingContactId && (
                       <button 

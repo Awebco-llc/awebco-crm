@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
 import { createDeal, updateDeal, deleteDeal, createMessage } from '@/lib/crmStore';
@@ -783,7 +783,7 @@ export default function DealsView({
             onClick={() => setIsImportModalOpen(true)}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors flex items-center gap-2"
           >
-            <Upload className="w-4 h-4" />
+            <Download className="w-4 h-4" />
             Import
           </button>
           <button 

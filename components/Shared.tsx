@@ -17,6 +17,22 @@ export interface Contact {
   groupId?: string;
 }
 
+export interface ContactActivity {
+  id: string;
+  contactId: string;
+  type: 'email_sent' | 'email_received' | 'note' | 'call';
+  subject?: string;
+  body: string;
+  senderEmail: string;
+  recipientEmail: string;
+  timestamp: string;
+  attachments?: Array<{
+    name: string;
+    downloadUrl: string;
+  }>;
+  authorName?: string;
+}
+
 export interface ContactGroup {
   id: string;
   name: string;
