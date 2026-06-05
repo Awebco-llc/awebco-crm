@@ -1956,7 +1956,7 @@ export default function Page() {
             openRowId={workspaceOpenRequest?.navName === 'Deals / Sales' ? workspaceOpenRequest.rowId : undefined}
           />
         ) : canAccessCRM && activeContentNav === 'Proposals' ? (
-          <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} products={products} proposals={proposals} setProposals={setProposals} />
+          <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} products={products} proposals={proposals} setProposals={setProposals} currentUserId={currentTeamMember?.id} />
         ) : canAccessCRM && activeContentNav === 'Price Catalog' ? (
           <ProductsServicesView products={products} setProducts={setProducts} proposals={proposals} />
         ) : canAccessCRM && activeContentNav === 'Files' ? (

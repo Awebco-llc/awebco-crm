@@ -111,6 +111,7 @@ export interface Proposal {
   cardCvv?: string;
   billingZip?: string;
   order?: number;
+  attachments?: Array<{ name: string; url: string; }>;
 }
 
 export interface DealNote {

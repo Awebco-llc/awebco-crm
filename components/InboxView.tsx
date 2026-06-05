@@ -46,7 +46,11 @@ export default function InboxView({
   const [activeReactionPickerId, setActiveReactionPickerId] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleDocumentClick = () => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.closest('.reaction-trigger-btn') || target.closest('.reaction-picker-container'))) {
+        return;
+      }
       setActiveReactionPickerId(null);
     };
     document.addEventListener('click', handleDocumentClick);
@@ -343,7 +347,7 @@ export default function InboxView({
                                 e.stopPropagation();
                                 setActiveReactionPickerId(activeReactionPickerId === msg.id ? null : msg.id);
                               }}
-                              className="p-1 hover:bg-[#F0F2F5] rounded-full text-gray-400 hover:text-gray-600 transition-colors"
+                              className="reaction-trigger-btn p-1 hover:bg-[#F0F2F5] rounded-full text-gray-400 hover:text-gray-600 transition-colors"
                               title="Add reaction"
                             >
                               <Smile className="w-4 h-4" />
@@ -352,7 +356,7 @@ export default function InboxView({
                             {activeReactionPickerId === msg.id && (
                               <div 
                                 onClick={(e) => e.stopPropagation()}
-                                className={`absolute z-30 bottom-full mb-1 flex items-center gap-1.5 bg-white border border-[#E2E4E9] shadow-lg rounded-full px-2 py-1 ${
+                                className={`reaction-picker-container absolute z-30 bottom-full mb-1 flex items-center gap-1.5 bg-white border border-[#E2E4E9] shadow-lg rounded-full px-2 py-1 ${
                                   isMine ? 'right-0' : 'left-0'
                                 }`}
                               >
