@@ -262,6 +262,16 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [serviceFilterMode, setServiceFilterMode] = useState<'all' | 'any'>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+
+  const industryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    companies.forEach(c => {
+      const ind = c.industry || 'Unassigned';
+      counts[ind] = (counts[ind] || 0) + 1;
+    });
+    return counts;
+  }, [companies]);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em']);
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
@@ -327,11 +337,15 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       if (!matchesSearch) return false;
 
       if (selectedServices.length > 0) {
-        if (serviceFilterMode === 'all') {
-          return selectedServices.every(service => !!c[service as keyof Company]);
-        } else {
-          return selectedServices.some(service => !!c[service as keyof Company]);
-        }
+        const matchesServices = serviceFilterMode === 'all'
+          ? selectedServices.every(service => !!c[service as keyof Company])
+          : selectedServices.some(service => !!c[service as keyof Company]);
+        if (!matchesServices) return false;
+      }
+
+      if (selectedIndustries.length > 0) {
+        const ind = c.industry || 'Unassigned';
+        if (!selectedIndustries.includes(ind)) return false;
       }
 
       return true;
@@ -358,7 +372,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       const cmp = aVal.localeCompare(bVal);
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
-  }, [companies, searchQuery, selectedServices, serviceFilterMode, sortConfig]);
+  }, [companies, searchQuery, selectedServices, serviceFilterMode, selectedIndustries, sortConfig]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -833,6 +847,61 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       <div className="p-6 shrink-0 pb-2">
         <div className="flex items-center justify-between">
           <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">Companies</h1>
+        </div>
+
+        {/* Industry Filters */}
+        <div 
+          className="mt-4 flex items-center gap-2 overflow-x-auto pb-2 hide-scrollbar"
+          style={{
+            scrollbarWidth: 'none',
+          }}
+        >
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          <button
+            type="button"
+            onClick={() => setSelectedIndustries([])}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all select-none ${
+              selectedIndustries.length === 0
+                ? 'bg-[#1061E3] text-white shadow-sm'
+                : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E4E9] hover:text-[#1C1F23]'
+            }`}
+          >
+            All ({companies.length})
+          </button>
+          {Object.entries(industryCounts)
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([industryName, count]) => {
+              const isSelected = selectedIndustries.includes(industryName);
+              return (
+                <button
+                  key={industryName}
+                  type="button"
+                  onClick={() => {
+                    setSelectedIndustries(prev =>
+                      isSelected
+                        ? prev.filter(i => i !== industryName)
+                        : [...prev, industryName]
+                    );
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all select-none ${
+                    isSelected
+                      ? 'bg-[#1061E3] text-white shadow-sm'
+                      : 'bg-white border border-[#E2E4E9] text-[#4A4D53] hover:bg-[#F9FAFB] hover:border-[#CCCCCC]'
+                  }`}
+                >
+                  <span>{industryName}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-[#F0F2F5] text-[#8E9299]'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
         </div>
 
         {/* Active Filters */}
