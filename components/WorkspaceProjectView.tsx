@@ -1224,10 +1224,24 @@ export default function WorkspaceProjectView({
     };
 
     return [...filtered].sort((a, b) => {
+      const colId = sortConfig.column;
+      if (colId === 'deadline') {
+        const valA = a[colId];
+        const valB = b[colId];
+        if (!valA && !valB) return 0;
+        if (!valA) return 1;
+        if (!valB) return -1;
+        const timeA = new Date(valA).getTime();
+        const timeB = new Date(valB).getTime();
+        if (isNaN(timeA) && isNaN(timeB)) return 0;
+        if (isNaN(timeA)) return 1;
+        if (isNaN(timeB)) return -1;
+        return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+
       let aVal = '';
       let bVal = '';
 
-      const colId = sortConfig.column;
       if (colId === 'assignee') {
         aVal = getAssigneeName(a);
         bVal = getAssigneeName(b);

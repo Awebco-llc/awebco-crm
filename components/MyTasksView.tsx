@@ -133,8 +133,17 @@ export default function MyTasksView({
         const wB = priorityWeight[(b.priority || '').toLowerCase()] || 0;
         return sortConfig.direction === 'asc' ? wA - wB : wB - wA;
       } else if (sortConfig.column === 'deadline') {
-        aVal = a.deadline || '';
-        bVal = b.deadline || '';
+        const valA = a.deadline;
+        const valB = b.deadline;
+        if (!valA && !valB) return 0;
+        if (!valA) return 1;
+        if (!valB) return -1;
+        const timeA = new Date(valA).getTime();
+        const timeB = new Date(valB).getTime();
+        if (isNaN(timeA) && isNaN(timeB)) return 0;
+        if (isNaN(timeA)) return 1;
+        if (isNaN(timeB)) return -1;
+        return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
       }
 
       const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());

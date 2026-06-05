@@ -340,6 +340,19 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     if (!sortConfig) return filtered;
     return [...filtered].sort((a, b) => {
       const col = sortConfig.column as keyof Company;
+      if (col === 'deadline') {
+        const valA = a[col];
+        const valB = b[col];
+        if (!valA && !valB) return 0;
+        if (!valA) return 1;
+        if (!valB) return -1;
+        const timeA = new Date(valA).getTime();
+        const timeB = new Date(valB).getTime();
+        if (isNaN(timeA) && isNaN(timeB)) return 0;
+        if (isNaN(timeA)) return 1;
+        if (isNaN(timeB)) return -1;
+        return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
+      }
       const aVal = String(a[col] ?? '').toLowerCase();
       const bVal = String(b[col] ?? '').toLowerCase();
       const cmp = aVal.localeCompare(bVal);

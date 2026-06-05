@@ -191,8 +191,17 @@ export default function ProposalsView({
         aVal = companies.find(c => c.id === a.companyId)?.name || '';
         bVal = companies.find(c => c.id === b.companyId)?.name || '';
       } else if (sortConfig.column === 'date') {
-        aVal = a.date;
-        bVal = b.date;
+        const valA = a.date;
+        const valB = b.date;
+        if (!valA && !valB) return 0;
+        if (!valA) return 1;
+        if (!valB) return -1;
+        const timeA = new Date(valA).getTime();
+        const timeB = new Date(valB).getTime();
+        if (isNaN(timeA) && isNaN(timeB)) return 0;
+        if (isNaN(timeA)) return 1;
+        if (isNaN(timeB)) return -1;
+        return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
       } else if (sortConfig.column === 'total') {
         const totalA = calculateSubtotal(a.items);
         const totalB = calculateSubtotal(b.items);
