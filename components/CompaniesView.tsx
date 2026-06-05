@@ -263,6 +263,9 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [serviceFilterMode, setServiceFilterMode] = useState<'all' | 'any'>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [isIndustryFilterOpen, setIsIndustryFilterOpen] = useState(false);
+  const [tempSelectedIndustries, setTempSelectedIndustries] = useState<string[]>([]);
+  const [industrySearchQuery, setIndustrySearchQuery] = useState('');
 
   const industryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -849,63 +852,8 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">Companies</h1>
         </div>
 
-        {/* Industry Filters */}
-        <div 
-          className="mt-4 flex items-center gap-2 overflow-x-auto pb-2 hide-scrollbar"
-          style={{
-            scrollbarWidth: 'none',
-          }}
-        >
-          <style>{`
-            .hide-scrollbar::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
-          <button
-            type="button"
-            onClick={() => setSelectedIndustries([])}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all select-none ${
-              selectedIndustries.length === 0
-                ? 'bg-[#1061E3] text-white shadow-sm'
-                : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E4E9] hover:text-[#1C1F23]'
-            }`}
-          >
-            All ({companies.length})
-          </button>
-          {Object.entries(industryCounts)
-            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-            .map(([industryName, count]) => {
-              const isSelected = selectedIndustries.includes(industryName);
-              return (
-                <button
-                  key={industryName}
-                  type="button"
-                  onClick={() => {
-                    setSelectedIndustries(prev =>
-                      isSelected
-                        ? prev.filter(i => i !== industryName)
-                        : [...prev, industryName]
-                    );
-                  }}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all select-none ${
-                    isSelected
-                      ? 'bg-[#1061E3] text-white shadow-sm'
-                      : 'bg-white border border-[#E2E4E9] text-[#4A4D53] hover:bg-[#F9FAFB] hover:border-[#CCCCCC]'
-                  }`}
-                >
-                  <span>{industryName}</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-[#F0F2F5] text-[#8E9299]'
-                  }`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-        </div>
-
         {/* Active Filters */}
-        {selectedServices.length > 0 && (
+        {(selectedServices.length > 0 || selectedIndustries.length > 0) && (
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <span className="text-xs font-semibold text-[#8E9299]">Active Filters:</span>
             {selectedServices.map(serviceKey => {
@@ -926,9 +874,27 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 </div>
               );
             })}
+            {selectedIndustries.map(industry => (
+              <div 
+                key={industry}
+                className="bg-blue-50 border border-blue-100 rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-semibold text-[#1061E3]"
+              >
+                <span>{industry}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIndustries(prev => prev.filter(i => i !== industry))}
+                  className="hover:bg-blue-100 p-0.5 rounded-full text-blue-400 hover:text-[#1061E3] transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
             <button
               type="button"
-              onClick={() => setSelectedServices([])}
+              onClick={() => {
+                setSelectedServices([]);
+                setSelectedIndustries([]);
+              }}
               className="text-xs font-semibold text-[#D32F2F] hover:text-red-700 hover:underline ml-1"
             >
               Clear all
@@ -992,15 +958,31 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                     </div>
                   </th>
                 )}
-                {visibleColumns.includes('industry') && (
+                 {visibleColumns.includes('industry') && (
                   <th
-                    className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+                    className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors relative"
                     onClick={() => handleSort('industry')}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <span>INDUSTRY</span>
                         {renderSortIcon('industry')}
+                        
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTempSelectedIndustries(selectedIndustries);
+                            setIndustrySearchQuery('');
+                            setIsIndustryFilterOpen(prev => !prev);
+                          }}
+                          className={`p-1 rounded hover:bg-gray-200/80 transition-colors shrink-0 ${
+                            selectedIndustries.length > 0 ? 'text-[#1061E3] bg-blue-50' : 'text-[#8E9299]'
+                          }`}
+                          title="Filter Industries"
+                        >
+                          <Filter className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       {allowDeletingColumns && (
                         <button
@@ -1012,6 +994,119 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                         </button>
                       )}
                     </div>
+
+                    {isIndustryFilterOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40 cursor-default" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsIndustryFilterOpen(false);
+                          }} 
+                        />
+                        <div
+                          className="absolute left-0 mt-2 z-50 w-60 bg-white border border-[#E2E4E9] rounded-lg shadow-lg p-3 text-left font-normal normal-case text-sm text-[#1C1F23] cursor-default flex flex-col gap-2.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Search box */}
+                          <div className="relative flex items-center border border-[#E2E4E9] rounded px-2 py-1 bg-[#F9FAFB]">
+                            <Search className="w-3.5 h-3.5 text-[#8E9299] mr-1.5 shrink-0" />
+                            <input
+                              type="text"
+                              placeholder="Search..."
+                              className="bg-transparent border-none outline-none text-xs w-full text-[#1C1F23]"
+                              value={industrySearchQuery}
+                              onChange={(e) => setIndustrySearchQuery(e.target.value)}
+                            />
+                            {industrySearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setIndustrySearchQuery('')}
+                                className="text-[#8E9299] hover:text-[#1C1F23]"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Quick Select Buttons */}
+                          <div className="flex gap-2 text-xs font-semibold text-[#1061E3]">
+                            <button
+                              type="button"
+                              onClick={() => setTempSelectedIndustries(Object.keys(industryCounts))}
+                              className="hover:underline"
+                            >
+                              Select All
+                            </button>
+                            <span className="text-[#E2E4E9]">|</span>
+                            <button
+                              type="button"
+                              onClick={() => setTempSelectedIndustries([])}
+                              className="hover:underline text-red-500"
+                            >
+                              Clear All
+                            </button>
+                          </div>
+
+                          {/* List of Industries */}
+                          <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                            {Object.entries(industryCounts)
+                              .filter(([name]) => 
+                                name.toLowerCase().includes(industrySearchQuery.toLowerCase())
+                              )
+                              .map(([name, count]) => {
+                                const isChecked = tempSelectedIndustries.includes(name);
+                                return (
+                                  <label key={name} className="flex items-center gap-2 text-xs font-medium cursor-pointer py-0.5 hover:bg-gray-50 rounded select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        setTempSelectedIndustries(prev =>
+                                          isChecked
+                                            ? prev.filter(i => i !== name)
+                                            : [...prev, name]
+                                        );
+                                      }}
+                                      className="rounded border-gray-300 text-[#1061E3] focus:ring-[#1061E3] w-3.5 h-3.5"
+                                    />
+                                    <span className="truncate flex-grow">{name}</span>
+                                    <span className="text-[10px] text-[#8E9299] font-semibold bg-gray-100 px-1.5 py-0.5 rounded-full shrink-0">
+                                      {count}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            {Object.keys(industryCounts).filter(name => 
+                              name.toLowerCase().includes(industrySearchQuery.toLowerCase())
+                            ).length === 0 && (
+                              <div className="text-xs text-[#8E9299] text-center py-2">No matches</div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex justify-end gap-2 pt-2 border-t border-[#F0F2F5] shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setIsIndustryFilterOpen(false)}
+                              className="px-2.5 py-1.5 rounded text-xs font-semibold text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors border border-transparent"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedIndustries(tempSelectedIndustries);
+                                setIsIndustryFilterOpen(false);
+                              }}
+                              className="px-2.5 py-1.5 rounded text-xs font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors shadow-sm"
+                            >
+                              Apply
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </th>
                 )}
                 {visibleColumns.includes('primaryContactId') && (
