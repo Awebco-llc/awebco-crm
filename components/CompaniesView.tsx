@@ -387,8 +387,13 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     setIsAddModalOpen(true);
   };
 
-  const handleUpdateCompany = (id: string, field: keyof Company, value: any) => {
+  const handleUpdateCompany = async (id: string, field: keyof Company, value: any) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+    try {
+      await updateCompany(id, { [field]: value });
+    } catch (err) {
+      console.error('Failed to update company in Firestore:', err);
+    }
   };
 
   const handleDeleteCompany = async (id: string) => {
