@@ -14,6 +14,7 @@ import {
   DragEndEvent,
   DragOverEvent,
   useDroppable,
+  DragOverlay,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -75,7 +76,21 @@ const INITIAL_DATA = [
 
 const SUPPORT_TICKETS_BOARD_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_TICKETS_EMAIL || 'tickets@awebco.com';
 
-function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, onSort }: { column: Column, onDelete?: (id: string) => void, allowDeletingColumns?: boolean, sortConfig: { column: string; direction: 'asc' | 'desc' } | null, onSort: (colId: string) => void }) {
+function SortableHeader({ 
+  column, 
+  onDelete, 
+  allowDeletingColumns, 
+  sortConfig, 
+  onSort,
+  onRename 
+}: { 
+  column: Column, 
+  onDelete?: (id: string) => void, 
+  allowDeletingColumns?: boolean, 
+  sortConfig: { column: string; direction: 'asc' | 'desc' } | null, 
+  onSort: (colId: string) => void,
+  onRename?: (id: string, newHeader: string) => void
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -86,6 +101,24 @@ function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, on
     width: getColumnWidth(column.id),
     minWidth: getColumnWidth(column.id),
     maxWidth: getColumnWidth(column.id),
+  };
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempHeader, setTempHeader] = useState(column.header);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleSave = () => {
+    setIsEditing(false);
+    if (tempHeader.trim() && tempHeader.trim() !== column.header) {
+      onRename?.(column.id, tempHeader.trim());
+    }
   };
 
   // Core columns cannot be deleted, unless allowDeletingColumns is enabled
@@ -104,11 +137,15 @@ function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, on
     <th
       ref={setNodeRef}
       style={style}
-      onClick={() => onSort(column.id)}
+      onClick={() => {
+        if (!isEditing) {
+          onSort(column.id);
+        }
+      }}
       className="sticky top-0 z-10 bg-[#F9FAFB] px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] whitespace-nowrap group select-none uppercase truncate cursor-pointer hover:bg-[#F0F2F5] transition-colors"
     >
       <div className="flex items-center gap-1 justify-between">
-        <div className="flex items-center gap-1 group/th">
+        <div className="flex items-center gap-1 group/th" onClick={(e) => { if (isEditing) e.stopPropagation(); }}>
           <button 
             {...attributes} 
             {...listeners} 
@@ -117,8 +154,41 @@ function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, on
           >
             <GripHorizontal className="w-3.5 h-3.5" />
           </button>
-          <span>{column.header}</span>
-          {column.id !== 'updatesCount' && renderSortIcon(column.id)}
+          
+          {isEditing ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={tempHeader}
+              onChange={(e) => setTempHeader(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') handleSave();
+                else if (e.key === 'Escape') {
+                  setTempHeader(column.header);
+                  setIsEditing(false);
+                }
+              }}
+              onBlur={handleSave}
+              className="px-1.5 py-0.5 text-[11px] border border-[#1061E3] rounded outline-none bg-white text-[#1C1F23] focus:ring-1 focus:ring-[#1061E3] font-semibold uppercase max-w-[120px]"
+            />
+          ) : (
+            <span
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (column.id !== 'updatesCount') {
+                  setIsEditing(true);
+                }
+              }}
+              title="Double click to rename column"
+              className="hover:underline cursor-text"
+            >
+              {column.header}
+            </span>
+          )}
+          
+          {column.id !== 'updatesCount' && !isEditing && renderSortIcon(column.id)}
         </div>
         {isDeletable && onDelete && (
           <button
@@ -126,7 +196,7 @@ function SortableHeader({ column, onDelete, allowDeletingColumns, sortConfig, on
             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
             title={`Delete column "${column.header}"`}
           >
-            <X className="w-3 h-3" />
+            <X className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
@@ -709,7 +779,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
             onMouseDown={(e) => { if (e.shiftKey) { e.preventDefault(); onToggleSelect?.(true); } }}
             className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
           />
-          <div className="text-[#8E9299] group-hover:text-[#1C1F23] relative shrink-0 cursor-grab active:cursor-grabbing">
+          <div data-drag-handle className="text-[#8E9299] group-hover:text-[#1C1F23] relative shrink-0 cursor-grab active:cursor-grabbing">
             <GripVertical className="w-4 h-4" />
             {isDragging && isSelected && selectedCount > 1 && (
               <span className="absolute -top-2 -right-2.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm pointer-events-none z-10">
@@ -979,7 +1049,7 @@ function GroupHeader({
     <div className="flex items-center justify-between mb-3 group/header">
       <div className="flex items-center gap-2">
         {dragHandleProps && (
-          <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23] p-1 hover:bg-gray-100 rounded">
+          <div data-drag-handle {...dragHandleProps} className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23] p-1 hover:bg-gray-100 rounded">
             <GripVertical className="w-4 h-4" />
           </div>
         )}
@@ -1132,6 +1202,21 @@ export default function WorkspaceProjectView({
 }) {
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
+    if (typeof window !== 'undefined') {
+      const storageKey = `awebco_workspace_columns_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+
     let result: Column[];
     if (projectType === 'Local Listings') {
       result = [
@@ -1169,6 +1254,60 @@ export default function WorkspaceProjectView({
     }
     return result;
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && columns.length > 0) {
+      const storageKey = `awebco_workspace_columns_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+      localStorage.setItem(storageKey, JSON.stringify(columns));
+    }
+  }, [columns, projectType]);
+
+  useEffect(() => {
+    if (columns.length === 0) {
+      let result: Column[];
+      if (projectType === 'Local Listings') {
+        result = [
+          { id: 'projectName', header: 'Project Name' },
+          { id: 'assignee', header: 'Assignee' },
+          { id: 'status', header: 'Status' },
+          { id: 'planType', header: 'Plan Type' }
+        ];
+      } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
+        const filtered = INITIAL_COLUMNS.filter(c => {
+          if (['companyName', 'contactName', 'email', 'category'].includes(c.id)) {
+            return false;
+          }
+          return c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl';
+        });
+        filtered.splice(5, 0, { id: 'billableHours', header: 'Billable Hours' });
+        if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
+          filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
+        }
+        result = filtered;
+      } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
+        result = INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
+        if (projectType === 'Google Ads') {
+          result.push({ id: 'planDescription', header: 'Plan Description' });
+        }
+      } else {
+        result = INITIAL_COLUMNS.filter(c => !['companyName', 'contactName', 'email', 'category'].includes(c.id));
+      }
+
+      const statusIndex = result.findIndex(c => c.id === 'status');
+      if (statusIndex !== -1) {
+        result.splice(statusIndex + 1, 0, { id: 'updatesCount', header: '' });
+      } else {
+        result.push({ id: 'updatesCount', header: '' });
+      }
+      setColumns(result);
+    }
+  }, [columns.length, projectType]);
+
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const handleRenameColumn = (id: string, newHeader: string) => {
+    setColumns(prev => prev.map(col => col.id === id ? { ...col, header: newHeader } : col));
+  };
   const [rawTickets, setRawTickets] = useState<any[]>([]);
 
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
@@ -2038,6 +2177,13 @@ export default function WorkspaceProjectView({
         delay: 200,
         tolerance: 5,
       },
+      bypassActivationConstraint({ event }) {
+        const target = event.target as HTMLElement | null;
+        if (target && target.closest) {
+          return !!(target.closest('[data-drag-handle]') || target.closest('.drag-handle'));
+        }
+        return false;
+      }
     }),
     useSensor(KeyboardSensor)
   );
@@ -2118,11 +2264,10 @@ export default function WorkspaceProjectView({
         targetGroupId = String(over.id).replace('group-container-', '');
       }
       if (targetGroupId && activeData && getRowGroupId(activeData) !== targetGroupId) {
-        const patch: any = { groupId: targetGroupId };
-        if (activeData.parentId) {
-          patch.parentId = null;
+        if (!activeData.parentId) {
+          const patch: any = { groupId: targetGroupId };
+          await handleUpdateRow(activeIdStr, patch);
         }
-        await handleUpdateRow(activeIdStr, patch);
       }
     }
   };
@@ -2158,12 +2303,31 @@ export default function WorkspaceProjectView({
     if (String(active.id).startsWith('row-')) {
       const activeId = String(active.id).replace('row-', '');
       const activeRowData = data.find(r => r.id === activeId);
-      const overId = String(over.id).replace('row-', '');
-      const overRowData = data.find(r => r.id === overId);
-      if (!activeRowData || !overRowData) return;
+      if (!activeRowData) return;
 
-      const newParentId = overRowData.parentId || null;
-      const newGroupId = overRowData ? getRowGroupId(overRowData) : (activeRowData ? getRowGroupId(activeRowData) : undefined);
+      let overRowData: any = null;
+      let newParentId = null;
+      let newGroupId = activeRowData.groupId || getRowGroupId(activeRowData);
+      const overIdStr = String(over.id);
+
+      if (overIdStr.startsWith('row-')) {
+        const overId = overIdStr.replace('row-', '');
+        overRowData = data.find(r => r.id === overId);
+        if (overRowData) {
+          if (activeRowData.parentId && !overRowData.parentId) {
+            newParentId = overRowData.id;
+            setExpandedIds(prev => new Set(prev).add(overRowData.id));
+          } else {
+            newParentId = overRowData.parentId || null;
+          }
+          newGroupId = getRowGroupId(overRowData);
+        }
+      } else if (overIdStr.startsWith('group-container-')) {
+        newGroupId = overIdStr.replace('group-container-', '');
+        newParentId = null;
+      } else {
+        return;
+      }
 
       // Build ordered list of currently visible rows in DOM to detect direction
       const orderedIds: string[] = [];
@@ -2183,35 +2347,39 @@ export default function WorkspaceProjectView({
       }
 
       const flatActiveIdx = orderedIds.indexOf(activeId);
-      const flatOverIdx = orderedIds.indexOf(overId);
+      const flatOverIdx = overRowData ? orderedIds.indexOf(overRowData.id) : -1;
 
       // Find siblings at target location (excluding the active row itself)
       const siblings = data
         .filter(r => (r.parentId || null) === (newParentId || null) && getRowGroupId(r) === newGroupId && r.id !== activeId)
         .sort((a, b) => (a.order || 0) - (b.order || 0));
 
-      const overIdx = siblings.findIndex(r => r.id === overId);
       let newOrder = 0;
+      if (overRowData) {
+        const overIdx = siblings.findIndex(r => r.id === overRowData.id);
+        if (overIdx !== -1) {
+          const dragDown = flatActiveIdx !== -1 && flatOverIdx !== -1 && flatActiveIdx < flatOverIdx;
+          let prevSibling = null;
+          let nextSibling = null;
 
-      if (overIdx !== -1) {
-        const dragDown = flatActiveIdx !== -1 && flatOverIdx !== -1 && flatActiveIdx < flatOverIdx;
-        let prevSibling = null;
-        let nextSibling = null;
+          if (dragDown) {
+            prevSibling = overRowData;
+            nextSibling = overIdx + 1 < siblings.length ? siblings[overIdx + 1] : null;
+          } else {
+            prevSibling = overIdx - 1 >= 0 ? siblings[overIdx - 1] : null;
+            nextSibling = overRowData;
+          }
 
-        if (dragDown) {
-          prevSibling = overRowData;
-          nextSibling = overIdx + 1 < siblings.length ? siblings[overIdx + 1] : null;
+          if (!prevSibling && nextSibling) {
+            newOrder = (nextSibling.order || 0) - 1;
+          } else if (prevSibling && !nextSibling) {
+            newOrder = (prevSibling.order || 0) + 1;
+          } else if (prevSibling && nextSibling) {
+            newOrder = ((prevSibling.order || 0) + (nextSibling.order || 0)) / 2;
+          }
         } else {
-          prevSibling = overIdx - 1 >= 0 ? siblings[overIdx - 1] : null;
-          nextSibling = overRowData;
-        }
-
-        if (!prevSibling && nextSibling) {
-          newOrder = (nextSibling.order || 0) - 1;
-        } else if (prevSibling && !nextSibling) {
-          newOrder = (prevSibling.order || 0) + 1;
-        } else if (prevSibling && nextSibling) {
-          newOrder = ((prevSibling.order || 0) + (nextSibling.order || 0)) / 2;
+          const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(r => r.order || 0)) : 0;
+          newOrder = maxOrder + 1;
         }
       } else {
         const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(r => r.order || 0)) : 0;
@@ -2598,14 +2766,23 @@ export default function WorkspaceProjectView({
           </button>
         </div>
       </div>      <div className="flex-grow px-6 pb-6 overflow-auto">
-        <DndContext id="websites-dnd-context" sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => {
+        <DndContext
+          id="websites-dnd-context"
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          accessibility={{ restoreFocus: false }}
+          onDragStart={(e) => {
+            setActiveDragId(e.active.id as string);
             // Clear any stale nest state when a new drag starts
             if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
             if (nestClearTimerRef.current) { clearTimeout(nestClearTimerRef.current); nestClearTimerRef.current = null; }
             nestTargetIdRef.current = null;
             nestLastOverIdRef.current = null;
             setNestHighlightId(null);
-          }} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+          }} onDragOver={handleDragOver} onDragEnd={(e) => {
+            setActiveDragId(null);
+            handleDragEnd(e);
+          }} onDragCancel={() => setActiveDragId(null)}>
           <SortableContext items={groups.map(g => `group-sortable-${g.id}`)} strategy={verticalListSortingStrategy}>
             {groups.map((group) => {
               const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
@@ -2661,16 +2838,23 @@ export default function WorkspaceProjectView({
                               </div>
                             </th>
                             <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
-                              {columns.map(col => (
-                                <SortableHeader
-                                  key={col.id}
-                                  column={col}
-                                  onDelete={(colId) => setColumns(prev => prev.filter(c => c.id !== colId))}
-                                  allowDeletingColumns={allowDeletingColumns}
-                                  sortConfig={sortConfig}
-                                  onSort={handleSort}
-                                />
-                              ))}
+                              {columns.map(col => {
+                                let displayCol = col;
+                                if (projectType === 'Websites' && group.id === 'group-completed' && col.id === 'deadline') {
+                                  displayCol = { ...col, header: 'Launched Date' };
+                                }
+                                return (
+                                  <SortableHeader
+                                    key={`${col.id}-${displayCol.header}`}
+                                    column={displayCol}
+                                    onDelete={(colId) => setColumns(prev => prev.filter(c => c.id !== colId))}
+                                    allowDeletingColumns={allowDeletingColumns}
+                                    sortConfig={sortConfig}
+                                    onSort={handleSort}
+                                    onRename={handleRenameColumn}
+                                  />
+                                );
+                              })}
                             </SortableContext>
                             <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
                               <button 
@@ -2794,6 +2978,59 @@ export default function WorkspaceProjectView({
               );
             })}
           </SortableContext>
+          <DragOverlay adjustScale={false}>
+            {activeDragId ? (() => {
+              if (activeDragId.startsWith('group-sortable-')) {
+                const groupId = activeDragId.replace('group-sortable-', '');
+                const activeGroup = groups.find(g => g.id === groupId);
+                return activeGroup ? (
+                  <div className="bg-white rounded-lg shadow-lg border border-[#E2E4E9] p-4 opacity-90 w-[300px] pointer-events-none select-none">
+                    <div className="font-bold text-[#1C1F23] text-sm uppercase tracking-wide">{activeGroup.name}</div>
+                  </div>
+                ) : null;
+              } else if (activeDragId.startsWith('row-')) {
+                const rowId = activeDragId.replace('row-', '');
+                const activeRow = data.find(r => r.id === rowId);
+                return activeRow ? (
+                  <div className="bg-white rounded-lg shadow-lg border border-[#E2E4E9] overflow-hidden opacity-95 pointer-events-none select-none">
+                    <table className="w-full border-collapse text-left table-fixed min-w-[1200px]" style={{ minWidth: '1200px', width: '1200px' }}>
+                      <tbody>
+                        <tr className="bg-white">
+                          <td style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+                            <div className="flex items-center gap-2 text-[#8E9299]">
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                          </td>
+                          {columns.map(col => {
+                            let displayCol = col;
+                            if (projectType === 'Websites' && activeRow.groupId === 'group-completed' && col.id === 'deadline') {
+                              displayCol = { ...col, header: 'Launched Date' };
+                            }
+                            const val = activeRow[col.id];
+                            return (
+                              <td
+                                key={col.id}
+                                style={{
+                                  width: getColumnWidth(col.id),
+                                  minWidth: getColumnWidth(col.id),
+                                  maxWidth: getColumnWidth(col.id),
+                                }}
+                                className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate text-[#1C1F23]"
+                              >
+                                {col.id === 'projectName' ? <strong>{val}</strong> : (val || '-')}
+                              </td>
+                            );
+                          })}
+                          <td style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5]"></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null;
+              }
+              return null;
+            })() : null}
+          </DragOverlay>
         </DndContext>
       </div>
 
@@ -3071,7 +3308,11 @@ export default function WorkspaceProjectView({
 
                               {/* Deadline */}
                               <div className="flex-grow flex-shrink-0 min-w-[150px] md:min-w-[160px]">
-                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Deadline</label>
+                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">
+                                  {projectType === 'Websites' && (editingRow.groupId === 'group-completed' || getRowGroupId(editingRow) === 'group-completed')
+                                    ? 'Launched Date'
+                                    : 'Deadline'}
+                                </label>
                                 <input 
                                   type="date"
                                   value={editingRow.deadline ?? ''}

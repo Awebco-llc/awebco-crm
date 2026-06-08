@@ -256,7 +256,7 @@ function SortableRow({
         />
       </td>
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-10">
-        <div className="text-[#8E9299] hover:text-[#1C1F23] cursor-grab active:cursor-grabbing">
+        <div data-drag-handle className="text-[#8E9299] hover:text-[#1C1F23] cursor-grab active:cursor-grabbing">
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
@@ -376,7 +376,7 @@ function SortableGroupSection({
   return (
     <div ref={setNodeRef} style={style} className="mb-8">
       <div className="flex items-center gap-2 py-3 mt-2 group relative">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 text-[#8E9299] hover:text-[#1C1F23] opacity-0 group-hover:opacity-100 transition-opacity">
+        <div data-drag-handle {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 text-[#8E9299] hover:text-[#1C1F23] opacity-0 group-hover:opacity-100 transition-opacity">
           <GripVertical className="w-4 h-4" />
         </div>
         <button 
@@ -715,6 +715,9 @@ export default function Page() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+  const selectedCount = useMemo(() => {
+    return contacts.filter(c => selectedContactIds.has(c.id)).length;
+  }, [contacts, selectedContactIds]);
   const [dataError, setDataError] = useState<string>('');
 
   const handleToggleSelectContact = useCallback((id: string) => {
@@ -742,7 +745,7 @@ export default function Page() {
   }, []);
 
   const handleExportSelectedContacts = () => {
-    if (selectedContactIds.size === 0) return;
+    if (selectedCount === 0) return;
     
     const selectedContacts = contacts.filter(c => selectedContactIds.has(c.id));
     
@@ -788,22 +791,7 @@ export default function Page() {
   };
 
   useEffect(() => {
-    setSelectedContactIds(prev => {
-      const next = new Set<string>();
-      prev.forEach(id => {
-        if (contacts.some(c => c.id === id)) {
-          next.add(id);
-        }
-      });
-      return next;
-    });
-  }, [contacts]);
-
-  useEffect(() => {
-    if (!editingContactId) {
-      setActivities([]);
-      return;
-    }
+    if (!editingContactId) return;
     const unsubActivities = subscribeActivities(editingContactId, setActivities, (e: any) => {
       console.error('Firestore activities subscribe failed', e);
       alert(`Firestore Activity sync failed: ${e.message || e}`);
@@ -1126,6 +1114,13 @@ export default function Page() {
         delay: 200,
         tolerance: 5,
       },
+      bypassActivationConstraint({ event }) {
+        const target = event.target as HTMLElement | null;
+        if (target && target.closest) {
+          return !!(target.closest('[data-drag-handle]') || target.closest('.drag-handle'));
+        }
+        return false;
+      }
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -1276,6 +1271,7 @@ export default function Page() {
 
   const openAddModal = () => {
     setEditingContactId(null);
+    setActivities([]);
     setNewFirstName('');
     setNewLastName('');
     setNewTitle('');
@@ -1289,6 +1285,7 @@ export default function Page() {
 
   const openEditModal = (contact: Contact) => {
     setEditingContactId(contact.id);
+    setActivities([]);
     setNewFirstName(contact.firstName || '');
     setNewLastName(contact.lastName || '');
     setNewTitle(contact.title || '');
@@ -1781,13 +1778,13 @@ export default function Page() {
                 />
               </div>
               <div className="flex gap-3 justify-end">
-                {selectedContactIds.size > 0 && (
+                {selectedCount > 0 && (
                   <button 
                     onClick={handleExportSelectedContacts}
                     className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-100 transition-colors flex items-center gap-2 justify-center"
                   >
                     <Upload className="w-4 h-4" />
-                    Export Selected ({selectedContactIds.size})
+                    Export Selected ({selectedCount})
                   </button>
                 )}
                 <button 
@@ -1832,6 +1829,7 @@ export default function Page() {
                 id="contacts-dnd-context"
                 sensors={sensors}
                 collisionDetection={closestCenter}
+                accessibility={{ restoreFocus: false }}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}

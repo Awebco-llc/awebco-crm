@@ -142,7 +142,7 @@ function SortableRow({ item, onClick, onUpdate, onDelete }: { item: ProductServi
       className="hover:bg-gray-50 transition-colors cursor-pointer bg-white"
     >
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-10">
-        <div className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
+        <div data-drag-handle className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
@@ -434,6 +434,13 @@ export default function ProductsServicesView({
         delay: 200,
         tolerance: 5,
       },
+      bypassActivationConstraint({ event }) {
+        const target = event.target as HTMLElement | null;
+        if (target && target.closest) {
+          return !!(target.closest('[data-drag-handle]') || target.closest('.drag-handle'));
+        }
+        return false;
+      }
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -570,6 +577,7 @@ export default function ProductsServicesView({
         <DndContext 
           sensors={sensors}
           collisionDetection={closestCenter}
+          accessibility={{ restoreFocus: false }}
           onDragEnd={handleDragEnd}
         >
           <div className="overflow-x-auto w-full bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] mb-8">

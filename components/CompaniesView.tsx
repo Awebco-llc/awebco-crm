@@ -138,7 +138,7 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
       className="hover:bg-gray-50 transition-colors cursor-pointer bg-white"
     >
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] w-10">
-        <div className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
+        <div data-drag-handle className="cursor-grab active:cursor-grabbing text-[#8E9299] hover:text-[#1C1F23]">
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
@@ -383,6 +383,13 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         delay: 200,
         tolerance: 5,
       },
+      bypassActivationConstraint({ event }) {
+        const target = event.target as HTMLElement | null;
+        if (target && target.closest) {
+          return !!(target.closest('[data-drag-handle]') || target.closest('.drag-handle'));
+        }
+        return false;
+      }
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -908,6 +915,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         <DndContext 
           sensors={sensors}
           collisionDetection={closestCenter}
+          accessibility={{ restoreFocus: false }}
           onDragEnd={handleDragEnd}
         >
           <table className="w-full border-collapse bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-left mb-8 min-w-[1100px]" style={{ minWidth: '1100px' }}>
