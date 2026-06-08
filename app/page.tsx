@@ -1297,6 +1297,11 @@ export default function Page() {
     setIsAddModalOpen(true);
   };
 
+  const closeEditModal = () => {
+    setIsAddModalOpen(false);
+    setEditingContactId(null);
+  };
+
   const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -1343,7 +1348,7 @@ export default function Page() {
       }
     }
     
-    setIsAddModalOpen(false);
+    closeEditModal();
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -2028,7 +2033,7 @@ export default function Page() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="absolute inset-0 bg-black/20 backdrop-blur-sm"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={closeEditModal}
               />
               <motion.div 
                 initial={{ x: '100%' }}
@@ -2041,7 +2046,7 @@ export default function Page() {
                   <h3 className="font-bold text-lg text-[#1C1F23]">
                     {editingContactId ? 'Edit Contact' : 'Add New Contact'}
                   </h3>
-                  <button onClick={() => setIsAddModalOpen(false)} className="text-[#8E9299] hover:text-[#1C1F23] transition-colors">
+                  <button onClick={closeEditModal} className="text-[#8E9299] hover:text-[#1C1F23] transition-colors">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -2155,6 +2160,10 @@ export default function Page() {
                           contactName={`${newFirstName} ${newLastName}`}
                           contactEmail={newEmail}
                           currentTeamMember={currentTeamMember}
+                          onSendEmailClick={() => {
+                            const contactObj = contacts.find(c => c.id === editingContactId);
+                            if (contactObj) setEmailingContact(contactObj);
+                          }}
                         />
                       </div>
                     )}
@@ -2166,7 +2175,7 @@ export default function Page() {
                         type="button"
                         onClick={() => {
                           handleDeleteContact(editingContactId);
-                          setIsAddModalOpen(false);
+                          closeEditModal();
                         }}
                         className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 mr-auto"
                       >
@@ -2176,7 +2185,7 @@ export default function Page() {
                     )}
                     <button 
                       type="button"
-                      onClick={() => setIsAddModalOpen(false)}
+                      onClick={closeEditModal}
                       className="px-4 py-2 rounded-md text-sm font-semibold text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors"
                     >
                       Cancel

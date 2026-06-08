@@ -1,0 +1,4 @@
+[2026-06-08T18:24:45.849Z] Mailgun Success: Sent to=tres3awebco@gmail.com, Subject=HERRROOOOO how are you, Domain=mg.awebco.com, URL=https://api.mailgun.net/v3/mg.awebco.com/messages
+[2026-06-08T18:47:52.356Z] Mailgun Success: Sent to=tres3awebco@gmail.com, Subject=testing again how is this, Domain=mg.awebco.com, URL=https://api.mailgun.net/v3/mg.awebco.com/messages, From=Tres <tres@mg.awebco.com>
+[2026-06-08T18:50:16.721Z] Mailgun Success: Sent to=tres3awebco@gmail.com, Subject=now can you see light, Domain=mg.awebco.com, URL=https://api.mailgun.net/v3/mg.awebco.com/messages, From=Tres <tres@mg.awebco.com>, AttachmentsCount=1
+[2026-06-08T18:57:06.271Z] Mailgun Success: Sent to=tres3awebco@gmail.com, Subject=ok ok files test 2 and im seeing if the log stays, Domain=mg.awebco.com, URL=https://api.mailgun.net/v3/mg.awebco.com/messages, From=Tres <tres@mg.awebco.com>, AttachmentsCount=1

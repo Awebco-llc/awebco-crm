@@ -11,6 +11,7 @@ interface ContactTimelinePaneProps {
   contactName: string;
   contactEmail: string;
   currentTeamMember: TeamMember | undefined;
+  onSendEmailClick?: () => void;
 }
 
 export default function ContactTimelinePane({
@@ -19,6 +20,7 @@ export default function ContactTimelinePane({
   contactName,
   contactEmail,
   currentTeamMember,
+  onSendEmailClick,
 }: ContactTimelinePaneProps) {
   const [noteText, setNoteText] = useState('');
   const [replyText, setReplyText] = useState('');
@@ -118,14 +120,26 @@ export default function ContactTimelinePane({
           </h4>
           <p className="text-xs text-[#8E9299]">Log notes, sent emails, and replies</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowSimulator(prev => !prev)}
-          className="text-xs font-semibold text-[#1061E3] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md border border-blue-200 transition-colors flex items-center gap-1"
-        >
-          <CornerUpLeft className="w-3.5 h-3.5" />
-          Simulate Client Reply
-        </button>
+        <div className="flex items-center gap-2">
+          {onSendEmailClick && (
+            <button
+              type="button"
+              onClick={onSendEmailClick}
+              className="text-xs font-semibold text-white bg-[#1061E3] hover:bg-blue-700 px-3 py-1.5 rounded-md border border-blue-700 transition-colors flex items-center gap-1"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Send Email
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowSimulator(prev => !prev)}
+            className="text-xs font-semibold text-[#1061E3] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md border border-blue-200 transition-colors flex items-center gap-1"
+          >
+            <CornerUpLeft className="w-3.5 h-3.5" />
+            Simulate Reply
+          </button>
+        </div>
       </div>
 
       {/* Simulator Modal Form */}
