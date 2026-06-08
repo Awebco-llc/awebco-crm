@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { TeamMember } from './Shared';
 import { updateTeamMember } from '@/lib/crmStore';
+import { Eye, EyeOff, Lock } from 'lucide-react';
+import { getAuthClient } from '@/lib/firebase';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword as updateAuthPassword } from 'firebase/auth';
 
 export default function ProfileView({
   teamMembers,
@@ -17,7 +20,17 @@ export default function ProfileView({
   const [initials, setInitials] = useState(currentMember?.initials || '');
   const [color, setColor] = useState(currentMember?.color || '#1061E3');
   const [photoUrl, setPhotoUrl] = useState(currentMember?.photoUrl || '');
-  const [password, setPassword] = useState(currentMember?.password || '');
+  
+  // Password change states
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(currentMember?.emailNotificationsEnabled ?? true);
 
   if (!currentMember) {
@@ -35,26 +48,76 @@ export default function ProfileView({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = {
-      ...currentMember,
+
+    if (showChangePassword) {
+      if (!currentPassword) {
+        alert('Please enter your current password.');
+        return;
+      }
+      if (newPassword.length < 6) {
+        alert('New password must be at least 6 characters long.');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        alert('New passwords do not match.');
+        return;
+      }
+
+      // Re-authenticate and update Firebase Auth password
+      const auth = getAuthClient();
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        alert('Error: No authenticated user session found.');
+        return;
+      }
+
+      try {
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+      } catch (err) {
+        console.error('Re-authentication failed:', err);
+        alert('Failed to change password: Your current password is incorrect.');
+        return;
+      }
+
+      try {
+        await updateAuthPassword(user, newPassword);
+      } catch (err: any) {
+        console.error('Firebase Auth update password failed:', err);
+        alert(`Failed to update auth password: ${err.message || 'Unknown error'}`);
+        return;
+      }
+    }
+
+    const updatedFields: Partial<Omit<TeamMember, 'id'>> = {
       name,
       initials,
       color,
-      password,
       photoUrl: photoUrl || undefined,
       emailNotificationsEnabled,
     };
+
+    if (showChangePassword) {
+      updatedFields.password = newPassword;
+    }
+
+    const updated = {
+      ...currentMember,
+      ...updatedFields,
+    };
+
     setTeamMembers(prev => prev.map(m => m.id === currentMember.id ? updated : m));
+
     try {
-      await updateTeamMember(currentMember.id, {
-        name,
-        initials,
-        color,
-        password,
-        photoUrl: photoUrl || undefined,
-        emailNotificationsEnabled,
-      });
+      await updateTeamMember(currentMember.id, updatedFields);
       alert('Profile updated successfully!');
+      
+      if (showChangePassword) {
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowChangePassword(false);
+      }
     } catch (err) {
       console.error('Failed to save profile changes:', err);
       alert('Failed to save profile changes to database.');
@@ -124,16 +187,103 @@ export default function ProfileView({
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-[#1C1F23] mb-1.5">Password</label>
-              <input
-                type="text"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-[#E2E4E9] text-sm focus:ring-2 focus:ring-[#1061E3] outline-none"
-                required
-              />
-              <p className="text-xs text-[#8E9299] mt-2">This controls your local app login password.</p>
+            <div className="border border-[#E2E4E9] rounded-lg p-5 bg-[#F9FAFB] space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-[#8E9299]" />
+                  <span className="text-sm font-semibold text-[#1C1F23]">Security & Password</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChangePassword(!showChangePassword);
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }}
+                  className="text-xs font-bold text-[#1061E3] hover:underline"
+                >
+                  {showChangePassword ? 'Cancel' : 'Change Password'}
+                </button>
+              </div>
+
+              {!showChangePassword ? (
+                <div className="flex items-center justify-between py-2 border-t border-[#E2E4E9] pt-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] uppercase tracking-wider">Password</label>
+                    <div className="text-sm text-[#1C1F23] font-mono mt-1">••••••••</div>
+                  </div>
+                  <div className="text-xs text-[#8E9299]">Last updated recently</div>
+                </div>
+              ) : (
+                <div className="space-y-4 border-t border-[#E2E4E9] pt-4">
+                  {/* Current Password */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] uppercase tracking-wider mb-1.5">Current Password</label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        value={currentPassword}
+                        onChange={e => setCurrentPassword(e.target.value)}
+                        className="w-full h-10 pl-3 pr-10 rounded-md border border-[#E2E4E9] text-sm focus:ring-2 focus:ring-[#1061E3] outline-none bg-white text-[#1C1F23]"
+                        placeholder="Enter current password"
+                        required={showChangePassword}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8E9299] hover:text-[#1C1F23]"
+                      >
+                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* New Password */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] uppercase tracking-wider mb-1.5">New Password</label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        className="w-full h-10 pl-3 pr-10 rounded-md border border-[#E2E4E9] text-sm focus:ring-2 focus:ring-[#1061E3] outline-none bg-white text-[#1C1F23]"
+                        placeholder="At least 6 characters"
+                        required={showChangePassword}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8E9299] hover:text-[#1C1F23]"
+                      >
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Confirm New Password */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] uppercase tracking-wider mb-1.5">Confirm New Password</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        className="w-full h-10 pl-3 pr-10 rounded-md border border-[#E2E4E9] text-sm focus:ring-2 focus:ring-[#1061E3] outline-none bg-white text-[#1C1F23]"
+                        placeholder="Confirm new password"
+                        required={showChangePassword}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8E9299] hover:text-[#1C1F23]"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

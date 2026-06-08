@@ -77,16 +77,28 @@ export default function InboxView({
     }
   };
 
-  // Auto select first user if none selected
+  // Auto select last selected user or fallback to first user if none selected
   useEffect(() => {
     if (!selectedUserId && teamMembers.length > 0 && currentUserId) {
-      const firstOtherUser = teamMembers.find(m => m.id !== currentUserId);
-      if (firstOtherUser) {
-        // Just setting it on initial mount when null
-        setTimeout(() => setSelectedUserId(firstOtherUser.id), 0);
+      const stored = localStorage.getItem(`lastInboxChatUserId_${currentUserId}`);
+      if (stored && teamMembers.some(m => m.id === stored && m.id !== currentUserId)) {
+        setTimeout(() => setSelectedUserId(stored), 0);
+      } else {
+        const firstOtherUser = teamMembers.find(m => m.id !== currentUserId);
+        if (firstOtherUser) {
+          // Just setting it on initial mount when null
+          setTimeout(() => setSelectedUserId(firstOtherUser.id), 0);
+        }
       }
     }
   }, [teamMembers, currentUserId, selectedUserId]);
+
+  // Save selected chat to memory whenever it changes
+  useEffect(() => {
+    if (selectedUserId && currentUserId) {
+      localStorage.setItem(`lastInboxChatUserId_${currentUserId}`, selectedUserId);
+    }
+  }, [selectedUserId, currentUserId]);
 
   // Mark messages from the selected user as read when the chat is active
   useEffect(() => {
@@ -112,13 +124,38 @@ export default function InboxView({
   }, [messages, selectedUserId]);
 
   const otherTeamMembers = useMemo(() => {
-    return teamMembers
+    const filtered = teamMembers
       .filter(m => m.id !== currentUserId)
       .filter(m => 
         m.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
         (m.email && m.email.toLowerCase().includes(searchQuery.toLowerCase()))
       );
-  }, [teamMembers, currentUserId, searchQuery]);
+
+    // Precompute the latest message timestamp for each member
+    const latestTimestampMap: { [memberId: string]: number } = {};
+    messages.forEach(msg => {
+      const otherId = msg.senderId === currentUserId ? msg.receiverId : (msg.receiverId === currentUserId ? msg.senderId : null);
+      if (otherId) {
+        const time = new Date(msg.timestamp).getTime();
+        if (!latestTimestampMap[otherId] || time > latestTimestampMap[otherId]) {
+          latestTimestampMap[otherId] = time;
+        }
+      }
+    });
+
+    return [...filtered].sort((a, b) => {
+      const timeA = latestTimestampMap[a.id] || 0;
+      const timeB = latestTimestampMap[b.id] || 0;
+
+      if (timeA !== timeB) {
+        return timeB - timeA; // Descending (most recent first)
+      }
+
+      const nameA = a.name || '';
+      const nameB = b.name || '';
+      return nameA.localeCompare(nameB);
+    });
+  }, [teamMembers, currentUserId, searchQuery, messages]);
 
   const currentChatMessages = useMemo(() => {
     if (!currentUserId || !selectedUserId) return [];
