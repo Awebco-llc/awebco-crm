@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Mail, Send, MessageSquare, Trash2, Calendar, User, CornerUpLeft } from 'lucide-react';
+import { Mail, Send, MessageSquare, Trash2, Calendar, CornerUpLeft, ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
 import { ContactActivity, TeamMember } from './Shared';
 import { createActivity, deleteActivity } from '@/lib/crmStore';
 
@@ -27,6 +27,28 @@ export default function ContactTimelinePane({
   const [showSimulator, setShowSimulator] = useState(false);
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpandedActivities(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const getFileIcon = (filename: string) => {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return '🖼️';
+    if (['pdf'].includes(ext)) return '📄';
+    if (['doc', 'docx'].includes(ext)) return '📝';
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return '📊';
+    if (['zip', 'rar', '7z'].includes(ext)) return '🗜️';
+    if (['mp4', 'mov', 'avi', 'webm'].includes(ext)) return '🎥';
+    if (['mp3', 'wav', 'ogg'].includes(ext)) return '🎵';
+    return '📎';
+  };
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,9 +291,58 @@ export default function ContactTimelinePane({
                         </div>
                       )}
 
-                      <p className="text-xs text-[#4A4D53] whitespace-pre-wrap break-words leading-relaxed mt-1">
-                        {act.body}
-                      </p>
+                      {/* Email / Note Body */}
+                      {act.body && (() => {
+                        const isExpanded = expandedActivities.has(act.id);
+                        const isLong = act.body.length > 240;
+                        return (
+                          <div>
+                            <p
+                              className="text-xs text-[#4A4D53] whitespace-pre-wrap break-words leading-relaxed mt-1"
+                              style={!isExpanded && isLong ? {
+                                display: '-webkit-box',
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              } : {}}
+                            >
+                              {act.body}
+                            </p>
+                            {isLong && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpand(act.id)}
+                                className="mt-1 flex items-center gap-0.5 text-[10px] font-semibold text-[#1061E3] hover:text-blue-700 transition-colors"
+                              >
+                                {isExpanded ? (
+                                  <><ChevronUp className="w-3 h-3" /> Show less</>
+                                ) : (
+                                  <><ChevronDown className="w-3 h-3" /> Show more</>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Attachments */}
+                      {act.attachments && act.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100">
+                          {act.attachments.map((att, idx) => (
+                            <a
+                              key={idx}
+                              href={att.downloadUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-md text-[10px] font-medium text-[#4A4D53] hover:text-[#1061E3] transition-all max-w-[160px] truncate"
+                              title={att.name}
+                            >
+                              <span className="shrink-0">{getFileIcon(att.name)}</span>
+                              <span className="truncate">{att.name}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
