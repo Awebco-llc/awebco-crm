@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { 
   Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
-  LineChart, MapPin, MousePointerClick, Share2, Ticket, Settings as SettingsIcon, LayoutList,
+  LineChart, MapPin, MousePointerClick, Share2, Ticket as TicketIcon, Settings as SettingsIcon, LayoutList,
   FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu, Rocket, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -22,8 +22,8 @@ import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
 import ImportModal from '@/components/ImportModal';
 import ContactTimelinePane from '@/components/ContactTimelinePane';
-import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup, ContactActivity } from '@/components/Shared';
-import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages, createMessage, subscribeActivities, createActivity, deleteActivity } from '@/lib/crmStore';
+import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup, ContactActivity, Ticket } from '@/components/Shared';
+import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages, createMessage, subscribeActivities, createActivity, deleteActivity, subscribeTickets } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getAuthClient } from '@/lib/firebase';
@@ -67,7 +67,7 @@ const NAV_ITEMS_CRM = [
 const CRM_NAV_NAMES = NAV_ITEMS_CRM.map(item => item.name);
 const NAV_ITEMS_WORKSPACE = [
   { name: 'Awebco', icon: Rocket },
-  { name: 'Support Tickets', icon: Ticket },
+  { name: 'Support Tickets', icon: TicketIcon },
   { name: 'Websites', icon: Globe },
   { name: 'Design & Print', icon: Palette },
   { name: 'SEO', icon: LineChart },
@@ -635,6 +635,18 @@ export default function Page() {
   const [products, setProducts] = useState<ProductService[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [supportTickets, setSupportTickets] = useState<Ticket[]>([]);
+  const notStartedSupportTicketsCount = useMemo(() => {
+    return supportTickets.filter(t => {
+      if (t.status !== 'Not Started') return false;
+      if (t.parentId) return false;
+      if (t.companyId) {
+        const company = companies.find(c => c.id === t.companyId);
+        if (company && company.support === false) return false;
+      }
+      return true;
+    }).length;
+  }, [supportTickets, companies]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNav, setActiveNav] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -846,6 +858,10 @@ export default function Page() {
       console.error('Firestore contact groups subscribe failed', e);
       setDataError('Could not load contact groups from Firestore.');
     });
+    const unsubSupportTickets = subscribeTickets('Support Tickets', setSupportTickets, (e) => {
+      console.error('Firestore support tickets subscribe failed', e);
+      setDataError('Could not load support tickets from Firestore.');
+    });
     return () => {
       unsubCompanies();
       unsubContacts();
@@ -855,6 +871,7 @@ export default function Page() {
       unsubDeals();
       unsubMessages();
       unsubContactGroups();
+      unsubSupportTickets();
     };
   }, []);
 
@@ -1612,11 +1629,7 @@ export default function Page() {
             </div>
             {NAV_ITEMS_CRM.map(item => {
               let count = 0;
-              if (item.name === 'Contacts') count = contacts.length;
-              else if (item.name === 'Companies') count = companies.length;
-              else if (item.name === 'Deals / Sales') count = deals.length;
-              else if (item.name === 'Proposals') count = proposals.length;
-              else if (item.name === 'Price Catalog') count = products.length;
+              if (item.name === 'Deals / Sales') count = deals.length;
 
               const isActive = activeContentNav === item.name;
 
@@ -1654,20 +1667,32 @@ export default function Page() {
             <div className="text-[11px] font-bold uppercase text-[#88AADD] px-5 pb-2 tracking-wide">
               Workspace
             </div>
-            {visibleWorkspaceItems.map(item => (
-              <div 
-                key={item.name}
-                onClick={() => handleNavClick(item.name)}
-                className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
-                  activeContentNav === item.name 
-                    ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
-                    : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
-                }`}
-              >
-                <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
-                {item.name}
-              </div>
-            ))}
+            {visibleWorkspaceItems.map(item => {
+              const isActive = activeContentNav === item.name;
+              const isSupportTickets = item.name === 'Support Tickets';
+
+              return (
+                <div 
+                  key={item.name}
+                  onClick={() => handleNavClick(item.name)}
+                  className={`px-5 py-2 text-sm flex items-center justify-between cursor-pointer transition-colors ${
+                    isActive 
+                      ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
+                      : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className={`w-4 h-4 ${isActive ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
+                    <span>{item.name}</span>
+                  </div>
+                  {isSupportTickets && notStartedSupportTicketsCount > 0 && (
+                    <span className="bg-[#EA580C] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full select-none shadow-sm min-w-[18px] text-center">
+                      {notStartedSupportTicketsCount}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         )}
       </aside>
