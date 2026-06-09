@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Mail, Send, MessageSquare, Trash2, Calendar, CornerUpLeft, ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
+import { Mail, Send, MessageSquare, Trash2, Calendar, CornerUpLeft, ChevronDown, ChevronUp, Paperclip, Download } from 'lucide-react';
 import { ContactActivity, TeamMember } from './Shared';
 import { createActivity, deleteActivity } from '@/lib/crmStore';
 
@@ -332,13 +332,15 @@ export default function ContactTimelinePane({
                             <a
                               key={idx}
                               href={att.downloadUrl}
+                              download={att.name}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-md text-[10px] font-medium text-[#4A4D53] hover:text-[#1061E3] transition-all max-w-[160px] truncate"
-                              title={att.name}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-md text-[10px] font-medium text-[#4A4D53] hover:text-[#1061E3] transition-all max-w-[180px] truncate group/att"
+                              title={`Download ${att.name}`}
                             >
                               <span className="shrink-0">{getFileIcon(att.name)}</span>
-                              <span className="truncate">{att.name}</span>
+                              <span className="truncate flex-grow">{att.name}</span>
+                              <Download className="w-3 h-3 text-[#8E9299] group-hover/att:text-[#1061E3] shrink-0 ml-0.5" />
                             </a>
                           ))}
                         </div>

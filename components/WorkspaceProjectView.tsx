@@ -28,6 +28,8 @@ import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company
 import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour, createGroupWithId, createMessage } from '@/lib/crmStore';
 import TicketImportModal from './TicketImportModal';
 import RichTextEditor from './RichTextEditor';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorageClient } from '@/lib/firebase';
 
 interface Column {
   id: string;
@@ -217,6 +219,30 @@ const getInitials = (name?: string) => {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
+};
+
+/**
+ * Safely format a date value that may be a string, number, JS Date, or
+ * Firestore Timestamp object. Returns a fallback string if the value is
+ * missing or produces an invalid Date.
+ */
+const safeFormatDate = (value: any, opts: Intl.DateTimeFormatOptions = { dateStyle: 'short', timeStyle: 'short' }, fallback = 'Just now'): string => {
+  if (!value) return fallback;
+  let date: Date;
+  if (typeof value?.toDate === 'function') {
+    // Firestore Timestamp
+    date = value.toDate();
+  } else if (value instanceof Date) {
+    date = value;
+  } else {
+    date = new Date(value);
+  }
+  if (isNaN(date.getTime())) return fallback;
+  try {
+    return new Intl.DateTimeFormat('en-US', opts).format(date);
+  } catch {
+    return fallback;
+  }
 };
 
 const getColumnWidth = (colId: string): string => {
@@ -1589,6 +1615,9 @@ export default function WorkspaceProjectView({
   const [rowToDeleteId, setRowToDeleteId] = useState<string | null>(null);
   const [newUpdateText, setNewUpdateText] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [fileUploadProgress, setFileUploadProgress] = useState<{ [filename: string]: number }>({});
+  const [isPostingUpdate, setIsPostingUpdate] = useState(false);
   const [activeCommentsRowId, setActiveCommentsRowId] = useState<string | null>(null);
   const [commentsPopoverPosition, setCommentsPopoverPosition] = useState({ top: 0, left: 0 });
   const [quickUpdateText, setQuickUpdateText] = useState('');
@@ -2191,6 +2220,42 @@ export default function WorkspaceProjectView({
       onMention?.(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId, projectType, rowId);
     }
 
+    let attachmentUrl = '';
+    if (attachedFile) {
+      try {
+        setIsPostingUpdate(true);
+        const storage = getStorageClient();
+        const uniqueName = `${Date.now()}_${attachedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const path = currentUserId || 'anonymous';
+        const storageRef = ref(storage, `update-attachments/${path}/${uniqueName}`);
+        const uploadTask = uploadBytesResumable(storageRef, attachedFile);
+        
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            null,
+            (error) => {
+              console.error('Upload failed:', error);
+              reject(error);
+            },
+            async () => {
+              try {
+                attachmentUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve();
+              } catch (err) {
+                reject(err);
+              }
+            }
+          );
+        });
+      } catch (err) {
+        console.error('Failed to upload comment attachment:', err);
+        alert('Failed to upload attachment.');
+        setIsPostingUpdate(false);
+        return;
+      }
+    }
+
     const newUpdate: any = {
       id: `update-${Date.now()}`,
       author,
@@ -2199,6 +2264,9 @@ export default function WorkspaceProjectView({
     };
     if (attachedFile) {
       newUpdate.attachment = attachedFile.name;
+      if (attachmentUrl) {
+        newUpdate.attachmentUrl = attachmentUrl;
+      }
     }
 
     const updates = row.updates ? [...row.updates, newUpdate] : [newUpdate];
@@ -2206,6 +2274,7 @@ export default function WorkspaceProjectView({
 
     setNewUpdateText('');
     setAttachedFile(null);
+    setIsPostingUpdate(false);
   };
 
   const handleCommentsButtonClick = (e: React.MouseEvent, rowId: string) => {
@@ -2283,13 +2352,62 @@ export default function WorkspaceProjectView({
     const row = data.find(item => item.id === rowId);
     if (!row) return;
 
-    const files = row.files ? [...row.files] : [];
-    files.push({
-      id: `file-${Date.now()}`,
-      name: file.name,
-      uploadedAt: new Date().toISOString(),
-    });
-    await handleUpdateRow(rowId, { files });
+    try {
+      setIsUploadingFile(true);
+      const storage = getStorageClient();
+      const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const path = currentUserId || 'anonymous';
+      const storageRef = ref(storage, `project-attachments/${path}/${uniqueName}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      setFileUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+
+      const downloadUrl = await new Promise<string>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setFileUploadProgress(prev => ({ ...prev, [file.name]: progress }));
+          },
+          (error) => {
+            console.error('Upload failed:', error);
+            setFileUploadProgress(prev => {
+              const next = { ...prev };
+              delete next[file.name];
+              return next;
+            });
+            reject(error);
+          },
+          async () => {
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              setFileUploadProgress(prev => {
+                const next = { ...prev };
+                delete next[file.name];
+                return next;
+              });
+              resolve(url);
+            } catch (err) {
+              reject(err);
+            }
+          }
+        );
+      });
+
+      const files = row.files ? [...row.files] : [];
+      files.push({
+        id: `file-${Date.now()}`,
+        name: file.name,
+        url: downloadUrl,
+        uploadedAt: new Date().toISOString(),
+      });
+      await handleUpdateRow(rowId, { files });
+    } catch (err) {
+      console.error('Failed to add project file:', err);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setIsUploadingFile(false);
+    }
   };
 
   const handleRemoveProjectFile = async (rowId: string, fileId: string) => {
@@ -3721,11 +3839,26 @@ export default function WorkspaceProjectView({
                             </div>
                           </div>
 
-                          {/* Files list */}
                           <div className="border border-[#E2E4E9] rounded-xl overflow-hidden bg-[#F9FAFB] p-4">
-                            {editingRow.files && editingRow.files.length > 0 ? (
+                            {(editingRow.files && editingRow.files.length > 0) || Object.keys(fileUploadProgress).length > 0 ? (
                               <div className="flex flex-col gap-2">
-                                {editingRow.files.map((file: any, index: number) => (
+                                {Object.entries(fileUploadProgress).map(([name, progress]) => (
+                                  <div key={name} className="flex items-center justify-between bg-white border border-[#E2E4E9] rounded-lg px-4 py-2.5 shadow-xs">
+                                    <div className="flex items-center gap-3 min-w-0 flex-grow">
+                                      <Loader2 className="w-4 h-4 text-[#1061E3] animate-spin shrink-0" />
+                                      <div className="flex-grow min-w-0">
+                                        <div className="text-xs font-medium text-[#1C1F23] truncate mb-1">{name}</div>
+                                        <div className="h-1.5 w-full bg-[#E3F2FD] rounded-full overflow-hidden">
+                                          <div 
+                                            className="h-full bg-[#1061E3] transition-all duration-300 ease-out"
+                                            style={{ width: `${progress}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                {editingRow.files && editingRow.files.map((file: any, index: number) => (
                                   <div key={index} className="flex items-center justify-between bg-white border border-[#E2E4E9] rounded-lg px-4 py-2.5 shadow-xs">
                                     <div className="flex items-center gap-2 min-w-0">
                                       <FileIcon className="w-4 h-4 text-[#8E9299] shrink-0" />
@@ -3745,18 +3878,32 @@ export default function WorkspaceProjectView({
                                         <span className="text-[11px] text-[#8E9299] font-medium">({file.size})</span>
                                       )}
                                     </div>
-                                    <button
-                                      onClick={() => {
-                                        if (confirm('Delete this file?')) {
-                                          const updatedFiles = editingRow.files.filter((_: any, i: number) => i !== index);
-                                          handleUpdateRow(editingRowId, { files: updatedFiles });
-                                        }
-                                      }}
-                                      className="text-[#8E9299] hover:text-[#D32F2F] p-1 rounded hover:bg-red-50 transition-colors"
-                                      title="Delete attachment"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      {file.url && (
+                                        <a
+                                          href={file.url}
+                                          download={file.name}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[#8E9299] hover:text-[#1061E3] p-1 rounded hover:bg-blue-50 transition-colors flex items-center justify-center shrink-0"
+                                          title="Download file"
+                                        >
+                                          <Download className="w-4 h-4" />
+                                        </a>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          if (confirm('Delete this file?')) {
+                                            const updatedFiles = editingRow.files.filter((_: any, i: number) => i !== index);
+                                            handleUpdateRow(editingRowId, { files: updatedFiles });
+                                          }
+                                        }}
+                                        className="text-[#8E9299] hover:text-[#D32F2F] p-1 rounded hover:bg-red-50 transition-colors"
+                                        title="Delete attachment"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -3787,14 +3934,38 @@ export default function WorkspaceProjectView({
                                       <span className="font-bold text-xs text-[#1C1F23] truncate">{update.author}</span>
                                     </div>
                                     <span className="text-[10px] font-medium text-[#8E9299]">
-                                      {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
+                                      {safeFormatDate(update.timestamp)}
                                     </span>
                                   </div>
                                   <p className="text-sm text-[#4A4D53] whitespace-pre-wrap pl-9">{update.text}</p>
                                   {update.attachment && (
                                     <div className="mt-1 ml-9 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5 w-fit">
                                       <FileIcon className="w-3.5 h-3.5" />
-                                      <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
+                                      {update.attachmentUrl ? (
+                                        <a
+                                          href={update.attachmentUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="font-semibold hover:underline truncate max-w-[200px]"
+                                          title={update.attachment}
+                                        >
+                                          {update.attachment}
+                                        </a>
+                                      ) : (
+                                        <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
+                                      )}
+                                      {update.attachmentUrl && (
+                                        <a
+                                          href={update.attachmentUrl}
+                                          download={update.attachment}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[#8E9299] hover:text-[#1061E3] ml-1 p-0.5 rounded hover:bg-blue-100 transition-colors flex items-center justify-center shrink-0"
+                                          title="Download attachment"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />
+                                        </a>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -3904,9 +4075,10 @@ export default function WorkspaceProjectView({
                               {/* Post button */}
                               <button
                                 onClick={() => handleAddUpdate(editingRowId)}
-                                disabled={!newUpdateText.trim() && !attachedFile}
-                                className="px-4 py-2 bg-[#1061E3] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                                disabled={(!newUpdateText.trim() && !attachedFile) || isPostingUpdate}
+                                className="px-4 py-2 bg-[#1061E3] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5"
                               >
+                                {isPostingUpdate && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                 Post
                               </button>
                             </div>
@@ -4147,14 +4319,38 @@ export default function WorkspaceProjectView({
                                   <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
                                 </div>
                                 <span className="text-[10px] text-[#8E9299]">
-                                  {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
+                                  {safeFormatDate(update.timestamp)}
                                 </span>
                               </div>
                               <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
                               {update.attachment && (
                                 <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2 py-1 w-fit">
                                   <FileIcon className="w-3.5 h-3.5" />
-                                  <span className="truncate max-w-[200px]">{update.attachment}</span>
+                                  {update.attachmentUrl ? (
+                                    <a
+                                      href={update.attachmentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-semibold hover:underline truncate max-w-[200px]"
+                                      title={update.attachment}
+                                    >
+                                      {update.attachment}
+                                    </a>
+                                  ) : (
+                                    <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
+                                  )}
+                                  {update.attachmentUrl && (
+                                    <a
+                                      href={update.attachmentUrl}
+                                      download={update.attachment}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[#8E9299] hover:text-[#1061E3] ml-1 p-0.5 rounded hover:bg-blue-100 transition-colors flex items-center justify-center shrink-0"
+                                      title="Download attachment"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -4306,9 +4502,10 @@ export default function WorkspaceProjectView({
                           </div>
                           <button
                             onClick={() => handleAddUpdate(editingRowId)}
-                            disabled={!newUpdateText.trim() && !attachedFile}
-                            className="px-4 py-2 h-[80px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                            disabled={(!newUpdateText.trim() && !attachedFile) || isPostingUpdate}
+                            className="px-4 py-2 h-[80px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center gap-1.5"
                           >
+                            {isPostingUpdate && <Loader2 className="w-4 h-4 animate-spin" />}
                             Post
                           </button>
                         </div>
@@ -4344,9 +4541,27 @@ export default function WorkspaceProjectView({
                             </button>
                           </div>
                         </div>
-                        {editingRow?.files && editingRow.files.length > 0 ? (
+                        {(editingRow?.files && editingRow.files.length > 0) || Object.keys(fileUploadProgress).length > 0 ? (
                           <div className="flex flex-col gap-2">
-                            {editingRow.files.map((file: any) => (
+                            {Object.entries(fileUploadProgress).map(([name, progress]) => (
+                              <div key={name} className="flex items-center justify-between p-3 border border-[#E2E4E9] rounded-lg bg-[#F9FAFB]">
+                                <div className="flex items-center gap-3 min-w-0 flex-grow">
+                                  <div className="p-2 bg-white border border-[#E2E4E9] rounded-md text-[#1061E3]">
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                  </div>
+                                  <div className="flex-grow min-w-0">
+                                    <div className="text-sm font-medium text-[#1C1F23] truncate mb-1">{name}</div>
+                                    <div className="h-1.5 w-full bg-[#E3F2FD] rounded-full overflow-hidden">
+                                      <div 
+                                        className="h-full bg-[#1061E3] transition-all duration-300 ease-out"
+                                        style={{ width: `${progress}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {editingRow?.files && editingRow.files.map((file: any) => (
                               <div key={file.id} className="flex items-center justify-between p-3 border border-[#E2E4E9] rounded-lg bg-[#F9FAFB] group/file">
                                 <div className="flex items-center gap-3 min-w-0">
                                   <div className="p-2 bg-white border border-[#E2E4E9] rounded-md text-[#8E9299]">
@@ -4369,18 +4584,32 @@ export default function WorkspaceProjectView({
                                       </p>
                                     )}
                                     <p className="text-[11px] text-[#8E9299]">
-                                      {file.uploadedAt ? new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.uploadedAt)) : 'Just now'}
+                                      {safeFormatDate(file.uploadedAt)}
                                     </p>
                                   </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveProjectFile(editingRowId, file.id)}
-                                  className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
-                                  title="Remove File"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  {file.url && (
+                                    <a
+                                      href={file.url}
+                                      download={file.name}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-colors"
+                                      title="Download File"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveProjectFile(editingRowId, file.id)}
+                                    className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
+                                    title="Remove File"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -4649,7 +4878,7 @@ export default function WorkspaceProjectView({
                     <div className="flex justify-between items-center font-semibold text-[#1C1F23]">
                       <span className="truncate max-w-[120px]">{update.author}</span>
                       <span className="text-[9px] text-[#8E9299]">
-                        {update.timestamp ? new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp)) : 'Just now'}
+                        {safeFormatDate(update.timestamp)}
                       </span>
                     </div>
                     <p className="text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>

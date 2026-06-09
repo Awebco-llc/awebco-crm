@@ -136,7 +136,49 @@ export async function POST(req: Request) {
     // Auto-extract any attached file or image links from the incoming payload
     const extractedFiles = extractFilesFromPayload(payload);
 
-    // Deep search payload keys for matching fields case-insensitively
+    // --- Explicitly parse the `uploads` key sent by Gravity Forms webhook ---
+    // The value can be a single URL string, a newline-separated string of URLs,
+    // or an array of URL strings.
+    const rawUploads = payload.uploads || payload.file || payload.upload || null;
+    if (rawUploads) {
+      const uploadUrls: string[] = [];
+      if (Array.isArray(rawUploads)) {
+        rawUploads.forEach((u: any) => { if (typeof u === 'string' && u.trim()) uploadUrls.push(u.trim()); });
+      } else if (typeof rawUploads === 'string') {
+        // May be newline- or comma-separated if multiple files
+        rawUploads.split(/[\n,]+/).forEach((u: string) => { if (u.trim()) uploadUrls.push(u.trim()); });
+      }
+
+      for (const urlStr of uploadUrls) {
+        // Skip if we already caught this URL via the generic extractor
+        if (extractedFiles.some(f => f.url === urlStr)) continue;
+        try {
+          const urlObj = new URL(urlStr);
+          const gfDownload = urlObj.searchParams.get('gf-download');
+          let filename = 'attachment';
+          if (gfDownload) {
+            const decoded = decodeURIComponent(gfDownload);
+            const parts = decoded.split('/');
+            filename = parts[parts.length - 1] || 'attachment';
+          } else {
+            const parts = urlObj.pathname.split('/');
+            const last = parts[parts.length - 1];
+            if (last) filename = decodeURIComponent(last);
+          }
+          extractedFiles.push({
+            id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: filename,
+            url: urlStr,
+            uploadedAt: new Date().toISOString(),
+          });
+        } catch {
+          // invalid URL — skip
+        }
+      }
+    }
+    // -------------------------------------------------------------------
+
+
     const findInPayload = (keys: string[]) => {
       for (const k of keys) {
         if (payload[k]) return payload[k];

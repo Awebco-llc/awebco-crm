@@ -24,6 +24,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+const safeFormatDate = (value: any, opts: Intl.DateTimeFormatOptions = { dateStyle: 'short', timeStyle: 'short' }, fallback = 'Just now'): string => {
+  if (!value) return fallback;
+  let date: Date;
+  if (typeof value?.toDate === 'function') { date = value.toDate(); }
+  else if (value instanceof Date) { date = value; }
+  else { date = new Date(value); }
+  if (isNaN(date.getTime())) return fallback;
+  try { return new Intl.DateTimeFormat('en-US', opts).format(date); } catch { return fallback; }
+};
+
 const DEAL_STEPS = [
   '1. Onboarding',
   '2. Strategy Meeting',
@@ -1062,9 +1072,9 @@ export default function DealsView({
                                 </div>
                                 <span className="font-semibold text-xs text-[#1C1F23] truncate">{note.author || 'User'}</span>
                               </div>
-                              <span className="text-[10px] text-[#8E9299]">
-                                {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(note.createdAt))}
-                              </span>
+                               <span className="text-[10px] text-[#8E9299]">
+                                 {safeFormatDate(note.createdAt)}
+                               </span>
                             </div>
                             <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{note.text}</p>
                             {note.attachment && (
@@ -1263,11 +1273,11 @@ export default function DealsView({
                                     <h5 className="text-sm font-semibold text-[#1C1F23] truncate">{proposal.title}</h5>
                                   </div>
                                   <p className="text-xs text-[#8E9299]">
-                                    Created {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.date))}
-                                  </p>
-                                  <p className="text-xs text-[#8E9299] mt-1">
-                                    Valid until {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.validUntil))}
-                                  </p>
+                                   Created {safeFormatDate(proposal.date, { dateStyle: 'medium' }, '')}
+                                 </p>
+                                 <p className="text-xs text-[#8E9299] mt-1">
+                                   Valid until {safeFormatDate(proposal.validUntil, { dateStyle: 'medium' }, '')}
+                                 </p>
                                 </div>
                                 <div className="flex flex-col items-end gap-2 shrink-0">
                                   <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase whitespace-nowrap ${

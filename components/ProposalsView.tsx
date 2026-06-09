@@ -597,14 +597,26 @@ export default function ProposalsView({
                           {attachment.name}
                         </a>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAttachment(idx)}
-                        className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 print:hidden"
-                        title="Remove Attachment"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={attachment.url}
+                          download={attachment.name}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-colors flex items-center justify-center shrink-0"
+                          title="Download attachment"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(idx)}
+                          className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 print:hidden"
+                          title="Remove Attachment"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { UploadCloud, File, Image as ImageIcon, X, FolderOpen, Folder, FolderPlus, ChevronRight, Search, Loader2, LayoutGrid, List, Trash2, ArrowRight } from 'lucide-react';
+import { UploadCloud, File, Image as ImageIcon, X, FolderOpen, Folder, FolderPlus, ChevronRight, Search, Loader2, LayoutGrid, List, Trash2, ArrowRight, Download } from 'lucide-react';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getStorageClient } from '@/lib/firebase';
 import { subscribeFiles, saveFileMetadata, deleteFileMetadata, subscribeFolders, createFolder, deleteFolder, updateFileMetadata } from '@/lib/crmStore';
@@ -567,6 +567,17 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
                       )}
                       
                       {/* Grid Item hover actions */}
+                      <a 
+                        href={file.downloadUrl}
+                        download={file.name}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-2 right-18 p-1.5 bg-black/50 hover:bg-black/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        title="Download file"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -677,6 +688,17 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
                             </td>
                           )}
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                            <a
+                              href={file.downloadUrl}
+                              download={file.name}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 p-1.5 rounded transition-colors opacity-0 group-hover:opacity-100 mr-2 inline-flex items-center justify-center"
+                              title="Download file"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();

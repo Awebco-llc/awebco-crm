@@ -26,6 +26,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+const safeFormatDate = (value: any, opts: Intl.DateTimeFormatOptions = { dateStyle: 'short', timeStyle: 'short' }, fallback = 'Just now'): string => {
+  if (!value) return fallback;
+  let date: Date;
+  if (typeof value?.toDate === 'function') { date = value.toDate(); }
+  else if (value instanceof Date) { date = value; }
+  else { date = new Date(value); }
+  if (isNaN(date.getTime())) return fallback;
+  try { return new Intl.DateTimeFormat('en-US', opts).format(date); } catch { return fallback; }
+};
+
 function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
@@ -1542,7 +1552,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                                   <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author || 'User'}</span>
                                 </div>
                                 <span className="text-[10px] text-[#8E9299]">
-                                  {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.createdAt))}
+                                  {safeFormatDate(update.createdAt)}
                                 </span>
                               </div>
                               <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
@@ -1579,10 +1589,10 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                                     <h5 className="text-sm font-semibold text-[#1C1F23] truncate">{proposal.title}</h5>
                                   </div>
                                   <p className="text-xs text-[#8E9299]">
-                                    Created {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.date))}
+                                    Created {safeFormatDate(proposal.date, { dateStyle: 'medium' }, '')}
                                   </p>
                                   <p className="text-xs text-[#8E9299] mt-1">
-                                    Valid until {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(proposal.validUntil))}
+                                    Valid until {safeFormatDate(proposal.validUntil, { dateStyle: 'medium' }, '')}
                                   </p>
                                 </div>
                                 <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase whitespace-nowrap ${

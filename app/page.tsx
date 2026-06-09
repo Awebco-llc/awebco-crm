@@ -1732,9 +1732,9 @@ export default function Page() {
                           </div>
                           <p className="text-xs font-semibold text-[#4A4D53] truncate">{notification.sourceTitle}</p>
                           <p className="text-xs text-[#8E9299] mt-1 whitespace-pre-wrap break-words">{notification.preview}</p>
-                          <p className="text-[10px] text-[#8E9299] mt-2">
-                            {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(notification.createdAt))}
-                          </p>
+                           <p className="text-[10px] text-[#8E9299] mt-2">
+                             {(() => { try { const raw: any = notification.createdAt; const d = raw?.toDate?.() instanceof Date ? raw.toDate() : new Date(notification.createdAt); return isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(d); } catch { return ''; } })()}
+                           </p>
                         </button>
                       ))
                     )}
