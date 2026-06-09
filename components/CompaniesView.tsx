@@ -286,6 +286,14 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     return counts;
   }, [companies]);
 
+  const serviceCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    PLANS_CONFIG.forEach(plan => {
+      counts[plan.field] = companies.filter(c => !!c[plan.field as keyof Company]).length;
+    });
+    return counts;
+  }, [companies]);
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em']);
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
     if (typeof window !== 'undefined') {
@@ -829,7 +837,14 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                                 : 'hover:bg-[#F0F2F5] text-[#4A4D53]'
                             }`}
                           >
-                            <span>{plan.name}</span>
+                            <span className="flex items-center gap-2">
+                              <span>{plan.name}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full select-none font-bold ${
+                                isChecked ? 'bg-blue-100 text-[#1061E3]' : 'bg-[#F0F2F5]'
+                              }`}>
+                                {serviceCounts[plan.field] || 0}
+                              </span>
+                            </span>
                             {isChecked && <Check className="w-3.5 h-3.5 text-[#1061E3]" />}
                           </button>
                         );
@@ -866,7 +881,12 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       {/* View Header */}
       <div className="p-6 shrink-0 pb-2">
         <div className="flex items-center justify-between">
-          <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">Companies</h1>
+          <h1 className="m-0 text-2xl font-bold text-[#1C1F23] flex items-center gap-2">
+            <span>Companies</span>
+            <span className="text-sm font-semibold text-[#8E9299] bg-[#F0F2F5] px-2.5 py-0.5 rounded-full select-none">
+              {filteredCompanies.length < companies.length ? `${filteredCompanies.length} of ${companies.length}` : companies.length}
+            </span>
+          </h1>
         </div>
 
         {/* Active Filters */}
@@ -1168,7 +1188,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 {visibleColumns.includes('web') && (
                   <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
                     <div className="flex items-center justify-center gap-1">
-                      <span>WEB</span>
+                      <span>WEB ({serviceCounts.web || 0})</span>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -1184,7 +1204,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 {visibleColumns.includes('seo') && (
                   <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
                     <div className="flex items-center justify-center gap-1">
-                      <span>SEO</span>
+                      <span>SEO ({serviceCounts.seo || 0})</span>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -1200,7 +1220,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 {visibleColumns.includes('ll') && (
                   <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
                     <div className="flex items-center justify-center gap-1">
-                      <span>LL</span>
+                      <span>LL ({serviceCounts.ll || 0})</span>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -1216,7 +1236,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 {visibleColumns.includes('ppc') && (
                   <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
                     <div className="flex items-center justify-center gap-1">
-                      <span>PPC</span>
+                      <span>PPC ({serviceCounts.ppc || 0})</span>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -1232,7 +1252,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 {visibleColumns.includes('smm') && (
                   <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
                     <div className="flex items-center justify-center gap-1">
-                      <span>SMM</span>
+                      <span>SMM ({serviceCounts.smm || 0})</span>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -1248,7 +1268,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 {visibleColumns.includes('sma') && (
                   <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
                     <div className="flex items-center justify-center gap-1">
-                      <span>SMA</span>
+                      <span>SMA ({serviceCounts.sma || 0})</span>
                       {allowDeletingColumns && (
                         <button
                           type="button"
@@ -1264,11 +1284,27 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 {visibleColumns.includes('em') && (
                   <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
                     <div className="flex items-center justify-center gap-1">
-                      <span>EM</span>
+                      <span>EM ({serviceCounts.em || 0})</span>
                       {allowDeletingColumns && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'em')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('dp') && (
+                  <th className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-center group select-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>DP ({serviceCounts.dp || 0})</span>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'dp')); }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
                         >
                           <X className="w-3 h-3" />

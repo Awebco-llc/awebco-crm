@@ -1610,20 +1610,42 @@ export default function Page() {
             <div className="text-[11px] font-bold uppercase text-[#88AADD] px-5 pb-2 tracking-wide">
               CRM
             </div>
-            {NAV_ITEMS_CRM.map(item => (
-              <div 
-                key={item.name}
-                onClick={() => handleNavClick(item.name)}
-                className={`px-5 py-2 text-sm flex items-center gap-3 cursor-pointer transition-colors ${
-                  activeContentNav === item.name 
-                    ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
-                    : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
-                }`}
-              >
-                <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
-                {item.name}
-              </div>
-            ))}
+            {NAV_ITEMS_CRM.map(item => {
+              let count = 0;
+              if (item.name === 'Contacts') count = contacts.length;
+              else if (item.name === 'Companies') count = companies.length;
+              else if (item.name === 'Deals / Sales') count = deals.length;
+              else if (item.name === 'Proposals') count = proposals.length;
+              else if (item.name === 'Price Catalog') count = products.length;
+
+              const isActive = activeContentNav === item.name;
+
+              return (
+                <div 
+                  key={item.name}
+                  onClick={() => handleNavClick(item.name)}
+                  className={`px-5 py-2 text-sm flex items-center justify-between cursor-pointer transition-colors ${
+                    isActive 
+                      ? 'text-white bg-[#004080] border-r-[3px] border-[#66B2FF] font-medium' 
+                      : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className={`w-4 h-4 ${isActive ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
+                    <span>{item.name}</span>
+                  </div>
+                  {count > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full select-none ${
+                      isActive 
+                        ? 'bg-[#0059b3] text-white' 
+                        : 'bg-[#002244] text-[#B3D4FF]'
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         )}
 
