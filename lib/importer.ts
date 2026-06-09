@@ -438,10 +438,38 @@ export async function processTicketImport(
   teamMembers: TeamMember[],
   onProgress: (count: number) => void,
   existingGroups?: any[],
-  targetGroupId?: string
+  targetGroupId?: string,
+  existingTickets?: any[]
 ) {
   const companyCache = new Map<string, string>();
   existingCompanies.forEach(c => companyCache.set(c.name.toLowerCase(), c.id));
+
+  // Build a lookup of existing parent tickets for this workspace:
+  // Maps normalize(projectName) → ticketId  AND  normalize(companyName) → ticketId
+  // This lets sub-tasks find their parent even when only the business/company name is known.
+  const existingParentByProjectName = new Map<string, string>();
+  const existingParentByCompanyName = new Map<string, string>();
+  if (existingTickets) {
+    for (const t of existingTickets) {
+      if (!t.parentId) {
+        // Index by projectName
+        if (t.projectName) {
+          existingParentByProjectName.set(t.projectName.toLowerCase().trim(), t.id);
+        }
+        // Index by company.name (using the companyId → company lookup)
+        if (t.companyId) {
+          const company = existingCompanies.find(c => c.id === t.companyId);
+          if (company?.name) {
+            existingParentByCompanyName.set(company.name.toLowerCase().trim(), t.id);
+          }
+        }
+        // Also index by the stored companyName field (denormalized on the ticket)
+        if (t.companyName) {
+          existingParentByCompanyName.set(t.companyName.toLowerCase().trim(), t.id);
+        }
+      }
+    }
+  }
 
   const groupCache = new Map<string, string>();
   if (existingGroups) {
@@ -507,8 +535,22 @@ export async function processTicketImport(
     }
 
     let parentId = '';
-    if (item.isSubRow && item.parentName) {
-      parentId = createdTicketsCache.get(item.parentName.toLowerCase()) || '';
+    if (item.isSubRow) {
+      const lookupName = (item.parentName || item.groupName || '').toLowerCase().trim();
+      if (lookupName) {
+        // Priority 1: ticket created in this import session (parentName → projectName exact match)
+        parentId = createdTicketsCache.get(lookupName) || '';
+
+        // Priority 2: existing parent ticket in Firestore matched by projectName
+        if (!parentId) {
+          parentId = existingParentByProjectName.get(lookupName) || '';
+        }
+
+        // Priority 3: existing parent ticket in Firestore matched by company name
+        if (!parentId) {
+          parentId = existingParentByCompanyName.get(lookupName) || '';
+        }
+      }
     }
 
     const assignedTo = teamMembers.find(m =>
@@ -538,6 +580,7 @@ export async function processTicketImport(
     onProgress(processedCount);
   }
 }
+
 
 // ===================== Deal Import =====================
 

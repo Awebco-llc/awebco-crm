@@ -239,13 +239,12 @@ export function EditablePriority({ value }: { value: string }) {
   if (!value) return <span>-</span>;
   return (
     <span
-      className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase inline-block text-center ${
-        value === 'Low' ? 'bg-[#F3F4F6] text-[#4B5563]' :
-        value === 'Medium' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
-        value === 'High' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-        value === 'Urgent' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-        'bg-gray-100 text-gray-700'
-      }`}
+      className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase inline-block text-center ${value === 'Low' ? 'bg-[#F3F4F6] text-[#4B5563]' :
+          value === 'Medium' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
+            value === 'High' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+              value === 'Urgent' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                'bg-gray-100 text-gray-700'
+        }`}
     >
       {value}
     </span>
@@ -253,31 +252,31 @@ export function EditablePriority({ value }: { value: string }) {
 }
 
 function getStatusBadgeClasses(value: string) {
-  return value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' : 
-    value === 'Active' ? 'bg-[#ECFDF3] text-[#10B981]' : 
-    value === 'In Progress' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-    value === 'Not Started' ? 'bg-gray-100 text-gray-700' :
-    value === 'Setup' ? 'bg-[#E3F2FD] text-[#1976D2]' :
-    value === 'Awaiting Customer' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
-    value === 'Needs Invoiced' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-    value === 'Done' ? 'bg-[#ECFDF3] text-[#10B981]' :
-    value === 'Running' ? 'bg-[#ECFDF3] text-[#10B981]' :
-    value === 'On Hold' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-    value === 'Planning' ? 'bg-[#E3F2FD] text-[#1976D2]' :
-    value === 'S7: Content Collection' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-    value === 'S8: Design' ? 'bg-[#F3E8FF] text-[#9333EA]' :
-    value === 'S9: Design Proofing' ? 'bg-[#FAE8FF] text-[#C026D3]' :
-    value === 'S10: Development' ? 'bg-[#E0F2FE] text-[#0284C7]' :
-    value === 'S11: Development Proofing' ? 'bg-[#CCFBF1] text-[#0D9488]' :
-    value === 'S12: Final Payment' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
-    value === 'S13: Launch Checklist' ? 'bg-[#DCFCE7] text-[#16A34A]' :
-    value === 'S14: Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
-    value === 'Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
-    value === 'ON HOLD' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-    value === 'Need to Call / Email' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-    value === 'WON' ? 'bg-[#ECFDF3] text-[#10B981]' :
-    value === 'LOST' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-    'bg-gray-100 text-gray-700';
+  return value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+    value === 'Active' ? 'bg-[#ECFDF3] text-[#10B981]' :
+      value === 'In Progress' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+        value === 'Not Started' ? 'bg-gray-100 text-gray-700' :
+          value === 'Setup' ? 'bg-[#E3F2FD] text-[#1976D2]' :
+            value === 'Awaiting Customer' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
+              value === 'Needs Invoiced' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+                value === 'Done' ? 'bg-[#ECFDF3] text-[#10B981]' :
+                  value === 'Running' ? 'bg-[#ECFDF3] text-[#10B981]' :
+                    value === 'On Hold' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                      value === 'Planning' ? 'bg-[#E3F2FD] text-[#1976D2]' :
+                        value === 'S7: Content Collection' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+                          value === 'S8: Design' ? 'bg-[#F3E8FF] text-[#9333EA]' :
+                            value === 'S9: Design Proofing' ? 'bg-[#FAE8FF] text-[#C026D3]' :
+                              value === 'S10: Development' ? 'bg-[#E0F2FE] text-[#0284C7]' :
+                                value === 'S11: Development Proofing' ? 'bg-[#CCFBF1] text-[#0D9488]' :
+                                  value === 'S12: Final Payment' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
+                                    value === 'S13: Launch Checklist' ? 'bg-[#DCFCE7] text-[#16A34A]' :
+                                      value === 'S14: Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
+                                        value === 'Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
+                                          value === 'ON HOLD' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                                            value === 'Need to Call / Email' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+                                              value === 'WON' ? 'bg-[#ECFDF3] text-[#10B981]' :
+                                                value === 'LOST' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                                                  'bg-gray-100 text-gray-700';
 }
 
 const DEFAULT_STATUS_OPTIONS = [
@@ -385,15 +384,15 @@ export function EditableStatus({ value, onSave, options = DEFAULT_STATUS_OPTIONS
   );
 }
 
-export function AssigneeDropdown({ 
-  value, 
-  onSave, 
+export function AssigneeDropdown({
+  value,
+  onSave,
   teamMembers,
   values,
   onSaveMultiple
-}: { 
-  value?: string, 
-  onSave?: (val: string) => void, 
+}: {
+  value?: string,
+  onSave?: (val: string) => void,
   teamMembers: TeamMember[],
   values?: string[],
   onSaveMultiple?: (vals: string[]) => void
@@ -408,7 +407,7 @@ export function AssigneeDropdown({
 
   useEffect(() => {
     const handleGlobalClick = () => setIsOpen(false);
-    
+
     const updatePosition = () => {
       if (isOpen && buttonRef.current) {
         const rect = buttonRef.current.getBoundingClientRect();
@@ -425,7 +424,7 @@ export function AssigneeDropdown({
       document.addEventListener('click', handleGlobalClick);
       window.addEventListener('scroll', updatePosition, true);
       window.addEventListener('resize', updatePosition);
-      
+
       return () => {
         document.removeEventListener('click', handleGlobalClick);
         window.removeEventListener('scroll', updatePosition, true);
@@ -435,8 +434,8 @@ export function AssigneeDropdown({
   }, [isOpen]);
 
   const dropdownMenu = isOpen && typeof document !== 'undefined' ? createPortal(
-    <div 
-      className="absolute z-[9999] w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden pb-1" 
+    <div
+      className="absolute z-[9999] w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden pb-1"
       style={{ top: position.top, left: position.left }}
       onClick={e => e.stopPropagation()}
     >
@@ -485,7 +484,7 @@ export function AssigneeDropdown({
                   style={{ backgroundImage: `url(${tm.photoUrl})` }}
                 />
               ) : (
-                <div 
+                <div
                   className="w-5 h-5 rounded-full inline-flex items-center justify-center text-white text-[9px] font-bold shrink-0"
                   style={{ backgroundColor: tm.color }}
                 >
@@ -510,7 +509,7 @@ export function AssigneeDropdown({
 
   return (
     <div className="relative inline-block hover:bg-gray-100 rounded px-1 -mx-1" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
-      <button 
+      <button
         ref={buttonRef}
         type="button"
         className="inline-flex items-center justify-center cursor-pointer hover:ring-2 ring-gray-200 transition-all rounded-full p-0.5"
@@ -550,13 +549,13 @@ export function AssigneeDropdown({
           </div>
         ) : member ? (
           member.photoUrl ? (
-            <div 
+            <div
               className="w-6 h-6 rounded-full bg-cover bg-center shrink-0 border border-gray-100"
               style={{ backgroundImage: `url(${member.photoUrl})` }}
               title={member.name}
             />
           ) : (
-            <div 
+            <div
               className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold shrink-0"
               style={{ backgroundColor: member.color || '#ccc' }}
               title={member.name}
@@ -661,9 +660,9 @@ export function EditableDeadline({ value, onSave }: { value: string; onSave: (va
 
   if (isEditing) {
     return (
-      <div 
+      <div
         ref={containerRef}
-        className="relative inline-block" 
+        className="relative inline-block"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -682,7 +681,7 @@ export function EditableDeadline({ value, onSave }: { value: string; onSave: (va
   }
 
   return (
-    <div 
+    <div
       className="relative inline-block hover:bg-gray-100 rounded px-2 py-0.5 -mx-2 cursor-pointer transition-colors"
       onClick={(e) => {
         e.stopPropagation();

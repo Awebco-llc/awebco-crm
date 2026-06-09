@@ -308,11 +308,10 @@ type TicketDoc = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: 
 export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]) => void, onError?: (e: unknown) => void): Unsubscribe {
   const q = query(
     collection(getDb(), 'tickets'),
-    where('workspace', '==', workspace),
-    orderBy('order', 'asc')
+    where('workspace', '==', workspace)
   );
   return onSnapshot(q, (snap) => {
-    onChange(snap.docs.map((d) => {
+    const tickets = snap.docs.map((d) => {
       const data = d.data() as any;
       return {
         id: d.id,
@@ -320,7 +319,9 @@ export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]
         createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
       } as Ticket;
-    }));
+    });
+    tickets.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+    onChange(tickets);
   }, (e) => onError?.(e));
 }
 

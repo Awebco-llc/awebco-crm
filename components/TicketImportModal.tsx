@@ -13,9 +13,10 @@ interface TicketImportModalProps {
   companies: Company[];
   workspace: string;
   groups?: any[];
+  existingTickets?: any[];
 }
 
-export default function TicketImportModal({ isOpen, onClose, teamMembers, companies, workspace, groups }: TicketImportModalProps) {
+export default function TicketImportModal({ isOpen, onClose, teamMembers, companies, workspace, groups, existingTickets }: TicketImportModalProps) {
   const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'complete'>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<TicketImportResult[]>([]);
@@ -70,9 +71,16 @@ export default function TicketImportModal({ isOpen, onClose, teamMembers, compan
     setStep('importing');
     setImportProgress(0);
     try {
-      await processTicketImport(previewData, workspace, companies, teamMembers, (count) => {
-        setImportProgress(count);
-      }, groups, selectedGroupId);
+      await processTicketImport(
+        previewData,
+        workspace,
+        companies,
+        teamMembers,
+        (count) => { setImportProgress(count); },
+        groups,
+        selectedGroupId,
+        existingTickets
+      );
       setStep('complete');
     } catch (err) {
       setError('An error occurred during import.');

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -76,18 +76,18 @@ const INITIAL_DATA = [
 
 const SUPPORT_TICKETS_BOARD_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_TICKETS_EMAIL || 'tickets@awebco.com';
 
-function SortableHeader({ 
-  column, 
-  onDelete, 
-  allowDeletingColumns, 
-  sortConfig, 
+function SortableHeader({
+  column,
+  onDelete,
+  allowDeletingColumns,
+  sortConfig,
   onSort,
-  onRename 
-}: { 
-  column: Column, 
-  onDelete?: (id: string) => void, 
-  allowDeletingColumns?: boolean, 
-  sortConfig: { column: string; direction: 'asc' | 'desc' } | null, 
+  onRename
+}: {
+  column: Column,
+  onDelete?: (id: string) => void,
+  allowDeletingColumns?: boolean,
+  sortConfig: { column: string; direction: 'asc' | 'desc' } | null,
   onSort: (colId: string) => void,
   onRename?: (id: string, newHeader: string) => void
 }) {
@@ -146,15 +146,15 @@ function SortableHeader({
     >
       <div className="flex items-center gap-1 justify-between">
         <div className="flex items-center gap-1 group/th" onClick={(e) => { if (isEditing) e.stopPropagation(); }}>
-          <button 
-            {...attributes} 
-            {...listeners} 
+          <button
+            {...attributes}
+            {...listeners}
             onClick={(e) => e.stopPropagation()}
             className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity text-[#8E9299] hover:text-[#1C1F23]"
           >
             <GripHorizontal className="w-3.5 h-3.5" />
           </button>
-          
+
           {isEditing ? (
             <input
               ref={inputRef}
@@ -187,7 +187,7 @@ function SortableHeader({
               {column.header}
             </span>
           )}
-          
+
           {column.id !== 'updatesCount' && !isEditing && renderSortIcon(column.id)}
         </div>
         {isDeletable && onDelete && (
@@ -265,7 +265,7 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, i
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
@@ -300,7 +300,7 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, i
   ];
 
   const combined = Array.from(new Set([...defaultOptions, ...customLabels]));
-  const filtered = combined.filter(opt => 
+  const filtered = combined.filter(opt =>
     opt.toLowerCase().includes(tempValue.toLowerCase())
   );
 
@@ -456,11 +456,10 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, i
                 setIsEditing(false);
               }
             }}
-            className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors flex items-center justify-between ${
-              value === opt
+            className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors flex items-center justify-between ${value === opt
                 ? 'bg-[#2C314D] text-white font-semibold'
                 : 'text-gray-300 hover:bg-[#2C314D] hover:text-white'
-            }`}
+              }`}
           >
             <span>{opt}</span>
             {value === opt && (
@@ -486,7 +485,7 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, i
   if (isInline) {
     if (!isEditing) {
       return (
-        <div 
+        <div
           className="min-h-[20px] min-w-[50px] truncate hover:bg-gray-100/80 rounded px-1 -mx-1 transition-colors cursor-text flex items-center justify-between group/cell"
           title={value ? `${value} (Click to edit)` : 'Click to edit'}
           onClick={(e) => {
@@ -589,7 +588,7 @@ function RowPlanNotes({ notes, projectType }: { notes: string; projectType: stri
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
-          triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -661,11 +660,10 @@ function RowPlanNotes({ notes, projectType }: { notes: string; projectType: stri
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen(p => !p)}
-        className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1 text-xs font-semibold ${
-          isOpen
+        className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1 text-xs font-semibold ${isOpen
             ? 'bg-[#1061E3] text-white shadow-sm'
             : 'bg-blue-50 text-[#1061E3] hover:bg-blue-100'
-        }`}
+          }`}
         title={`View ${projectType} plan notes`}
       >
         <Info className="w-3.5 h-3.5 shrink-0" />
@@ -714,8 +712,8 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
 
   if (isEditing) {
     return (
-      <div 
-        className="w-full h-full flex items-center" 
+      <div
+        className="w-full h-full flex items-center"
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
       >
@@ -733,8 +731,8 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   }
 
   return (
-    <div 
-      className="min-h-[20px] min-w-[50px] truncate hover:bg-gray-100/80 rounded px-1 -mx-1 transition-colors cursor-text" 
+    <div
+      className="min-h-[20px] min-w-[50px] truncate hover:bg-gray-100/80 rounded px-1 -mx-1 transition-colors cursor-text"
       title={value ? `${value} (Click to edit)` : 'Click to edit'}
       onClick={(e) => {
         e.stopPropagation();
@@ -760,7 +758,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
   const isExpanded = expandedIds?.has(row.id);
 
   return (
-    <tr 
+    <tr
       ref={setNodeRef}
       style={style}
       {...attributes}
@@ -772,14 +770,17 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
       <td style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] select-none" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
           {isSubRow && <div className="w-5 shrink-0" />}
-          <input 
+          <input
             type="checkbox"
             checked={isSelected || false}
             onChange={() => onToggleSelect?.(false)}
             onMouseDown={(e) => { if (e.shiftKey) { e.preventDefault(); onToggleSelect?.(true); } }}
             className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
           />
-          <div data-drag-handle className="text-[#8E9299] group-hover:text-[#1C1F23] relative shrink-0 cursor-grab active:cursor-grabbing">
+          <div
+            data-drag-handle
+            className="text-[#8E9299] group-hover:text-[#1C1F23] relative shrink-0 cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded transition-colors"
+          >
             <GripVertical className="w-4 h-4" />
             {isDragging && isSelected && selectedCount > 1 && (
               <span className="absolute -top-2 -right-2.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm pointer-events-none z-10">
@@ -790,8 +791,8 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
         </div>
       </td>
       {columns.map((col: any) => (
-        <td 
-          key={col.id} 
+        <td
+          key={col.id}
           style={{
             width: getColumnWidth(col.id),
             minWidth: getColumnWidth(col.id),
@@ -804,11 +805,10 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
               <button
                 type="button"
                 onClick={(e) => onCommentsClick?.(e, row.id)}
-                className={`group/btn flex items-center justify-center w-8 h-8 rounded-full transition-all relative ${
-                  row.updates && row.updates.length > 0
+                className={`group/btn flex items-center justify-center w-8 h-8 rounded-full transition-all relative ${row.updates && row.updates.length > 0
                     ? 'text-[#1061E3] hover:bg-[#F0F2F5]'
                     : 'text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5]'
-                }`}
+                  }`}
                 title={
                   row.updates && row.updates.length > 0
                     ? `${row.updates.length} updates. Click to leave update.`
@@ -828,8 +828,8 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
               </button>
             </div>
           ) : col.id === 'status' ? (
-            <EditableStatus 
-              value={row[col.id]} 
+            <EditableStatus
+              value={row[col.id]}
               options={projectType === 'Local Listings' || projectType === 'Social Media'
                 ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
                 : row.parentId
@@ -853,7 +853,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                   }
                 }
                 onUpdate(row.id, patch);
-              }} 
+              }}
             />
           ) : col.id === 'priority' ? (
             <EditablePriority value={row[col.id]} />
@@ -871,26 +871,26 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
               </select>
             </div>
           ) : col.id === 'assignee' ? (
-            <AssigneeDropdown 
-              values={row.assignees || (row[col.id] ? [row[col.id]] : [])} 
+            <AssigneeDropdown
+              values={row.assignees || (row[col.id] ? [row[col.id]] : [])}
               onSaveMultiple={(newVals) => {
-                onUpdate(row.id, { 
+                onUpdate(row.id, {
                   assignees: newVals,
                   assignee: newVals[0] || ''
                 });
-              }} 
-              teamMembers={teamMembers} 
+              }}
+              teamMembers={teamMembers}
             />
           ) : col.id === 'deadline' ? (
-            <EditableDeadline 
-              value={row[col.id] || ''} 
+            <EditableDeadline
+              value={row[col.id] || ''}
               onSave={(newVal) => {
                 onUpdate(row.id, { [col.id]: newVal });
-              }} 
+              }}
             />
           ) : col.id === 'billableHours' ? (
             <div onClick={(e) => e.stopPropagation()}>
-              <BillableHoursDropdown 
+              <BillableHoursDropdown
                 value={row[col.id] || ''}
                 onChange={(newVal) => onUpdate(row.id, { [col.id]: newVal })}
                 customLabels={customBillableHours || []}
@@ -900,7 +900,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
             </div>
           ) : col.id === 'planDescription' ? (
             <div onClick={(e) => e.stopPropagation()}>
-              <RowPlanNotes 
+              <RowPlanNotes
                 notes={row.companyId ? (() => {
                   const comp = companies?.find((c: any) => c.id === row.companyId);
                   if (!comp) return '';
@@ -914,7 +914,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                     case 'Support Tickets': return comp.supportNotes || '';
                     default: return '';
                   }
-                })() : ''} 
+                })() : ''}
                 projectType={projectType}
               />
             </div>
@@ -944,7 +944,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
           ) : (
             <div className={`flex items-center gap-2 ${col.id === 'projectName' && isSubRow ? 'pl-6' : ''}`}>
               {col.id === 'projectName' && !isSubRow && (
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); toggleExpand(row.id); }}
                   className="p-1 hover:bg-[#E2E4E9] rounded text-[#8E9299] hover:text-[#1C1F23] transition-colors -ml-1 shrink-0"
                 >
@@ -952,7 +952,17 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                 </button>
               )}
               {col.id === 'projectName' && isSubRow && (
-                <CornerDownRight className="w-4 h-4 text-[#8E9299] shrink-0" />
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await onUpdate(row.id, { parentId: null });
+                  }}
+                  className="p-1 hover:bg-[#E2E4E9] rounded text-[#8E9299] hover:text-[#1061E3] transition-all -ml-1 shrink-0 group/subtask-btn"
+                  title="Promote to Main Task"
+                >
+                  <CornerDownRight className="w-4 h-4 text-[#8E9299] group-hover/subtask-btn:text-[#1061E3] shrink-0 transition-colors" />
+                </button>
               )}
               <EditableCell
                 value={row[col.id]}
@@ -1004,24 +1014,28 @@ function GroupDroppableBody({ groupId, children }: { groupId: string, children: 
   return <tbody ref={setNodeRef} className="min-h-[50px] align-top">{children}</tbody>;
 }
 
-function GroupHeader({ 
-  group, 
-  onUpdate, 
-  onRemove, 
-  dragHandleProps, 
-  isCollapsed, 
+function GroupHeader({
+  group,
+  onUpdate,
+  onRemove,
+  dragHandleProps,
+  isCollapsed,
   onToggleCollapse,
   allowDeletingGroups = false,
   planNotes,
-}: { 
-  group: { id: string, name: string }, 
-  onUpdate: (id: string, name: string) => void, 
-  onRemove: (id: string) => void, 
-  dragHandleProps?: any, 
-  isCollapsed?: boolean, 
+  itemCount,
+  totalHours,
+}: {
+  group: { id: string, name: string },
+  onUpdate: (id: string, name: string) => void,
+  onRemove: (id: string) => void,
+  dragHandleProps?: any,
+  isCollapsed?: boolean,
   onToggleCollapse?: () => void,
   allowDeletingGroups?: boolean,
   planNotes?: string,
+  itemCount?: number,
+  totalHours?: number,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(group.name);
@@ -1053,15 +1067,15 @@ function GroupHeader({
             <GripVertical className="w-4 h-4" />
           </div>
         )}
-        <button 
-          onClick={onToggleCollapse} 
+        <button
+          onClick={onToggleCollapse}
           className="p-1 hover:bg-gray-100 rounded text-[#8E9299] hover:text-[#1C1F23] transition-colors"
           title={isCollapsed ? "Expand group" : "Collapse group"}
         >
           {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
         {isEditing ? (
-          <input 
+          <input
             autoFocus
             value={name}
             onChange={e => setName(e.target.value)}
@@ -1074,23 +1088,38 @@ function GroupHeader({
           />
         ) : (
           <div className="flex items-center gap-2">
-            <h2 
+            <h2
               onDoubleClick={() => setIsEditing(true)}
               className="text-lg font-bold text-[#1C1F23] cursor-text hover:bg-gray-100 rounded px-1 -ml-1 inline-block transition-colors"
               title="Double click to rename"
             >
               {group.name}
             </h2>
+            {itemCount !== undefined && (
+              <span
+                className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-xs font-semibold shrink-0"
+                title={`${itemCount} items in this group`}
+              >
+                {itemCount}
+              </span>
+            )}
+            {totalHours !== undefined && (totalHours > 0 || group.id === 'group-needs-invoiced' || group.name.toLowerCase().includes('invoice')) && (
+              <span
+                className="px-2 py-0.5 rounded-full bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] text-xs font-semibold shrink-0"
+                title={`${totalHours} total billable hours`}
+              >
+                {totalHours} hrs
+              </span>
+            )}
             {planNotes && (
               <div className="relative" ref={notesRef}>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setIsNotesOpen(p => !p); }}
-                  className={`p-1 rounded-full transition-all flex items-center gap-1 text-xs font-semibold ${
-                    isNotesOpen
+                  className={`p-1 rounded-full transition-all flex items-center gap-1 text-xs font-semibold ${isNotesOpen
                       ? 'bg-[#1061E3] text-white shadow-sm'
                       : 'bg-blue-50 text-[#1061E3] hover:bg-blue-100'
-                  }`}
+                    }`}
                   title="View SEO plan notes"
                 >
                   <Info className="w-3.5 h-3.5 shrink-0" />
@@ -1121,7 +1150,7 @@ function GroupHeader({
                 )}
               </div>
             )}
-            <button 
+            <button
               onClick={() => setIsEditing(true)}
               className="p-1 opacity-0 group-hover/header:opacity-100 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-all"
               title="Rename group"
@@ -1132,7 +1161,7 @@ function GroupHeader({
         )}
       </div>
       {allowDeletingGroups && (
-        <button 
+        <button
           onClick={() => onRemove(group.id)}
           className="opacity-0 group-hover/header:opacity-100 p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
           title="Remove group"
@@ -1163,6 +1192,67 @@ function SortableGroupWrapper({ group, children }: { group: any, children: React
   );
 }
 
+const isDropAnimationEnabled = false;
+
+// Y-axis only vertical collision detection for table rows and empty group body dropzones.
+// Columns and groups reordering will fallback to closestCenter.
+const verticalCollisionDetection = (args: any) => {
+  const { active, droppableContainers, pointerCoordinates } = args;
+
+  const activeIdStr = String(active.id);
+  // If dragging a column (which doesn't start with row- or group-), fallback to closestCenter
+  if (!activeIdStr.startsWith('row-') && !activeIdStr.startsWith('group-')) {
+    return closestCenter(args);
+  }
+
+  // If dragging a group, fallback to closestCenter
+  if (activeIdStr.startsWith('group-sortable-')) {
+    return closestCenter(args);
+  }
+
+  // If we have pointerCoordinates, perform vertical-only checking
+  if (pointerCoordinates) {
+    const { y } = pointerCoordinates;
+    const targets = [];
+
+    for (const container of droppableContainers) {
+      const containerIdStr = String(container.id);
+
+      // Only consider rows and group container bodies when dragging a row
+      if (!containerIdStr.startsWith('row-') && !containerIdStr.startsWith('group-container-')) {
+        continue;
+      }
+
+      const rect = container.rect.current;
+      if (!rect) continue;
+
+      // Check if pointer Y is between the top and bottom bounds of the container
+      const isWithinY = y >= rect.top && y <= rect.bottom;
+      
+      // Calculate distance to the vertical center of the container
+      const centerY = rect.top + rect.height / 2;
+      const distance = Math.abs(y - centerY);
+
+      // Prioritize containers that actually envelope the pointer's Y coordinate
+      const score = isWithinY ? -1000 + distance : distance;
+
+      targets.push({
+        id: container.id,
+        score
+      });
+    }
+
+    // Sort by score ascending
+    targets.sort((a, b) => a.score - b.score);
+
+    if (targets.length > 0 && targets[0].score < Infinity) {
+      return [{ id: targets[0].id }];
+    }
+  }
+
+  return closestCenter(args);
+};
+
 export default function WorkspaceProjectView({
   teamMembers,
   companies,
@@ -1186,10 +1276,10 @@ export default function WorkspaceProjectView({
   currentUserId?: string,
   openRowId?: string,
   onMention?: (
-    text: string, 
-    sourceLabel: string, 
-    sourceTitle: string, 
-    actorName: string, 
+    text: string,
+    sourceLabel: string,
+    sourceTitle: string,
+    actorName: string,
     actorId?: string,
     workspaceName?: string,
     rowId?: string
@@ -1200,6 +1290,9 @@ export default function WorkspaceProjectView({
   allowDeletingGroups?: boolean,
   allowDeletingColumns?: boolean,
 }) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [subtaskFilters, setSubtaskFilters] = useState<Record<string, string>>({});
+  const [subtaskSorts, setSubtaskSorts] = useState<Record<string, string>>({}); // 'none' | 'asc' | 'desc'
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
     if (typeof window !== 'undefined') {
@@ -1343,7 +1436,7 @@ export default function WorkspaceProjectView({
   };
 
   const data = React.useMemo(() => {
-    const filtered = rawTickets.filter(r => {
+    let filtered = rawTickets.filter(r => {
       if (r.companyId) {
         const company = companies.find(c => c.id === r.companyId);
         if (company && flagKey && company[flagKey] === false) {
@@ -1352,6 +1445,68 @@ export default function WorkspaceProjectView({
       }
       return true;
     });
+
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = (row: any) => {
+        if (row.projectName?.toLowerCase().includes(q)) return true;
+        if (row.status?.toLowerCase().includes(q)) return true;
+        if (row.planType?.toLowerCase().includes(q)) return true;
+        if (row.category?.toLowerCase().includes(q)) return true;
+        if (row.companyId) {
+          const comp = companies.find(c => c.id === row.companyId);
+          if (comp?.name?.toLowerCase().includes(q)) return true;
+        }
+        if (row.companyName?.toLowerCase().includes(q)) return true;
+        if (row.assignees && Array.isArray(row.assignees)) {
+          const matchedAssignee = row.assignees.some((id: string) => {
+            const name = teamMembers.find(t => t.id === id)?.name;
+            return name?.toLowerCase().includes(q);
+          });
+          if (matchedAssignee) return true;
+        } else if (row.assignee) {
+          const name = teamMembers.find(t => t.id === row.assignee)?.name;
+          if (name?.toLowerCase().includes(q)) return true;
+        }
+        for (const col of columns) {
+          if (['projectName', 'status', 'assignee'].includes(col.id)) continue;
+          const val = row[col.id];
+          if (val && String(val).toLowerCase().includes(q)) return true;
+        }
+        return false;
+      };
+
+      const ticketMap = new Map<string, any>();
+      filtered.forEach(t => ticketMap.set(t.id, t));
+
+      const subtasksByParent = new Map<string, any[]>();
+      filtered.forEach(t => {
+        if (t.parentId) {
+          if (!subtasksByParent.has(t.parentId)) {
+            subtasksByParent.set(t.parentId, []);
+          }
+          subtasksByParent.get(t.parentId)!.push(t);
+        }
+      });
+
+      const matchesCache = new Map<string, boolean>();
+      filtered.forEach(t => {
+        matchesCache.set(t.id, matchesSearch(t));
+      });
+
+      filtered = filtered.filter(t => {
+        if (matchesCache.get(t.id)) return true;
+        if (t.parentId) {
+          if (matchesCache.get(t.parentId)) return true;
+        }
+        if (!t.parentId) {
+          const subs = subtasksByParent.get(t.id) || [];
+          const anySubMatches = subs.some(sub => matchesCache.get(sub.id));
+          if (anySubMatches) return true;
+        }
+        return false;
+      });
+    }
 
     if (!sortConfig) return filtered;
 
@@ -1392,7 +1547,7 @@ export default function WorkspaceProjectView({
       const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
-  }, [rawTickets, companies, flagKey, sortConfig, teamMembers]);
+  }, [rawTickets, companies, flagKey, sortConfig, teamMembers, searchQuery, columns]);
 
   const [rawGroups, setRawGroups] = useState<any[]>([]);
 
@@ -1434,19 +1589,45 @@ export default function WorkspaceProjectView({
   const projectFileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, rowId: string, isSubRow: boolean } | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const getSubtaskRows = useCallback((parentId: string, visibleDataList: any[]) => {
+    let subRows = visibleDataList.filter((sub: any) => sub.parentId === parentId);
+    const filterVal = subtaskFilters[parentId] || 'all';
+    if (filterVal !== 'all') {
+      subRows = subRows.filter(s => s.status === filterVal);
+    }
+    const sortVal = subtaskSorts[parentId] || 'none';
+    if (sortVal !== 'none') {
+      subRows = [...subRows].sort((a, b) => {
+        const cmp = (a.status || '').localeCompare(b.status || '');
+        return sortVal === 'asc' ? cmp : -cmp;
+      });
+    }
+    return subRows;
+  }, [subtaskFilters, subtaskSorts]);
+
+  const rowMatchesStatus = useCallback((row: any) => {
+    if (statusFilter === 'all') return true;
+    if (row.parentId) {
+      return row.status === statusFilter;
+    } else {
+      if (row.status === statusFilter) return true;
+      const subs = data.filter(t => t.parentId === row.id);
+      return subs.some(s => s.status === statusFilter);
+    }
+  }, [statusFilter, data]);
   const [isBoardEmailOpen, setIsBoardEmailOpen] = useState(false);
   const [copiedBoardEmail, setCopiedBoardEmail] = useState(false);
   const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const handleExportSelected = () => {
     if (selectedRowIds.size === 0) return;
-    
+
     // Get the selected rows from the data array
     const selectedRows = data.filter(row => selectedRowIds.has(row.id));
-    
+
     // Build CSV headers based on active columns
     const csvHeaders = columns.map(col => col.header);
-    
+
     // Build CSV rows
     const csvRows = selectedRows.map(row => {
       return columns.map(col => {
@@ -1465,7 +1646,7 @@ export default function WorkspaceProjectView({
         return val;
       });
     });
-    
+
     const escapeCsvCell = (cell: any) => {
       if (cell === null || cell === undefined) return '';
       const str = String(cell);
@@ -1474,12 +1655,12 @@ export default function WorkspaceProjectView({
       }
       return str;
     };
-    
+
     const csvContent = [
       csvHeaders.map(escapeCsvCell).join(','),
       ...csvRows.map(row => row.map(escapeCsvCell).join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1521,7 +1702,7 @@ export default function WorkspaceProjectView({
       try {
         const res = await fetch('/api/sheets/sync', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_SECRET}`
           },
@@ -1546,14 +1727,13 @@ export default function WorkspaceProjectView({
     if (shiftKey && lastCheckedRowId.current && lastCheckedRowId.current !== id) {
       // Build ordered list of currently visible rows in DOM to detect range
       const orderedIds: string[] = [];
-      const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
       const visibleData = data.filter(r => rowMatchesStatus(r));
       for (const group of groups) {
         const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
         for (const row of groupRows) {
           orderedIds.push(row.id);
           if (expandedIds.has(row.id)) {
-            const subRows = visibleData.filter((sub: any) => sub.parentId === row.id);
+            const subRows = getSubtaskRows(row.id, visibleData);
             for (const sub of subRows) {
               orderedIds.push(sub.id);
             }
@@ -1694,39 +1874,39 @@ export default function WorkspaceProjectView({
 
   const getRowGroupId = (row: any) => {
     let gid = row.groupId;
-    
+
     // If the group ID exists in our groups list, use it
     if (gid && groups.some((g: any) => g.id === gid)) {
       return gid;
     }
-    
+
     // If gid is a default or status is completed, map to the completed group
     const isCompletedStatus = projectType !== 'SEO' && (row.status === 'S14: Launched' || row.status === 'Launched' || row.status === 'Done' || row.status === 'Closed');
     if (gid === 'group-completed' || isCompletedStatus) {
-      const compGroup = groups.find((g: any) => 
-        g.id === 'group-completed' || 
-        g.name.toLowerCase().includes('clos') || 
-        g.name.toLowerCase().includes('complet') || 
+      const compGroup = groups.find((g: any) =>
+        g.id === 'group-completed' ||
+        g.name.toLowerCase().includes('clos') ||
+        g.name.toLowerCase().includes('complet') ||
         g.name.toLowerCase().includes('done')
       );
       if (compGroup) return compGroup.id;
       if (groups.length > 0) return groups[groups.length - 1].id;
     }
-    
+
     if (gid === 'group-running' || row.status === 'Running') {
       const runningGroup = groups.find((g: any) => g.id === 'group-running' || g.name.toLowerCase().includes('run'));
       if (runningGroup) return runningGroup.id;
     }
-    
+
     if (gid === 'group-needs-invoiced' || row.status === 'Needs Invoiced') {
       const invoiceGroup = groups.find((g: any) => g.id === 'group-needs-invoiced' || g.name.toLowerCase().includes('invoice'));
       if (invoiceGroup) return invoiceGroup.id;
     }
 
     if (gid === 'group-active') {
-      const activeGroup = groups.find((g: any) => 
-        g.id === 'group-active' || 
-        g.name.toLowerCase().includes('activ') || 
+      const activeGroup = groups.find((g: any) =>
+        g.id === 'group-active' ||
+        g.name.toLowerCase().includes('activ') ||
         g.name.toLowerCase().includes('setup')
       );
       if (activeGroup) return activeGroup.id;
@@ -1734,7 +1914,7 @@ export default function WorkspaceProjectView({
 
     // Default fallback to the first group
     if (groups.length > 0) return groups[0].id;
-    
+
     return gid || 'group-active';
   };
 
@@ -1809,16 +1989,16 @@ export default function WorkspaceProjectView({
       if (fetchedGroups.length === 0) {
         setIsDefaultGroups(true);
         // Just show the UI defaults for now
-        const defaults = projectType === 'Local Listings' 
+        const defaults = projectType === 'Local Listings'
           ? [{ name: 'Setup', id: 'group-setup' }, { name: 'Running', id: 'group-running' }]
           : projectType === 'SEO' || projectType === 'Google Ads'
-          ? [{ name: 'Setup', id: 'group-active' }, { name: 'Running', id: 'group-running' }]
-          : projectType === 'Design & Print' || projectType === 'Support Tickets'
-          ? [{ name: 'Active', id: 'group-active' }, { name: 'Needs Invoiced', id: 'group-needs-invoiced' }, { name: 'Complete', id: 'group-completed' }]
-          : projectType === 'Social Media'
-          ? [{ name: 'Social Media Management', id: 'group-smm' }, { name: 'Social Media Advertising', id: 'group-sma' }]
-          : [{ name: 'Active', id: 'group-active' }, { name: 'Completed / Launched', id: 'group-completed' }];
-        
+            ? [{ name: 'Setup', id: 'group-active' }, { name: 'Running', id: 'group-running' }]
+            : projectType === 'Design & Print' || projectType === 'Support Tickets'
+              ? [{ name: 'Active', id: 'group-active' }, { name: 'Needs Invoiced', id: 'group-needs-invoiced' }, { name: 'Complete', id: 'group-completed' }]
+              : projectType === 'Social Media'
+                ? [{ name: 'Social Media Management', id: 'group-smm' }, { name: 'Social Media Advertising', id: 'group-sma' }]
+                : [{ name: 'Active', id: 'group-active' }, { name: 'Completed / Launched', id: 'group-completed' }];
+
         setRawGroups(defaults);
       } else {
         setIsDefaultGroups(false);
@@ -1854,17 +2034,17 @@ export default function WorkspaceProjectView({
           const invoiceGroup = groups.find((g: any) => g.id === 'group-needs-invoiced' || g.name.toLowerCase().includes('invoice'));
           updatedPatch.groupId = invoiceGroup ? invoiceGroup.id : 'group-needs-invoiced';
         } else if (status === 'S14: Launched' || status === 'Launched' || status === 'Done' || status === 'Closed') {
-          const compGroup = groups.find((g: any) => 
-            g.id === 'group-completed' || 
-            g.name.toLowerCase().includes('clos') || 
-            g.name.toLowerCase().includes('complet') || 
+          const compGroup = groups.find((g: any) =>
+            g.id === 'group-completed' ||
+            g.name.toLowerCase().includes('clos') ||
+            g.name.toLowerCase().includes('complet') ||
             g.name.toLowerCase().includes('done')
           );
           updatedPatch.groupId = compGroup ? compGroup.id : 'group-completed';
         } else if (currentGroupId === 'group-needs-invoiced' || currentGroupId === 'group-completed' || currentGroupId === 'group-running') {
-          const activeGroup = groups.find((g: any) => 
-            g.id === 'group-active' || 
-            g.name.toLowerCase().includes('activ') || 
+          const activeGroup = groups.find((g: any) =>
+            g.id === 'group-active' ||
+            g.name.toLowerCase().includes('activ') ||
             g.name.toLowerCase().includes('setup')
           );
           updatedPatch.groupId = activeGroup ? activeGroup.id : 'group-active';
@@ -1875,10 +2055,10 @@ export default function WorkspaceProjectView({
         const gid = updatedPatch.groupId;
         if (!groups.some((g: any) => g.id === gid)) {
           if (gid === 'group-completed') {
-            const compGroup = groups.find((g: any) => 
-              g.id === 'group-completed' || 
-              g.name.toLowerCase().includes('clos') || 
-              g.name.toLowerCase().includes('complet') || 
+            const compGroup = groups.find((g: any) =>
+              g.id === 'group-completed' ||
+              g.name.toLowerCase().includes('clos') ||
+              g.name.toLowerCase().includes('complet') ||
               g.name.toLowerCase().includes('done')
             );
             if (compGroup) updatedPatch.groupId = compGroup.id;
@@ -1890,9 +2070,9 @@ export default function WorkspaceProjectView({
             const invoiceGroup = groups.find((g: any) => g.id === 'group-needs-invoiced' || g.name.toLowerCase().includes('invoice'));
             if (invoiceGroup) updatedPatch.groupId = invoiceGroup.id;
           } else if (gid === 'group-active') {
-            const activeGroup = groups.find((g: any) => 
-              g.id === 'group-active' || 
-              g.name.toLowerCase().includes('activ') || 
+            const activeGroup = groups.find((g: any) =>
+              g.id === 'group-active' ||
+              g.name.toLowerCase().includes('activ') ||
               g.name.toLowerCase().includes('setup')
             );
             if (activeGroup) updatedPatch.groupId = activeGroup.id;
@@ -1919,6 +2099,9 @@ export default function WorkspaceProjectView({
           }
         }
       }
+
+      // Optimistic update
+      setRawTickets(prev => prev.map(t => t.id === id ? { ...t, ...updatedPatch } : t));
 
       await updateTicket(id, updatedPatch);
       triggerSheetsSync();
@@ -1950,7 +2133,7 @@ export default function WorkspaceProjectView({
   const handleRemoveGroup = async (id: string) => {
     try {
       const fallbackGroup = groups.find(g => g.id !== id)?.id;
-      
+
       // Move tickets belonging to the deleted group
       const ticketsToMove = data.filter(r => getRowGroupId(r) === id);
       if (fallbackGroup) {
@@ -1991,7 +2174,7 @@ export default function WorkspaceProjectView({
     if (trimmedText) {
       onMention?.(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId, projectType, rowId);
     }
-    
+
     const newUpdate: any = {
       id: `update-${Date.now()}`,
       author,
@@ -2001,10 +2184,10 @@ export default function WorkspaceProjectView({
     if (attachedFile) {
       newUpdate.attachment = attachedFile.name;
     }
-    
+
     const updates = row.updates ? [...row.updates, newUpdate] : [newUpdate];
     await handleUpdateRow(rowId, { updates });
-    
+
     setNewUpdateText('');
     setAttachedFile(null);
   };
@@ -2036,17 +2219,17 @@ export default function WorkspaceProjectView({
     if (onMention && trimmedText) {
       onMention(trimmedText, 'Project Comment', `${projectType}: ${row.projectName}`, author, currentUserId, projectType, rowId);
     }
-    
+
     const newUpdate = {
       id: `update-${Date.now()}`,
       author,
       text: trimmedText,
       timestamp: new Date().toISOString()
     };
-    
+
     const updates = row.updates ? [...row.updates, newUpdate] : [newUpdate];
     await handleUpdateRow(rowId, { updates });
-    
+
     setQuickUpdateText('');
     setActiveCommentsRowId(null);
   };
@@ -2163,7 +2346,7 @@ export default function WorkspaceProjectView({
     if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
       newSubRow.priority = 'Medium';
     }
-    
+
     try {
       await createTicket(newSubRow);
     } catch (err) {
@@ -2174,21 +2357,18 @@ export default function WorkspaceProjectView({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        delay: 200,
+        delay: 250,
         tolerance: 5,
       },
       bypassActivationConstraint({ event }) {
         const target = event.target as HTMLElement | null;
-        if (target && target.closest) {
-          return !!(target.closest('[data-drag-handle]') || target.closest('.drag-handle'));
-        }
-        return false;
+        return !!target?.closest('[data-drag-handle]');
       }
     }),
     useSensor(KeyboardSensor)
   );
 
-  const handleDragOver = async (event: DragOverEvent) => {
+  const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
 
     if (!over) {
@@ -2207,11 +2387,17 @@ export default function WorkspaceProjectView({
       const activeIdStr = String(active.id).replace('row-', '');
       const activeData = data.find(r => r.id === activeIdStr);
 
-      // --- Nest-as-subtask gesture (200ms hover over a top-level row) ---
-      if (String(over.id).startsWith('row-') && activeData && !activeData.parentId) {
+      // --- Nest-as-subtask gesture (200ms hover over an expanded top-level row) ---
+      if (String(over.id).startsWith('row-') && activeData) {
         const overIdStr = String(over.id).replace('row-', '');
         const overData = data.find(r => r.id === overIdStr);
-        if (overData && !overData.parentId && overIdStr !== activeIdStr) {
+        if (
+          overData && 
+          !overData.parentId && 
+          overIdStr !== activeIdStr && 
+          overIdStr !== activeData.parentId && 
+          expandedIds.has(overIdStr)
+        ) {
           if (nestClearTimerRef.current) {
             clearTimeout(nestClearTimerRef.current);
             nestClearTimerRef.current = null;
@@ -2262,17 +2448,18 @@ export default function WorkspaceProjectView({
         if (overData) targetGroupId = getRowGroupId(overData);
       } else if (String(over.id).startsWith('group-container-')) {
         targetGroupId = String(over.id).replace('group-container-', '');
+      } else if (String(over.id).startsWith('group-sortable-')) {
+        targetGroupId = String(over.id).replace('group-sortable-', '');
       }
       if (targetGroupId && activeData && getRowGroupId(activeData) !== targetGroupId) {
         if (!activeData.parentId) {
-          const patch: any = { groupId: targetGroupId };
-          await handleUpdateRow(activeIdStr, patch);
+          setRawTickets(prev => prev.map(t => t.id === activeIdStr ? { ...t, groupId: targetGroupId! } : t));
         }
       }
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     // Clean up nest gesture state
@@ -2288,10 +2475,16 @@ export default function WorkspaceProjectView({
       const activeRowData = data.find(r => r.id === activeId);
 
       // Feature 1: Nest as subtask when hover-hold triggered (checked FIRST before returning)
-      if (nestTarget && activeRowData && !activeRowData.parentId) {
+      if (nestTarget && activeRowData) {
         const targetRow = data.find(r => r.id === nestTarget);
         if (targetRow) {
-          await handleUpdateRow(activeId, { parentId: nestTarget, groupId: getRowGroupId(targetRow) });
+          const targetGroupId = getRowGroupId(targetRow);
+          // Optimistic update
+          flushSync(() => {
+            setRawTickets(prev => prev.map(t => t.id === activeId ? { ...t, parentId: nestTarget, groupId: targetGroupId } : t));
+          });
+
+          handleUpdateRow(activeId, { parentId: nestTarget, groupId: targetGroupId });
           setExpandedIds(prev => new Set(prev).add(nestTarget));
           return;
         }
@@ -2314,16 +2507,40 @@ export default function WorkspaceProjectView({
         const overId = overIdStr.replace('row-', '');
         overRowData = data.find(r => r.id === overId);
         if (overRowData) {
-          if (activeRowData.parentId && !overRowData.parentId) {
-            newParentId = overRowData.id;
-            setExpandedIds(prev => new Set(prev).add(overRowData.id));
+          if (activeRowData.parentId) {
+            // Dragging a subtask
+            if (!overRowData.parentId) {
+              // Dropped on a top-level row
+              if (expandedIds.has(overRowData.id)) {
+                newParentId = overRowData.id;
+              } else {
+                newParentId = null; // Un-nest!
+              }
+            } else {
+              // Dropped on a subtask
+              newParentId = overRowData.parentId;
+            }
           } else {
-            newParentId = overRowData.parentId || null;
+            // Dragging a top-level row
+            newParentId = null; // Always keep top-level unless nestTarget was set
           }
           newGroupId = getRowGroupId(overRowData);
+
+          // If we resolved newParentId to null, but overRowData is a subtask,
+          // resolve the target overRowData to be the parent row of that subtask
+          // so that the ordering places the dragged top-level row relative to the parent row!
+          if (newParentId === null && overRowData.parentId) {
+            const parentRow = data.find(r => r.id === overRowData.parentId);
+            if (parentRow) {
+              overRowData = parentRow;
+            }
+          }
         }
       } else if (overIdStr.startsWith('group-container-')) {
         newGroupId = overIdStr.replace('group-container-', '');
+        newParentId = null;
+      } else if (overIdStr.startsWith('group-sortable-')) {
+        newGroupId = overIdStr.replace('group-sortable-', '');
         newParentId = null;
       } else {
         return;
@@ -2331,7 +2548,6 @@ export default function WorkspaceProjectView({
 
       // Build ordered list of currently visible rows in DOM to detect direction
       const orderedIds: string[] = [];
-      const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
       const visibleData = data.filter(r => rowMatchesStatus(r));
       for (const group of groups) {
         const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
@@ -2348,71 +2564,79 @@ export default function WorkspaceProjectView({
 
       const flatActiveIdx = orderedIds.indexOf(activeId);
       const flatOverIdx = overRowData ? orderedIds.indexOf(overRowData.id) : -1;
+      const dragDown = flatActiveIdx !== -1 && flatOverIdx !== -1 && flatActiveIdx < flatOverIdx;
 
-      // Find siblings at target location (excluding the active row itself)
-      const siblings = data
-        .filter(r => (r.parentId || null) === (newParentId || null) && getRowGroupId(r) === newGroupId && r.id !== activeId)
-        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      // Handle multi-drag or single drag row selection
+      const isMultiDrag = selectedRowIds.has(activeId) && selectedRowIds.size > 1;
+      const draggedIds = isMultiDrag ? Array.from(selectedRowIds) : [activeId];
 
-      let newOrder = 0;
-      if (overRowData) {
-        const overIdx = siblings.findIndex(r => r.id === overRowData.id);
+      // Sort draggedIds according to their current visual order
+      draggedIds.sort((a, b) => orderedIds.indexOf(a) - orderedIds.indexOf(b));
+
+      // Get target sibling rows from rawTickets, excluding the dragged ones, and sort them by current order
+      const targetSiblings = rawTickets
+        .filter(t => (t.parentId || null) === (newParentId || null) && getRowGroupId(t) === newGroupId && !draggedIds.includes(t.id))
+        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+
+      const draggedRows = draggedIds.map(id => rawTickets.find(t => t.id === id)).filter(Boolean) as any[];
+
+      const newOrderedSiblings = [...targetSiblings];
+      if (overRowData && !draggedIds.includes(overRowData.id)) {
+        const overIdx = targetSiblings.findIndex(r => r.id === overRowData.id);
         if (overIdx !== -1) {
-          const dragDown = flatActiveIdx !== -1 && flatOverIdx !== -1 && flatActiveIdx < flatOverIdx;
-          let prevSibling = null;
-          let nextSibling = null;
-
-          if (dragDown) {
-            prevSibling = overRowData;
-            nextSibling = overIdx + 1 < siblings.length ? siblings[overIdx + 1] : null;
-          } else {
-            prevSibling = overIdx - 1 >= 0 ? siblings[overIdx - 1] : null;
-            nextSibling = overRowData;
-          }
-
-          if (!prevSibling && nextSibling) {
-            newOrder = (nextSibling.order || 0) - 1;
-          } else if (prevSibling && !nextSibling) {
-            newOrder = (prevSibling.order || 0) + 1;
-          } else if (prevSibling && nextSibling) {
-            newOrder = ((prevSibling.order || 0) + (nextSibling.order || 0)) / 2;
-          }
+          const insertIdx = dragDown ? overIdx + 1 : overIdx;
+          newOrderedSiblings.splice(insertIdx, 0, ...draggedRows);
         } else {
-          const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(r => r.order || 0)) : 0;
-          newOrder = maxOrder + 1;
+          newOrderedSiblings.push(...draggedRows);
         }
       } else {
-        const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(r => r.order || 0)) : 0;
-        newOrder = maxOrder + 1;
+        newOrderedSiblings.push(...draggedRows);
       }
 
-      // Feature 3: Multi-drag — move all selected rows to same destination
-      if (selectedRowIds.has(activeId) && selectedRowIds.size > 1) {
-        await handleUpdateRow(activeId, { 
-          order: newOrder, 
-          parentId: newParentId,
-          ...(newGroupId ? { groupId: newGroupId } : {})
-        });
-        const otherIds = Array.from(selectedRowIds).filter(id => id !== activeId);
-        for (let i = 0; i < otherIds.length; i++) {
-          const otherId = otherIds[i];
-          const otherRowData = data.find(r => r.id === otherId);
-          if (otherRowData) {
-            await handleUpdateRow(otherId, {
-              order: newOrder + (i + 1) * 0.001,
-              parentId: newParentId,
-              ...(newGroupId ? { groupId: newGroupId } : {})
-            });
+      console.log('[CRM DnD] Drag Result re-indexed visually:', {
+        draggedIds,
+        overRowId: overRowData?.id,
+        dragDown,
+        newOrderedSiblings: newOrderedSiblings.map(s => s.projectName)
+      });
+
+      const updates: { id: string; patch: any }[] = [];
+      const localUpdatedTickets = rawTickets.map(t => {
+        const siblingIdx = newOrderedSiblings.findIndex(s => s.id === t.id);
+        if (siblingIdx !== -1) {
+          const targetOrder = siblingIdx + 1;
+          const targetParentId = draggedIds.includes(t.id) ? newParentId : t.parentId;
+          const targetGroupId = draggedIds.includes(t.id) ? newGroupId : t.groupId;
+
+          const hasOrderChanged = (Number(t.order) || 0) !== targetOrder;
+          const hasParentChanged = (t.parentId || null) !== (targetParentId || null);
+          const hasGroupChanged = (t.groupId || null) !== (targetGroupId || null);
+
+          if (hasOrderChanged || hasParentChanged || hasGroupChanged) {
+            const patch: any = { order: targetOrder };
+            if (draggedIds.includes(t.id)) {
+              patch.parentId = targetParentId;
+              patch.groupId = targetGroupId;
+            }
+            updates.push({ id: t.id, patch });
+            return { ...t, order: targetOrder, parentId: targetParentId, groupId: targetGroupId };
           }
         }
-        return;
-      }
-
-      await handleUpdateRow(activeId, { 
-        order: newOrder,
-        parentId: newParentId,
-        ...(newGroupId ? { groupId: newGroupId } : {})
+        return t;
       });
+
+      // Optimistic update all siblings in local state
+      flushSync(() => {
+        setRawTickets(localUpdatedTickets);
+      });
+
+      // Write updates to Firestore
+      updates.forEach(u => {
+        updateTicket(u.id, u.patch).catch(err => {
+          console.error('[CRM DnD] Failed to write drag update to Firestore for ticket', u.id, err);
+        });
+      });
+      triggerSheetsSync();
     } else if (String(active.id).startsWith('group-sortable-')) {
       const activeId = String(active.id).replace('group-sortable-', '');
       const overId = String(over.id).replace('group-sortable-', '');
@@ -2422,19 +2646,21 @@ export default function WorkspaceProjectView({
       if (oldIndex !== -1 && newIndex !== -1) {
         const newGroups = arrayMove(groups, oldIndex, newIndex);
         setRawGroups(newGroups);
-        try {
-          if (isDefaultGroups) {
-            for (let i = 0; i < newGroups.length; i++) {
-              await createGroupWithId(newGroups[i].id, { name: newGroups[i].name, workspace: projectType, order: i });
+        (async () => {
+          try {
+            if (isDefaultGroups) {
+              for (let i = 0; i < newGroups.length; i++) {
+                await createGroupWithId(newGroups[i].id, { name: newGroups[i].name, workspace: projectType, order: i });
+              }
+            } else {
+              for (let i = 0; i < newGroups.length; i++) {
+                await updateGroup(newGroups[i].id, { order: i });
+              }
             }
-          } else {
-            for (let i = 0; i < newGroups.length; i++) {
-              await updateGroup(newGroups[i].id, { order: i });
-            }
+          } catch (err) {
+            console.error('Failed to update group orders:', err);
           }
-        } catch (err) {
-          console.error('Failed to update group orders:', err);
-        }
+        })();
       }
     } else {
       setColumns(items => {
@@ -2448,12 +2674,12 @@ export default function WorkspaceProjectView({
   const handleAddColumn = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newColName.trim()) return;
-    
+
     const newColId = newColName
       .toLowerCase()
       .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase())
       .replace(/[^a-zA-Z0-9]/g, '');
-      
+
     let finalId = newColId;
     let counter = 1;
     while (columns.some(c => c.id === finalId)) {
@@ -2472,7 +2698,7 @@ export default function WorkspaceProjectView({
       // Find the current max order to put the new item at the end
       const orders = (data || []).map(r => Number(r.order) || 0);
       const maxOrder = orders.length > 0 ? Math.max(...orders) : 0;
-      
+
       const newTicket: any = {
         projectName: 'New Manual Project',
         assignee: '',
@@ -2495,7 +2721,7 @@ export default function WorkspaceProjectView({
       if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
         newTicket.priority = 'Medium';
       }
-      
+
       console.log('Payload being sent to Firestore:', newTicket);
       const id = await createTicket(newTicket);
       console.log('Successfully created ticket with ID:', id);
@@ -2531,10 +2757,12 @@ export default function WorkspaceProjectView({
       <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col lg:flex-row lg:items-center justify-between p-4 lg:px-6 gap-3 shrink-0">
         <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full lg:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
           <Search className="w-4 h-4 text-[#8E9299]" />
-          <input 
+          <input
             type="text"
             placeholder={`Search in ${projectType}...`}
             className="bg-transparent border-none outline-none text-sm w-full text-[#1C1F23] placeholder:text-[#8E9299]"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
@@ -2543,13 +2771,12 @@ export default function WorkspaceProjectView({
               onClick={() => triggerSheetsSync()}
               disabled={sheetsSyncStatus === 'syncing'}
               title="Sync this board to Google Sheets"
-              className={`h-[38px] px-3 rounded-md border text-sm font-semibold flex items-center gap-2 transition-all ${
-                sheetsSyncStatus === 'success'
+              className={`h-[38px] px-3 rounded-md border text-sm font-semibold flex items-center gap-2 transition-all ${sheetsSyncStatus === 'success'
                   ? 'border-green-300 bg-green-50 text-green-700'
                   : sheetsSyncStatus === 'error'
-                  ? 'border-red-300 bg-red-50 text-red-600'
-                  : 'border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-50 hover:text-[#1061E3]'
-              }`}
+                    ? 'border-red-300 bg-red-50 text-red-600'
+                    : 'border-[#E2E4E9] bg-white text-[#4A4D53] hover:bg-gray-50 hover:text-[#1061E3]'
+                }`}
             >
               {sheetsSyncStatus === 'syncing' ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -2560,9 +2787,9 @@ export default function WorkspaceProjectView({
               )}
               <span>
                 {sheetsSyncStatus === 'syncing' ? 'Syncing…' :
-                 sheetsSyncStatus === 'success' ? 'Synced!' :
-                 sheetsSyncStatus === 'error' ? 'Sync Failed' :
-                 'Sync to Sheets'}
+                  sheetsSyncStatus === 'success' ? 'Synced!' :
+                    sheetsSyncStatus === 'error' ? 'Sync Failed' :
+                      'Sync to Sheets'}
               </span>
             </button>
           )}
@@ -2610,7 +2837,7 @@ export default function WorkspaceProjectView({
                 <div className="absolute right-0 top-11 z-30 w-[320px] rounded-xl border border-[#E2E4E9] bg-white shadow-xl p-4">
                   <h3 className="text-sm font-bold text-[#1C1F23] mb-1">{projectType} Members</h3>
                   <p className="text-xs text-[#8E9299] mb-3">
-                    {canManageBoardMembers 
+                    {canManageBoardMembers
                       ? 'Toggle switches to grant or remove access for staff and freelancers.'
                       : `These members have access to ${projectType}. Go to Settings > Team Members to change access.`}
                   </p>
@@ -2633,9 +2860,9 @@ export default function WorkspaceProjectView({
                               {hasGlobalAccess && (
                                 <span className="text-[10px] font-bold text-[#1061E3] bg-[#EBF5FF] px-1.5 py-0.5 rounded uppercase tracking-tighter">Global</span>
                               )}
-                              <Toggle 
-                                checked={hasAccess} 
-                                onChange={(val) => onUpdateMemberPermissions?.(member.id, projectType, val)} 
+                              <Toggle
+                                checked={hasAccess}
+                                onChange={(val) => onUpdateMemberPermissions?.(member.id, projectType, val)}
                                 disabled={hasGlobalAccess}
                               />
                             </div>
@@ -2701,7 +2928,7 @@ export default function WorkspaceProjectView({
             ))}
           </select>
           {selectedRowIds.size > 0 && (
-            <button 
+            <button
               onClick={handleExportSelected}
               className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
@@ -2709,14 +2936,14 @@ export default function WorkspaceProjectView({
               Export Selected ({selectedRowIds.size})
             </button>
           )}
-          <button 
+          <button
             onClick={() => setIsImportModalOpen(true)}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             Import
           </button>
-          <button 
+          <button
             onClick={handleAddWebsite}
             className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
@@ -2729,7 +2956,7 @@ export default function WorkspaceProjectView({
       <div className="p-6 shrink-0">
         <div className="flex items-center justify-between mb-4">
           <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">{projectType}</h1>
-          <button 
+          <button
             disabled={isAddingGroup}
             onClick={async () => {
               setIsAddingGroup(true);
@@ -2746,10 +2973,10 @@ export default function WorkspaceProjectView({
                   }
                 }
 
-                await createGroup({ 
-                  name: 'New Group', 
-                  workspace: projectType, 
-                  order: groups.length 
+                await createGroup({
+                  name: 'New Group',
+                  workspace: projectType,
+                  order: groups.length
                 });
               } catch (err) {
                 console.error('Failed to create group:', err);
@@ -2769,10 +2996,13 @@ export default function WorkspaceProjectView({
         <DndContext
           id="websites-dnd-context"
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={verticalCollisionDetection}
           accessibility={{ restoreFocus: false }}
           onDragStart={(e) => {
             setActiveDragId(e.active.id as string);
+            if (String(e.active.id).startsWith('row-')) {
+              setSortConfig(null);
+            }
             // Clear any stale nest state when a new drag starts
             if (nestHoverTimerRef.current) { clearTimeout(nestHoverTimerRef.current); nestHoverTimerRef.current = null; }
             if (nestClearTimerRef.current) { clearTimeout(nestClearTimerRef.current); nestClearTimerRef.current = null; }
@@ -2785,16 +3015,41 @@ export default function WorkspaceProjectView({
           }} onDragCancel={() => setActiveDragId(null)}>
           <SortableContext items={groups.map(g => `group-sortable-${g.id}`)} strategy={verticalListSortingStrategy}>
             {groups.map((group) => {
-              const rowMatchesStatus = (row: any) => statusFilter === 'all' || row.status === statusFilter;
               const visibleData = data.filter(r => rowMatchesStatus(r));
               const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
               const isCollapsed = collapsedGroupIds.has(group.id);
+
+              const hasBillableHoursCol = columns.some(c => c.id === 'billableHours');
+              let totalHours = 0;
+              if (hasBillableHoursCol) {
+                const parseHours = (val: any) => {
+                  if (!val) return 0;
+                  const str = String(val).trim().toLowerCase();
+                  if (str === 'no fee' || str === 'no-fee') return 0;
+                  const match = str.match(/([0-9]*\.[0-9]+|[0-9]+)/);
+                  if (match) {
+                    const num = parseFloat(match[1]);
+                    return isNaN(num) ? 0 : num;
+                  }
+                  return 0;
+                };
+
+                groupRows.forEach(row => {
+                  totalHours += parseHours(row.billableHours);
+                  const subRows = visibleData.filter(sub => sub.parentId === row.id);
+                  subRows.forEach(sub => {
+                    totalHours += parseHours(sub.billableHours);
+                  });
+                });
+              }
+              const finalTotalHours = hasBillableHoursCol ? Number(totalHours.toFixed(2)) : undefined;
+
               return (
                 <SortableGroupWrapper key={group.id} group={group}>
-                  <GroupHeader 
-                    group={group} 
-                    onUpdate={handleUpdateGroup} 
-                    onRemove={handleRemoveGroup} 
+                  <GroupHeader
+                    group={group}
+                    onUpdate={handleUpdateGroup}
+                    onRemove={handleRemoveGroup}
                     isCollapsed={isCollapsed}
                     onToggleCollapse={() => {
                       setCollapsedGroupIds(prev => {
@@ -2809,6 +3064,8 @@ export default function WorkspaceProjectView({
                       ? companies.find(c => c.id === group.companyId)?.seoNotes || undefined
                       : undefined
                     }
+                    itemCount={groupRows.length}
+                    totalHours={finalTotalHours}
                   />
                   {!isCollapsed && (
                     <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] overflow-x-auto">
@@ -2817,7 +3074,7 @@ export default function WorkspaceProjectView({
                           <tr>
                             <th style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
                               <div className="flex items-center pl-1">
-                                <input 
+                                <input
                                   type="checkbox"
                                   checked={groupRows.length > 0 && groupRows.every(r => selectedRowIds.has(r.id))}
                                   onChange={(e) => {
@@ -2857,8 +3114,8 @@ export default function WorkspaceProjectView({
                               })}
                             </SortableContext>
                             <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
-                              <button 
-                                onClick={() => setIsAddColOpen(true)} 
+                              <button
+                                onClick={() => setIsAddColOpen(true)}
                                 className="p-1 hover:bg-[#E2E4E9] rounded text-[#1C1F23] transition-colors flex items-center justify-center w-6 h-6"
                                 title="Add Column"
                               >
@@ -2870,15 +3127,15 @@ export default function WorkspaceProjectView({
                         <GroupDroppableBody groupId={group.id}>
                           <SortableContext items={groupRows.flatMap(r => [
                             `row-${r.id}`,
-                            ...(expandedIds.has(r.id) ? visibleData.filter((sub: any) => sub.parentId === r.id).map((sub: any) => `row-${sub.id}`) : [])
+                            ...(expandedIds.has(r.id) ? getSubtaskRows(r.id, visibleData).map((sub: any) => `row-${sub.id}`) : [])
                           ])} strategy={verticalListSortingStrategy}>
                             {groupRows.map(row => (
                               <React.Fragment key={row.id}>
-                                <SortableRow 
-                                  row={row} 
-                                  columns={columns} 
+                                <SortableRow
+                                  row={row}
+                                  columns={columns}
                                   onUpdate={handleUpdateRow}
-                                  setEditingRowId={setEditingRowId} 
+                                  setEditingRowId={setEditingRowId}
                                   teamMembers={teamMembers}
                                   statusOptions={statusOptions}
                                   expandedIds={expandedIds}
@@ -2891,7 +3148,7 @@ export default function WorkspaceProjectView({
                                     e.preventDefault();
                                     setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
                                   }}
-                                  subtaskCount={visibleData.filter(r => r.parentId === row.id).length}
+                                  subtaskCount={data.filter(r => r.parentId === row.id).length}
                                   isSelected={selectedRowIds.has(row.id)}
                                   onToggleSelect={(shiftKey?: boolean) => handleToggleSelectRow(row.id, shiftKey)}
                                   onCommentsClick={handleCommentsButtonClick}
@@ -2900,14 +3157,19 @@ export default function WorkspaceProjectView({
                                   customBillableHours={customBillableHours}
                                   onCreateBillableHour={handleCreateBillableHour}
                                   companies={companies}
+                                  subtaskFilter={subtaskFilters[row.id] || 'all'}
+                                  onSetSubtaskFilter={(rid: string, val: string) => setSubtaskFilters(prev => ({ ...prev, [rid]: val }))}
+                                  subtaskSort={subtaskSorts[row.id] || 'none'}
+                                  onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
+                                  uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === row.id).map((s: any) => s.status).filter(Boolean)))}
                                 />
-                                {expandedIds.has(row.id) && visibleData.filter(r => r.parentId === row.id).map(subRow => (
-                                  <SortableRow 
-                                    key={subRow.id} 
-                                    row={subRow} 
-                                    columns={columns} 
+                                {expandedIds.has(row.id) && getSubtaskRows(row.id, visibleData).map(subRow => (
+                                  <SortableRow
+                                    key={subRow.id}
+                                    row={subRow}
+                                    columns={columns}
                                     onUpdate={handleUpdateRow}
-                                    setEditingRowId={setEditingRowId} 
+                                    setEditingRowId={setEditingRowId}
                                     teamMembers={teamMembers}
                                     statusOptions={statusOptions}
                                     isSubRow={true}
@@ -2925,6 +3187,11 @@ export default function WorkspaceProjectView({
                                     customBillableHours={customBillableHours}
                                     onCreateBillableHour={handleCreateBillableHour}
                                     companies={companies}
+                                    subtaskFilter={subtaskFilters[subRow.id] || 'all'}
+                                    onSetSubtaskFilter={(rid: string, val: string) => setSubtaskFilters(prev => ({ ...prev, [rid]: val }))}
+                                    subtaskSort={subtaskSorts[subRow.id] || 'none'}
+                                    onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
+                                    uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === subRow.id).map((s: any) => s.status).filter(Boolean)))}
                                   />
                                 ))}
                               </React.Fragment>
@@ -2978,7 +3245,7 @@ export default function WorkspaceProjectView({
               );
             })}
           </SortableContext>
-          <DragOverlay adjustScale={false}>
+          <DragOverlay adjustScale={false} dropAnimation={isDropAnimationEnabled ? undefined : null}>
             {activeDragId ? (() => {
               if (activeDragId.startsWith('group-sortable-')) {
                 const groupId = activeDragId.replace('group-sortable-', '');
@@ -3036,12 +3303,27 @@ export default function WorkspaceProjectView({
 
       {/* Context Menu */}
       {contextMenu && (
-        <div 
+        <div
           className="fixed z-50 w-48 bg-white rounded-md shadow-lg border border-[#E2E4E9] overflow-hidden py-1"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button 
+          {contextMenu.isSubRow && (
+            <>
+              <button 
+                onClick={async () => {
+                  await handleUpdateRow(contextMenu.rowId, { parentId: null });
+                  setContextMenu(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-[#1061E3] hover:bg-blue-50/60 flex items-center gap-2 font-medium"
+              >
+                <ArrowRight className="w-4 h-4 rotate-180" />
+                Convert to Main Task
+              </button>
+              <div className="h-px bg-[#E2E4E9] my-1" />
+            </>
+          )}
+          <button
             onClick={() => {
               setEditingRowId(contextMenu.rowId);
               setContextMenu(null);
@@ -3051,7 +3333,7 @@ export default function WorkspaceProjectView({
             <Pencil className="w-4 h-4 text-[#8E9299]" />
             Edit
           </button>
-          <button 
+          <button
             onClick={() => {
               duplicateRow(contextMenu.rowId);
               setContextMenu(null);
@@ -3062,7 +3344,7 @@ export default function WorkspaceProjectView({
             Duplicate
           </button>
           <div className="h-px bg-[#E2E4E9] my-1" />
-          <button 
+          <button
             onClick={() => {
               setRowToDeleteId(contextMenu.rowId);
               setContextMenu(null);
@@ -3079,14 +3361,14 @@ export default function WorkspaceProjectView({
       <AnimatePresence>
         {rowToDeleteId && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/30 backdrop-blur-sm"
               onClick={() => setRowToDeleteId(null)}
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -3103,13 +3385,13 @@ export default function WorkspaceProjectView({
                   Are you sure you want to delete this row? This action cannot be undone.
                 </p>
                 <div className="mt-2 flex justify-end gap-3 pt-4 border-t border-[#E2E4E9]">
-                  <button 
+                  <button
                     onClick={() => setRowToDeleteId(null)}
                     className="px-4 py-2 rounded-md text-sm font-semibold text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     onClick={() => {
                       deleteRow(rowToDeleteId);
                       setRowToDeleteId(null);
@@ -3129,14 +3411,14 @@ export default function WorkspaceProjectView({
       <AnimatePresence>
         {isAddColOpen && (
           <div className="absolute inset-0 z-50 flex items-center justify-center">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/30 backdrop-blur-sm"
               onClick={() => setIsAddColOpen(false)}
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -3151,10 +3433,10 @@ export default function WorkspaceProjectView({
               <form onSubmit={handleAddColumn} className="p-6 flex flex-col gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Column Name</label>
-                  <input 
+                  <input
                     required
                     autoFocus
-                    type="text" 
+                    type="text"
                     value={newColName || ''}
                     onChange={e => setNewColName(e.target.value)}
                     className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
@@ -3162,14 +3444,14 @@ export default function WorkspaceProjectView({
                   />
                 </div>
                 <div className="mt-2 flex justify-end gap-3 pt-4 border-t border-[#E2E4E9]">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsAddColOpen(false)}
                     className="px-4 py-2 rounded-md text-sm font-semibold text-[#4A4D53] hover:bg-[#F0F2F5] transition-colors"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
                   >
@@ -3197,7 +3479,7 @@ export default function WorkspaceProjectView({
                 {/* Header bar */}
                 <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
                   <div className="flex items-center gap-2">
-                    <button 
+                    <button
                       onClick={() => setEditingRowId(null)}
                       className="flex items-center gap-2 text-sm font-semibold text-[#4A4D53] hover:text-[#1C1F23] transition-colors bg-[#F0F2F5] hover:bg-[#E2E8F0] px-4 py-2 rounded-lg"
                     >
@@ -3233,7 +3515,7 @@ export default function WorkspaceProjectView({
 
                     return (
                       <div className="max-w-4xl mx-auto flex flex-col gap-6 pb-20">
-                        
+
                         {/* Card 1: Header / Title & Metadata */}
                         <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm relative z-20">
                           <div className="p-6 md:p-8">
@@ -3251,7 +3533,7 @@ export default function WorkspaceProjectView({
                               {/* Status */}
                               <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Status</label>
-                                <select 
+                                <select
                                   value={editingRow.status ?? ''}
                                   onChange={e => {
                                     const patch: any = { status: e.target.value };
@@ -3293,15 +3575,15 @@ export default function WorkspaceProjectView({
                               <div className="flex-grow flex-shrink-0 min-w-[140px] md:min-w-[150px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Assignee</label>
                                 <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg bg-white h-[38px] flex items-center justify-between">
-                                  <AssigneeDropdown 
-                                    values={editingRow.assignees || (editingRow.assignee ? [editingRow.assignee] : [])} 
+                                  <AssigneeDropdown
+                                    values={editingRow.assignees || (editingRow.assignee ? [editingRow.assignee] : [])}
                                     onSaveMultiple={(newVals) => {
-                                      handleUpdateRow(editingRowId, { 
+                                      handleUpdateRow(editingRowId, {
                                         assignees: newVals,
                                         assignee: newVals[0] || ''
                                       });
-                                    }} 
-                                    teamMembers={teamMembers} 
+                                    }}
+                                    teamMembers={teamMembers}
                                   />
                                 </div>
                               </div>
@@ -3313,7 +3595,7 @@ export default function WorkspaceProjectView({
                                     ? 'Launched Date'
                                     : 'Deadline'}
                                 </label>
-                                <input 
+                                <input
                                   type="date"
                                   value={editingRow.deadline ?? ''}
                                   onChange={e => handleUpdateRow(editingRowId, { deadline: e.target.value })}
@@ -3324,7 +3606,7 @@ export default function WorkspaceProjectView({
                               {/* Billable Hours */}
                               <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Billable Hours</label>
-                                <BillableHoursDropdown 
+                                <BillableHoursDropdown
                                   value={editingRow.billableHours || ''}
                                   onChange={(newVal) => handleUpdateRow(editingRowId, { billableHours: newVal })}
                                   customLabels={customBillableHours}
@@ -3335,7 +3617,7 @@ export default function WorkspaceProjectView({
                               {/* Company Name */}
                               <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Company Name</label>
-                                <input 
+                                <input
                                   type="text"
                                   value={editingRow.companyName ?? ''}
                                   onChange={e => handleUpdateRow(editingRowId, { companyName: e.target.value })}
@@ -3347,7 +3629,7 @@ export default function WorkspaceProjectView({
                               {/* Contact Name */}
                               <div className="flex-grow flex-shrink-0 min-w-[150px] md:min-w-[160px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Contact Name</label>
-                                <input 
+                                <input
                                   type="text"
                                   value={editingRow.contactName ?? ''}
                                   onChange={e => handleUpdateRow(editingRowId, { contactName: e.target.value })}
@@ -3359,7 +3641,7 @@ export default function WorkspaceProjectView({
                               {/* Contact Email */}
                               <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Contact Email</label>
-                                <input 
+                                <input
                                   type="email"
                                   value={editingRow.email ?? ''}
                                   onChange={e => handleUpdateRow(editingRowId, { email: e.target.value })}
@@ -3371,7 +3653,7 @@ export default function WorkspaceProjectView({
                               {/* Category */}
                               <div className="flex-grow flex-shrink-0 min-w-[150px] md:min-w-[160px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Category</label>
-                                <input 
+                                <input
                                   type="text"
                                   value={editingRow.category ?? ''}
                                   onChange={e => handleUpdateRow(editingRowId, { category: e.target.value })}
@@ -3519,13 +3801,13 @@ export default function WorkspaceProjectView({
                             )}
                             <div className="flex gap-3 items-start relative">
                               <div className="relative flex-grow">
-                                <textarea 
+                                <textarea
                                   ref={textareaRef}
                                   value={newUpdateText}
                                   onChange={e => {
                                     const val = e.target.value;
                                     setNewUpdateText(val);
-                                    
+
                                     // Mentions logic
                                     const cursorP = e.target.selectionStart;
                                     const textToCursor = val.slice(0, cursorP);
@@ -3600,9 +3882,9 @@ export default function WorkspaceProjectView({
                                   </div>
                                 )}
                               </div>
-                              
+
                               {/* Post button */}
-                              <button 
+                              <button
                                 onClick={() => handleAddUpdate(editingRowId)}
                                 disabled={!newUpdateText.trim() && !attachedFile}
                                 className="px-4 py-2 bg-[#1061E3] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
@@ -3613,10 +3895,10 @@ export default function WorkspaceProjectView({
 
                             {/* Textarea Bottom Action Bar */}
                             <div className="flex gap-2 border-t border-[#F0F2F5] pt-2 mt-1">
-                              <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                style={{ display: 'none' }} 
+                              <input
+                                type="file"
+                                ref={fileInputRef}
+                                style={{ display: 'none' }}
                                 onChange={(e) => {
                                   if (e.target.files && e.target.files.length > 0) {
                                     setAttachedFile(e.target.files[0]);
@@ -3666,14 +3948,14 @@ export default function WorkspaceProjectView({
             </div>
           ) : (
             <div className="fixed inset-0 z-50 flex justify-end">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="absolute inset-0 bg-black/20 backdrop-blur-sm"
                 onClick={() => setEditingRowId(null)}
               />
-              <motion.div 
+              <motion.div
                 initial={{ x: '100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
@@ -3698,11 +3980,10 @@ export default function WorkspaceProjectView({
                         key={tab.id}
                         type="button"
                         onClick={() => setActiveEditTab(tab.id as EditTab)}
-                        className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
-                          activeEditTab === tab.id
+                        className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${activeEditTab === tab.id
                             ? 'bg-[#1061E3] text-white'
                             : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
-                        }`}
+                          }`}
                       >
                         {tab.label}
                       </button>
@@ -3730,7 +4011,7 @@ export default function WorkspaceProjectView({
                       <div key={col.id}>
                         <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
                         {col.id === 'status' ? (
-                          <select 
+                          <select
                             value={editingRow?.[col.id] ?? ''}
                             onChange={e => {
                               const patch: any = { [col.id]: e.target.value };
@@ -3778,7 +4059,7 @@ export default function WorkspaceProjectView({
                             <option value="Plus Plan">Plus Plan</option>
                           </select>
                         ) : col.id === 'billableHours' ? (
-                          <BillableHoursDropdown 
+                          <BillableHoursDropdown
                             value={editingRow?.[col.id] || ''}
                             onChange={(newVal) => handleUpdateRow(editingRowId, { [col.id]: newVal })}
                             customLabels={customBillableHours}
@@ -3786,19 +4067,19 @@ export default function WorkspaceProjectView({
                           />
                         ) : col.id === 'assignee' ? (
                           <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md bg-white">
-                            <AssigneeDropdown 
-                              values={editingRow?.assignees || (editingRow?.[col.id] ? [editingRow[col.id]] : [])} 
+                            <AssigneeDropdown
+                              values={editingRow?.assignees || (editingRow?.[col.id] ? [editingRow[col.id]] : [])}
                               onSaveMultiple={(newVals) => {
-                                handleUpdateRow(editingRowId, { 
+                                handleUpdateRow(editingRowId, {
                                   assignees: newVals,
                                   assignee: newVals[0] || ''
                                 });
-                              }} 
-                              teamMembers={teamMembers} 
+                              }}
+                              teamMembers={teamMembers}
                             />
                           </div>
                         ) : (
-                          <input 
+                          <input
                             type={col.id === 'deadline' ? 'date' : 'text'}
                             value={editingRow?.[col.id] ?? ''}
                             onChange={e => {
@@ -3830,159 +4111,91 @@ export default function WorkspaceProjectView({
                   })()}
 
                   {activeEditTab === 'updates' && (
-                  <div>
-                    <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
-                    <div className="flex flex-col gap-4 mb-4">
-                      {(() => {
-                        const editingRow = data.find(r => r.id === editingRowId);
-                        return editingRow?.updates?.map((update: any) => (
-                          <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
-                            <div className="flex justify-between items-center mb-1">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div
-                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                                  style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
-                                >
-                                  {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
+                    <div>
+                      <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
+                      <div className="flex flex-col gap-4 mb-4">
+                        {(() => {
+                          const editingRow = data.find(r => r.id === editingRowId);
+                          return editingRow?.updates?.map((update: any) => (
+                            <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
+                              <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                    style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
+                                  >
+                                    {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
+                                  </div>
+                                  <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
                                 </div>
-                                <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
+                                <span className="text-[10px] text-[#8E9299]">
+                                  {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
+                                </span>
                               </div>
-                              <span className="text-[10px] text-[#8E9299]">
-                                {new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(update.timestamp))}
-                              </span>
+                              <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
+                              {update.attachment && (
+                                <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2 py-1 w-fit">
+                                  <FileIcon className="w-3.5 h-3.5" />
+                                  <span className="truncate max-w-[200px]">{update.attachment}</span>
+                                </div>
+                              )}
                             </div>
-                            <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
-                            {update.attachment && (
-                              <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2 py-1 w-fit">
-                                <FileIcon className="w-3.5 h-3.5" />
-                                <span className="truncate max-w-[200px]">{update.attachment}</span>
-                              </div>
-                            )}
+                          ));
+                        })()}
+                        {(() => {
+                          const editingRow = data.find(r => r.id === editingRowId);
+                          if (!editingRow?.updates || editingRow.updates.length === 0) {
+                            return <p className="text-sm text-[#8E9299] text-center py-2">No updates yet.</p>;
+                          }
+                          return null;
+                        })()}
+                      </div>
+                      <div className="flex flex-col gap-2 relative">
+                        {attachedFile && (
+                          <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-md p-2">
+                            <div className="flex items-center gap-2 text-sm text-[#1061E3]">
+                              <FileIcon className="w-4 h-4" />
+                              <span className="truncate max-w-[250px] font-medium">{attachedFile.name}</span>
+                            </div>
+                            <button onClick={() => setAttachedFile(null)} className="text-[#8E9299] hover:text-[#D32F2F] transition-colors"><X className="w-4 h-4" /></button>
                           </div>
-                        ));
-                      })()}
-                      {(() => {
-                        const editingRow = data.find(r => r.id === editingRowId);
-                        if (!editingRow?.updates || editingRow.updates.length === 0) {
-                          return <p className="text-sm text-[#8E9299] text-center py-2">No updates yet.</p>;
-                        }
-                        return null;
-                      })()}
-                    </div>
-                    <div className="flex flex-col gap-2 relative">
-                      {attachedFile && (
-                        <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-md p-2">
-                          <div className="flex items-center gap-2 text-sm text-[#1061E3]">
-                            <FileIcon className="w-4 h-4" />
-                            <span className="truncate max-w-[250px] font-medium">{attachedFile.name}</span>
-                          </div>
-                          <button onClick={() => setAttachedFile(null)} className="text-[#8E9299] hover:text-[#D32F2F] transition-colors"><X className="w-4 h-4" /></button>
-                        </div>
-                      )}
-                      <div className="flex gap-2 items-start relative">
-                        <div className="relative flex-grow">
-                          <textarea 
-                            ref={textareaRef}
-                            value={newUpdateText}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setNewUpdateText(val);
-                              
-                              // Mentions logic
-                              const cursorP = e.target.selectionStart;
-                              const textToCursor = val.slice(0, cursorP);
-                              const match = textToCursor.match(/@(\w*)$/);
-                              if (match) {
-                                setMentionFilter(match[1]);
-                                setShowMentionMenu(true);
-                                setMentionIndex(0);
-                              } else {
-                                setShowMentionMenu(false);
-                              }
-                            }}
-                            placeholder="Write an update..."
-                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[80px] resize-y pb-8"
-                            onKeyDown={e => {
-                              if (showMentionMenu) {
-                                const filteredMembers = teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()));
-                                if (e.key === 'ArrowDown') {
-                                  e.preventDefault();
-                                  setMentionIndex(prev => (prev + 1) % filteredMembers.length);
-                                } else if (e.key === 'ArrowUp') {
-                                  e.preventDefault();
-                                  setMentionIndex(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
-                                } else if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  if (filteredMembers.length > 0) {
-                                    const member = filteredMembers[mentionIndex];
-                                    const cursorP = textareaRef.current?.selectionStart || 0;
-                                    const textToCursor = newUpdateText.slice(0, cursorP);
-                                    const textAfterCursor = newUpdateText.slice(cursorP);
-                                    const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
-                                    setNewUpdateText(newText);
-                                    setShowMentionMenu(false);
-                                    textareaRef.current?.focus();
-                                  }
-                                } else if (e.key === 'Escape') {
+                        )}
+                        <div className="flex gap-2 items-start relative">
+                          <div className="relative flex-grow">
+                            <textarea
+                              ref={textareaRef}
+                              value={newUpdateText}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setNewUpdateText(val);
+
+                                // Mentions logic
+                                const cursorP = e.target.selectionStart;
+                                const textToCursor = val.slice(0, cursorP);
+                                const match = textToCursor.match(/@(\w*)$/);
+                                if (match) {
+                                  setMentionFilter(match[1]);
+                                  setShowMentionMenu(true);
+                                  setMentionIndex(0);
+                                } else {
                                   setShowMentionMenu(false);
                                 }
-                              } else if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  handleAddUpdate(editingRowId);
-                              }
-                            }}
-                          />
-                          <div className="absolute bottom-2 left-2 flex gap-1">
-                            <input 
-                              type="file" 
-                              ref={fileInputRef} 
-                              style={{ display: 'none' }} 
-                              onChange={(e) => {
-                                if (e.target.files && e.target.files.length > 0) {
-                                  setAttachedFile(e.target.files[0]);
-                                  e.target.value = ''; // Reset input to allow selecting same file again
-                                }
                               }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
-                              title="Attach File"
-                            >
-                              <Paperclip className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const textarea = textareaRef.current;
-                                if (textarea) {
-                                  const start = textarea.selectionStart;
-                                  const end = textarea.selectionEnd;
-                                  const newText = newUpdateText.substring(0, start) + '@' + newUpdateText.substring(end);
-                                  setNewUpdateText(newText);
-                                  setShowMentionMenu(true);
-                                  setMentionFilter('');
-                                  setTimeout(() => {
-                                    textarea.focus();
-                                    textarea.setSelectionRange(start + 1, start + 1);
-                                  }, 0);
-                                }
-                              }}
-                              className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
-                              title="Tag Member"
-                            >
-                              <AtSign className="w-4 h-4" />
-                            </button>
-                          </div>
-                          {/* Mention Menu */}
-                          {showMentionMenu && (
-                            <div className="absolute z-10 bottom-full mb-1 left-0 w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden py-1">
-                              {teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).length > 0 ? (
-                                teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).map((member, i) => (
-                                  <button
-                                    key={member.id}
-                                    onClick={() => {
+                              placeholder="Write an update..."
+                              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent min-h-[80px] resize-y pb-8"
+                              onKeyDown={e => {
+                                if (showMentionMenu) {
+                                  const filteredMembers = teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()));
+                                  if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    setMentionIndex(prev => (prev + 1) % filteredMembers.length);
+                                  } else if (e.key === 'ArrowUp') {
+                                    e.preventDefault();
+                                    setMentionIndex(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
+                                  } else if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (filteredMembers.length > 0) {
+                                      const member = filteredMembers[mentionIndex];
                                       const cursorP = textareaRef.current?.selectionStart || 0;
                                       const textToCursor = newUpdateText.slice(0, cursorP);
                                       const textAfterCursor = newUpdateText.slice(cursorP);
@@ -3990,31 +4203,99 @@ export default function WorkspaceProjectView({
                                       setNewUpdateText(newText);
                                       setShowMentionMenu(false);
                                       textareaRef.current?.focus();
-                                    }}
-                                    className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${i === mentionIndex ? 'bg-[#F0F2F5] text-[#1061E3]' : 'text-[#1C1F23] hover:bg-gray-50'}`}
-                                  >
-                                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
-                                      {member.name.charAt(0)}
-                                    </div>
-                                    {member.name}
-                                  </button>
-                                ))
-                              ) : (
-                                <div className="px-3 py-2 text-xs text-[#8E9299]">No members found</div>
-                              )}
+                                    }
+                                  } else if (e.key === 'Escape') {
+                                    setShowMentionMenu(false);
+                                  }
+                                } else if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleAddUpdate(editingRowId);
+                                }
+                              }}
+                            />
+                            <div className="absolute bottom-2 left-2 flex gap-1">
+                              <input
+                                type="file"
+                                ref={fileInputRef}
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    setAttachedFile(e.target.files[0]);
+                                    e.target.value = ''; // Reset input to allow selecting same file again
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
+                                title="Attach File"
+                              >
+                                <Paperclip className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const textarea = textareaRef.current;
+                                  if (textarea) {
+                                    const start = textarea.selectionStart;
+                                    const end = textarea.selectionEnd;
+                                    const newText = newUpdateText.substring(0, start) + '@' + newUpdateText.substring(end);
+                                    setNewUpdateText(newText);
+                                    setShowMentionMenu(true);
+                                    setMentionFilter('');
+                                    setTimeout(() => {
+                                      textarea.focus();
+                                      textarea.setSelectionRange(start + 1, start + 1);
+                                    }, 0);
+                                  }
+                                }}
+                                className="p-1.5 text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F2F5] rounded transition-colors"
+                                title="Tag Member"
+                              >
+                                <AtSign className="w-4 h-4" />
+                              </button>
                             </div>
-                          )}
+                            {/* Mention Menu */}
+                            {showMentionMenu && (
+                              <div className="absolute z-10 bottom-full mb-1 left-0 w-48 bg-white border border-[#E2E4E9] rounded-md shadow-lg overflow-hidden py-1">
+                                {teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).length > 0 ? (
+                                  teamMembers.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase())).map((member, i) => (
+                                    <button
+                                      key={member.id}
+                                      onClick={() => {
+                                        const cursorP = textareaRef.current?.selectionStart || 0;
+                                        const textToCursor = newUpdateText.slice(0, cursorP);
+                                        const textAfterCursor = newUpdateText.slice(cursorP);
+                                        const newText = textToCursor.replace(/@\w*$/, `@${member.name} `) + textAfterCursor;
+                                        setNewUpdateText(newText);
+                                        setShowMentionMenu(false);
+                                        textareaRef.current?.focus();
+                                      }}
+                                      className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${i === mentionIndex ? 'bg-[#F0F2F5] text-[#1061E3]' : 'text-[#1C1F23] hover:bg-gray-50'}`}
+                                    >
+                                      <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
+                                        {member.name.charAt(0)}
+                                      </div>
+                                      {member.name}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-2 text-xs text-[#8E9299]">No members found</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleAddUpdate(editingRowId)}
+                            disabled={!newUpdateText.trim() && !attachedFile}
+                            className="px-4 py-2 h-[80px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                          >
+                            Post
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => handleAddUpdate(editingRowId)}
-                          disabled={!newUpdateText.trim() && !attachedFile}
-                          className="px-4 py-2 h-[80px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                        >
-                          Post
-                        </button>
                       </div>
                     </div>
-                  </div>
                   )}
 
                   {activeEditTab === 'files' && (() => {
@@ -4095,7 +4376,7 @@ export default function WorkspaceProjectView({
                   })()}
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-between items-center shrink-0">
-                  <button 
+                  <button
                     onClick={() => {
                       setRowToDeleteId(editingRowId);
                       setEditingRowId(null);
@@ -4105,7 +4386,7 @@ export default function WorkspaceProjectView({
                     <Trash2 className="w-4 h-4" />
                     Delete
                   </button>
-                  <button 
+                  <button
                     onClick={() => setEditingRowId(null)}
                     className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
                   >
@@ -4121,7 +4402,7 @@ export default function WorkspaceProjectView({
       {/* Bulk Multi-Select Floating Bar */}
       <AnimatePresence>
         {selectedRowIds.size > 0 && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
@@ -4142,7 +4423,7 @@ export default function WorkspaceProjectView({
             <div className="flex items-center gap-2">
               {/* Move to Group Button with Dropdown Popover */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => {
                     setActiveBulkGroupDropdown(prev => !prev);
                     setActiveBulkStatusDropdown(false);
@@ -4153,13 +4434,13 @@ export default function WorkspaceProjectView({
                   <ArrowRight className="w-4 h-4 text-blue-400" />
                   Move to
                 </button>
-                
+
                 {/* Custom Sleek Dropdown */}
                 <AnimatePresence>
                   {activeBulkGroupDropdown && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setActiveBulkGroupDropdown(false)} />
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -4188,7 +4469,7 @@ export default function WorkspaceProjectView({
 
               {/* Change Status Button with Dropdown Popover */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => {
                     setActiveBulkStatusDropdown(prev => !prev);
                     setActiveBulkGroupDropdown(false);
@@ -4199,12 +4480,12 @@ export default function WorkspaceProjectView({
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   Status
                 </button>
-                
+
                 <AnimatePresence>
                   {activeBulkStatusDropdown && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setActiveBulkStatusDropdown(false)} />
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -4233,7 +4514,7 @@ export default function WorkspaceProjectView({
 
               {/* Set Assignee Button with Dropdown Popover */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => {
                     setActiveBulkAssigneeDropdown(prev => !prev);
                     setActiveBulkGroupDropdown(false);
@@ -4244,12 +4525,12 @@ export default function WorkspaceProjectView({
                   <AtSign className="w-4 h-4 text-indigo-400" />
                   Assignee
                 </button>
-                
+
                 <AnimatePresence>
                   {activeBulkAssigneeDropdown && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setActiveBulkAssigneeDropdown(false)} />
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -4276,7 +4557,7 @@ export default function WorkspaceProjectView({
                             }}
                             className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center gap-2"
                           >
-                            <div 
+                            <div
                               className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold shrink-0"
                               style={{ backgroundColor: member.color }}
                             >
@@ -4292,7 +4573,7 @@ export default function WorkspaceProjectView({
               </div>
 
               {/* Delete Button */}
-              <button 
+              <button
                 onClick={handleBulkDeleteSelected}
                 className="flex items-center gap-2 text-xs font-bold hover:bg-red-500/10 hover:text-red-400 text-red-500 px-4 py-2 rounded-lg transition-all border border-red-500/10 active:scale-95"
               >
@@ -4302,7 +4583,7 @@ export default function WorkspaceProjectView({
             </div>
 
             {/* Clear / Dismiss Selection */}
-            <button 
+            <button
               onClick={handleClearSelection}
               className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-all active:scale-95"
               title="Clear Selection"
@@ -4313,13 +4594,14 @@ export default function WorkspaceProjectView({
         )}
       </AnimatePresence>
 
-      <TicketImportModal 
+      <TicketImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         teamMembers={teamMembers}
         companies={companies}
         workspace={projectType}
         groups={groups}
+        existingTickets={data}
       />
 
       {activeCommentsRowId && (() => {
@@ -4333,7 +4615,7 @@ export default function WorkspaceProjectView({
           >
             <div className="flex justify-between items-center pb-2 border-b border-[#F0F2F5]">
               <span className="font-bold text-xs text-[#1C1F23] uppercase tracking-wider">Leave Update</span>
-              <button 
+              <button
                 type="button"
                 onClick={() => setActiveCommentsRowId(null)}
                 className="text-[#8E9299] hover:text-[#1C1F23] transition-colors"
@@ -4366,7 +4648,7 @@ export default function WorkspaceProjectView({
                 onChange={(e) => {
                   const val = e.target.value;
                   setQuickUpdateText(val);
-                  
+
                   // Mentions logic
                   const cursorP = e.target.selectionStart;
                   const textToCursor = val.slice(0, cursorP);
