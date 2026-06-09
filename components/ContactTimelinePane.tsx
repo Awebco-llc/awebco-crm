@@ -29,6 +29,26 @@ export default function ContactTimelinePane({
   const [isSimulating, setIsSimulating] = useState(false);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
 
+  const handleDownloadFileDirectly = async (e: React.MouseEvent, url: string, filename: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Failed to download file:', err);
+      window.open(url, '_blank');
+    }
+  };
+
   const toggleExpand = (id: string) => {
     setExpandedActivities(prev => {
       const next = new Set(prev);
@@ -329,19 +349,29 @@ export default function ContactTimelinePane({
                       {act.attachments && act.attachments.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100">
                           {act.attachments.map((att, idx) => (
-                            <a
+                            <div
                               key={idx}
-                              href={att.downloadUrl}
-                              download={att.name}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-md text-[10px] font-medium text-[#4A4D53] hover:text-[#1061E3] transition-all max-w-[180px] truncate group/att"
-                              title={`Download ${att.name}`}
+                              className="inline-flex items-center bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-md text-[10px] font-medium text-[#4A4D53] transition-all max-w-[200px]"
                             >
-                              <span className="shrink-0">{getFileIcon(att.name)}</span>
-                              <span className="truncate flex-grow">{att.name}</span>
-                              <Download className="w-3 h-3 text-[#8E9299] group-hover/att:text-[#1061E3] shrink-0 ml-0.5" />
-                            </a>
+                              <a
+                                href={att.downloadUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-1 hover:text-[#1061E3] hover:bg-blue-50/40 rounded-l-md truncate"
+                                title={`View ${att.name}`}
+                              >
+                                <span className="shrink-0">{getFileIcon(att.name)}</span>
+                                <span className="truncate max-w-[120px]">{att.name}</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDownloadFileDirectly(e, att.downloadUrl, att.name)}
+                                className="p-1 hover:bg-blue-50 text-[#8E9299] hover:text-[#1061E3] rounded-r-md transition-colors border-l border-gray-200 shrink-0"
+                                title={`Download ${att.name}`}
+                              >
+                                <Download className="w-3 h-3" />
+                              </button>
+                            </div>
                           ))}
                         </div>
                       )}
