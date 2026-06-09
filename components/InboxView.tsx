@@ -1,9 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { TeamMember } from './Shared';
-import { Search, Send, ExternalLink, Smile } from 'lucide-react';
+import { Search, Send, ExternalLink, Smile, Paperclip, X, Download, Copy, Check, Loader2, FileText } from 'lucide-react';
 import { createMessage, markMessageAsRead, updateMessage } from '@/lib/crmStore';
+import type { ChatAttachment } from '@/lib/crmStore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorageClient } from '@/lib/firebase';
 
 interface ChatMessage {
   id: string;
@@ -13,6 +16,7 @@ interface ChatMessage {
   timestamp: string;
   read: boolean;
   reacts?: { [userId: string]: string };
+  attachments?: ChatAttachment[];
 }
 
 function parseTaskLink(text: string) {
@@ -25,6 +29,104 @@ function parseTaskLink(text: string) {
     };
   }
   return null;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function isImage(type: string) {
+  return type.startsWith('image/');
+}
+
+/** Renders a single attachment: image thumbnail or file chip */
+function AttachmentBubble({ attachment, isMine }: { attachment: ChatAttachment; isMine: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyImage = useCallback(async () => {
+    try {
+      const response = await fetch(attachment.url);
+      const blob = await response.blob();
+      // Convert to PNG if necessary so ClipboardItem accepts it
+      let pngBlob = blob;
+      if (blob.type !== 'image/png') {
+        const imageBitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = imageBitmap.width;
+        canvas.height = imageBitmap.height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(imageBitmap, 0, 0);
+        pngBlob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'));
+      }
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy image:', err);
+    }
+  }, [attachment.url]);
+
+  if (isImage(attachment.type)) {
+    return (
+      <div className="relative group/att mt-1.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={attachment.url}
+          alt={attachment.name}
+          className="max-w-[240px] rounded-lg border border-black/10 cursor-pointer object-cover shadow-sm"
+          onClick={() => window.open(attachment.url, '_blank')}
+        />
+        {/* Hover overlay actions */}
+        <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover/att:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={handleCopyImage}
+            title="Copy image to clipboard"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold shadow bg-black/60 hover:bg-black/80 text-white transition-colors"
+          >
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+          <a
+            href={attachment.url}
+            download={attachment.name}
+            target="_blank"
+            rel="noreferrer"
+            title="Download"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold shadow bg-black/60 hover:bg-black/80 text-white transition-colors"
+          >
+            <Download className="w-3 h-3" />
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Non-image file chip
+  return (
+    <a
+      href={attachment.url}
+      download={attachment.name}
+      target="_blank"
+      rel="noreferrer"
+      className={`mt-1.5 flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors max-w-[240px] ${
+        isMine
+          ? 'bg-white/15 hover:bg-white/25 border-white/20 text-white'
+          : 'bg-gray-50 hover:bg-gray-100 border-[#E2E4E9] text-[#1C1F23]'
+      }`}
+    >
+      <FileText className="w-5 h-5 shrink-0 opacity-80" />
+      <div className="flex-grow min-w-0">
+        <div className="text-xs font-semibold truncate">{attachment.name}</div>
+        <div className={`text-[10px] ${isMine ? 'text-white/70' : 'text-[#8E9299]'}`}>{formatSize(attachment.size)}</div>
+      </div>
+      <Download className="w-4 h-4 shrink-0 opacity-70" />
+    </a>
+  );
 }
 
 export default function InboxView({ 
@@ -44,6 +146,12 @@ export default function InboxView({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeReactionPickerId, setActiveReactionPickerId] = useState<string | null>(null);
+
+  // File attachment state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ [name: string]: number }>({});
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
@@ -86,7 +194,6 @@ export default function InboxView({
       } else {
         const firstOtherUser = teamMembers.find(m => m.id !== currentUserId);
         if (firstOtherUser) {
-          // Just setting it on initial mount when null
           setTimeout(() => setSelectedUserId(firstOtherUser.id), 0);
         }
       }
@@ -167,23 +274,105 @@ export default function InboxView({
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [messages, currentUserId, selectedUserId]);
 
+  // --- File handling ---
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setPendingFiles(prev => [...prev, ...files]);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFiles = async (files: File[]): Promise<ChatAttachment[]> => {
+    const storage = getStorageClient();
+    const results: ChatAttachment[] = [];
+
+    await Promise.all(
+      files.map(
+        (file) =>
+          new Promise<void>((resolve, reject) => {
+            const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            const storageRef = ref(storage, `chat-attachments/${currentUserId}/${uniqueName}`);
+            const task = uploadBytesResumable(storageRef, file);
+
+            setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+
+            task.on(
+              'state_changed',
+              (snap) => {
+                const pct = (snap.bytesTransferred / snap.totalBytes) * 100;
+                setUploadProgress(prev => ({ ...prev, [file.name]: pct }));
+              },
+              (err) => {
+                console.error('Upload error:', err);
+                setUploadProgress(prev => { const n = { ...prev }; delete n[file.name]; return n; });
+                reject(err);
+              },
+              async () => {
+                const url = await getDownloadURL(task.snapshot.ref);
+                results.push({
+                  url,
+                  name: file.name,
+                  type: file.type || 'application/octet-stream',
+                  size: file.size,
+                  storagePath: task.snapshot.ref.fullPath,
+                });
+                setUploadProgress(prev => { const n = { ...prev }; delete n[file.name]; return n; });
+                resolve();
+              }
+            );
+          })
+      )
+    );
+
+    return results;
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !currentUserId || !selectedUserId) return;
+    const hasText = inputText.trim().length > 0;
+    const hasFiles = pendingFiles.length > 0;
+    if (!hasText && !hasFiles) return;
+    if (!currentUserId || !selectedUserId) return;
 
+    setIsUploading(true);
     try {
+      let attachments: ChatAttachment[] = [];
+      if (hasFiles) {
+        attachments = await uploadFiles(pendingFiles);
+        setPendingFiles([]);
+      }
+
       await createMessage({
         senderId: currentUserId,
         receiverId: selectedUserId,
         text: inputText.trim(),
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
       setInputText('');
     } catch (err) {
       console.error('Failed to send message:', err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
+  /** Preview text shown in sidebar for latest message */
+  function getPreviewText(msg: ChatMessage, meId: string): string {
+    const prefix = msg.senderId === meId ? 'You: ' : '';
+    if (msg.text) return prefix + msg.text;
+    if (msg.attachments && msg.attachments.length > 0) {
+      return prefix + `📎 ${msg.attachments.length > 1 ? `${msg.attachments.length} attachments` : 'Attachment'}`;
+    }
+    return '';
+  }
+
   const selectedUser = teamMembers.find(m => m.id === selectedUserId);
+  const canSend = (inputText.trim().length > 0 || pendingFiles.length > 0) && !isUploading;
 
   if (!currentUserId) {
     return (
@@ -250,7 +439,7 @@ export default function InboxView({
                     </div>
                     {latestMessage && (
                       <p className="text-xs text-[#8E9299] truncate">
-                        {latestMessage.senderId === currentUserId ? 'You: ' : ''}{latestMessage.text}
+                        {getPreviewText(latestMessage, currentUserId)}
                       </p>
                     )}
                   </div>
@@ -328,27 +517,39 @@ export default function InboxView({
                         )}
                         <div className={`relative group/msg flex items-center gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
                           <div className="flex flex-col">
-                            <div className={`p-3 rounded-lg text-[13px] shadow-sm flex flex-col items-start ${
-                              isMine 
-                                ? 'bg-[#1061E3] text-white rounded-tr-none' 
-                                : 'bg-white border border-[#E2E4E9] text-[#1C1F23] rounded-tl-none'
-                            }`}>
-                              <span>{displayText}</span>
-                              {parsed && onNavigateTask && (
-                                <button
-                                  type="button"
-                                  onClick={() => onNavigateTask(parsed.workspace, parsed.taskId)}
-                                  className={`mt-2 px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1 transition-colors ${
-                                    isMine
-                                      ? 'bg-white/20 hover:bg-white/30 text-white'
-                                      : 'bg-[#1061E3] hover:bg-blue-700 text-white shadow-sm'
-                                  }`}
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                  View {parsed.workspace === 'Deals / Sales' ? 'Deal' : 'Task'}
-                                </button>
-                              )}
-                            </div>
+                            {/* Message bubble — only shown if there's text or a task link */}
+                            {(displayText || (parsed && onNavigateTask)) && (
+                              <div className={`p-3 rounded-lg text-[13px] shadow-sm flex flex-col items-start ${
+                                isMine 
+                                  ? 'bg-[#1061E3] text-white rounded-tr-none' 
+                                  : 'bg-white border border-[#E2E4E9] text-[#1C1F23] rounded-tl-none'
+                              }`}>
+                                {displayText && <span>{displayText}</span>}
+                                {parsed && onNavigateTask && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onNavigateTask(parsed.workspace, parsed.taskId)}
+                                    className={`mt-2 px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1 transition-colors ${
+                                      isMine
+                                        ? 'bg-white/20 hover:bg-white/30 text-white'
+                                        : 'bg-[#1061E3] hover:bg-blue-700 text-white shadow-sm'
+                                    }`}
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    View {parsed.workspace === 'Deals / Sales' ? 'Deal' : 'Task'}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Attachments */}
+                            {msg.attachments && msg.attachments.length > 0 && (
+                              <div className={`flex flex-col gap-1 ${isMine ? 'items-end' : 'items-start'}`}>
+                                {msg.attachments.map((att, ai) => (
+                                  <AttachmentBubble key={ai} attachment={att} isMine={isMine} />
+                                ))}
+                              </div>
+                            )}
                             
                             {/* Reactions Display */}
                             {reactionGroups.length > 0 && (
@@ -427,8 +628,76 @@ export default function InboxView({
               </div>
 
               {/* Chat Input */}
-              <div className="p-4 bg-white border-t border-[#E2E4E9] shrink-0">
-                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+              <div className="bg-white border-t border-[#E2E4E9] shrink-0">
+                {/* Pending file previews */}
+                {pendingFiles.length > 0 && (
+                  <div className="px-4 pt-3 flex flex-wrap gap-2">
+                    {pendingFiles.map((file, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-1.5 bg-[#F0F2F5] border border-[#E2E4E9] rounded-lg px-2.5 py-1.5 max-w-[200px] group/pf"
+                      >
+                        {isImage(file.type) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            className="w-6 h-6 object-cover rounded shrink-0"
+                          />
+                        ) : (
+                          <FileText className="w-4 h-4 text-[#8E9299] shrink-0" />
+                        )}
+                        <span className="text-xs text-[#1C1F23] truncate flex-grow">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removePendingFile(i)}
+                          className="text-[#8E9299] hover:text-[#D32F2F] transition-colors shrink-0 ml-0.5"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload progress bars */}
+                {Object.entries(uploadProgress).length > 0 && (
+                  <div className="px-4 pt-2 flex flex-col gap-1.5">
+                    {Object.entries(uploadProgress).map(([name, pct]) => (
+                      <div key={name} className="flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 text-[#1061E3] animate-spin shrink-0" />
+                        <div className="flex-grow min-w-0">
+                          <div className="text-[11px] text-[#4A4D53] truncate mb-0.5">{name}</div>
+                          <div className="h-1 bg-[#E3F2FD] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#1061E3] transition-all duration-200"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="p-4 flex items-center gap-2">
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  {/* Paperclip button */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Attach files"
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-[#8E9299] hover:text-[#1061E3] hover:bg-[#F0F7FF] transition-colors shrink-0"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
                   <input 
                     type="text" 
                     value={inputText}
@@ -438,10 +707,14 @@ export default function InboxView({
                   />
                   <button 
                     type="submit" 
-                    disabled={!inputText.trim()}
+                    disabled={!canSend}
                     className="w-10 h-10 rounded-full bg-[#1061E3] text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
                   >
-                    <Send className="w-4 h-4 ml-1" />
+                    {isUploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 ml-1" />
+                    )}
                   </button>
                 </form>
               </div>

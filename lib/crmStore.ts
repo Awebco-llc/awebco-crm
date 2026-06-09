@@ -446,6 +446,14 @@ export async function createBillableHour(label: string) {
   });
 }
 
+export interface ChatAttachment {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+  storagePath: string;
+}
+
 export function subscribeMessages(onChange: (messages: any[]) => void, onError?: (e: unknown) => void): Unsubscribe {
   const db = getDb();
   const q = query(collection(db, 'messages'), orderBy('timestamp'));
@@ -463,6 +471,7 @@ export function subscribeMessages(onChange: (messages: any[]) => void, onError?:
             timestamp: data.timestamp?.toDate?.() ? data.timestamp.toDate().toISOString() : data.timestamp || new Date().toISOString(),
             read: data.read ?? false,
             reacts: data.reacts || {},
+            attachments: (data.attachments || []) as ChatAttachment[],
           };
         }),
       );
@@ -471,13 +480,19 @@ export function subscribeMessages(onChange: (messages: any[]) => void, onError?:
   );
 }
 
-export async function createMessage(input: { senderId: string; receiverId: string; text: string }): Promise<string> {
+export async function createMessage(input: { senderId: string; receiverId: string; text: string; attachments?: ChatAttachment[] }): Promise<string> {
   const db = getDb();
-  const ref = await addDoc(collection(db, 'messages'), {
-    ...input,
+  const payload: Record<string, unknown> = {
+    senderId: input.senderId,
+    receiverId: input.receiverId,
+    text: input.text,
     timestamp: serverTimestamp(),
     read: false,
-  });
+  };
+  if (input.attachments && input.attachments.length > 0) {
+    payload.attachments = input.attachments;
+  }
+  const ref = await addDoc(collection(db, 'messages'), payload);
   return ref.id;
 }
 
