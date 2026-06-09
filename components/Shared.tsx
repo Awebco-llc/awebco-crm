@@ -272,11 +272,12 @@ function getStatusBadgeClasses(value: string) {
                                     value === 'S13: Launch Checklist' ? 'bg-[#DCFCE7] text-[#16A34A]' :
                                       value === 'S14: Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
                                         value === 'Launched' ? 'bg-[#ECFDF3] text-[#10B981]' :
-                                          value === 'ON HOLD' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-                                            value === 'Need to Call / Email' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
-                                              value === 'WON' ? 'bg-[#ECFDF3] text-[#10B981]' :
-                                                value === 'LOST' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-                                                  'bg-gray-100 text-gray-700';
+                                          value === 'LIVE' || value === 'Live' ? 'bg-[#ECFDF3] text-[#10B981]' :
+                                            value === 'ON HOLD' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                                              value === 'Need to Call / Email' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+                                                value === 'WON' ? 'bg-[#ECFDF3] text-[#10B981]' :
+                                                  value === 'LOST' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                                                    'bg-gray-100 text-gray-700';
 }
 
 const DEFAULT_STATUS_OPTIONS = [

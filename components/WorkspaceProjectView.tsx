@@ -247,6 +247,10 @@ const getColumnWidth = (colId: string): string => {
       return '130px';
     case 'email':
       return '180px';
+    case 'username':
+      return '180px';
+    case 'password':
+      return '150px';
     default:
       return '150px';
   }
@@ -1302,6 +1306,14 @@ export default function WorkspaceProjectView({
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
+            if (projectType === 'Local Listings') {
+              if (!parsed.some((c: any) => c.id === 'username')) {
+                parsed.push({ id: 'username', header: 'Username' });
+              }
+              if (!parsed.some((c: any) => c.id === 'password')) {
+                parsed.push({ id: 'password', header: 'Password' });
+              }
+            }
             return parsed;
           }
         } catch (e) {
@@ -1316,7 +1328,9 @@ export default function WorkspaceProjectView({
         { id: 'projectName', header: 'Project Name' },
         { id: 'assignee', header: 'Assignee' },
         { id: 'status', header: 'Status' },
-        { id: 'planType', header: 'Plan Type' }
+        { id: 'planType', header: 'Plan Type' },
+        { id: 'username', header: 'Username' },
+        { id: 'password', header: 'Password' }
       ];
     } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
       const filtered = INITIAL_COLUMNS.filter(c => {
@@ -1363,7 +1377,9 @@ export default function WorkspaceProjectView({
           { id: 'projectName', header: 'Project Name' },
           { id: 'assignee', header: 'Assignee' },
           { id: 'status', header: 'Status' },
-          { id: 'planType', header: 'Plan Type' }
+          { id: 'planType', header: 'Plan Type' },
+          { id: 'username', header: 'Username' },
+          { id: 'password', header: 'Password' }
         ];
       } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
         const filtered = INITIAL_COLUMNS.filter(c => {
@@ -2391,12 +2407,14 @@ export default function WorkspaceProjectView({
       if (String(over.id).startsWith('row-') && activeData) {
         const overIdStr = String(over.id).replace('row-', '');
         const overData = data.find(r => r.id === overIdStr);
+        const activeHasChildren = data.some(r => r.parentId === activeIdStr);
         if (
           overData && 
           !overData.parentId && 
           overIdStr !== activeIdStr && 
           overIdStr !== activeData.parentId && 
-          expandedIds.has(overIdStr)
+          expandedIds.has(overIdStr) &&
+          !activeHasChildren
         ) {
           if (nestClearTimerRef.current) {
             clearTimeout(nestClearTimerRef.current);
