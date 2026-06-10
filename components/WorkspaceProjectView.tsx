@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -1765,6 +1765,10 @@ export default function WorkspaceProjectView({
   const [activeBulkGroupDropdown, setActiveBulkGroupDropdown] = useState(false);
   const [activeBulkStatusDropdown, setActiveBulkStatusDropdown] = useState(false);
   const [activeBulkAssigneeDropdown, setActiveBulkAssigneeDropdown] = useState(false);
+  const [activeBulkDeadlineDropdown, setActiveBulkDeadlineDropdown] = useState(false);
+  const [activeBulkStartDateDropdown, setActiveBulkStartDateDropdown] = useState(false);
+  const [bulkDeadlineValue, setBulkDeadlineValue] = useState('');
+  const [bulkStartDateValue, setBulkStartDateValue] = useState('');
   const [sheetsSyncStatus, setSheetsSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
 
   // Nest-as-subtask drag state
@@ -1855,6 +1859,11 @@ export default function WorkspaceProjectView({
 
   const handleClearSelection = () => {
     setSelectedRowIds(new Set());
+    setActiveBulkGroupDropdown(false);
+    setActiveBulkStatusDropdown(false);
+    setActiveBulkAssigneeDropdown(false);
+    setActiveBulkDeadlineDropdown(false);
+    setActiveBulkStartDateDropdown(false);
   };
 
   const handleBulkMoveSelected = async (targetGroupId: string) => {
@@ -1924,6 +1933,40 @@ export default function WorkspaceProjectView({
       handleClearSelection();
     } catch (err) {
       console.error('Failed to bulk delete rows', err);
+    }
+  };
+
+  const findStartDateColumnId = () => {
+    const col = columns.find(c => 
+      c.id === 'startDate' || 
+      c.id === 'start_date' || 
+      c.header.toLowerCase() === 'start date' || 
+      c.header.toLowerCase() === 'start'
+    );
+    return col ? col.id : 'startDate';
+  };
+
+  const findDeadlineColumnId = () => {
+    const col = columns.find(c => 
+      c.id === 'deadline' || 
+      c.id === 'due_date' || 
+      c.id === 'dueDate' || 
+      c.header.toLowerCase() === 'deadline' || 
+      c.header.toLowerCase() === 'due date'
+    );
+    return col ? col.id : 'deadline';
+  };
+
+  const handleBulkDateUpdate = async (type: 'startDate' | 'deadline', value: string) => {
+    try {
+      const fieldId = type === 'startDate' ? findStartDateColumnId() : findDeadlineColumnId();
+      const ids = Array.from(selectedRowIds);
+      for (const id of ids) {
+        await handleUpdateRow(id, { [fieldId]: value });
+      }
+      handleClearSelection();
+    } catch (err) {
+      console.error(`Failed to bulk update date for type: ${type}`, err);
     }
   };
 
@@ -4760,167 +4803,326 @@ export default function WorkspaceProjectView({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
-              {/* Move to Group Button with Dropdown Popover */}
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setActiveBulkGroupDropdown(prev => !prev);
-                    setActiveBulkStatusDropdown(false);
-                    setActiveBulkAssigneeDropdown(false);
-                  }}
-                  className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
-                >
-                  <ArrowRight className="w-4 h-4 text-blue-400" />
-                  Move to
-                </button>
+            {(() => {
+              const hasStartDateColumn = columns.some(c => 
+                c.id === 'startDate' || 
+                c.id === 'start_date' || 
+                c.header.toLowerCase() === 'start date' || 
+                c.header.toLowerCase() === 'start'
+              );
 
-                {/* Custom Sleek Dropdown */}
-                <AnimatePresence>
-                  {activeBulkGroupDropdown && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setActiveBulkGroupDropdown(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
-                      >
-                        <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
-                          Select Group
-                        </div>
-                        {groups.map(group => (
-                          <button
-                            key={group.id}
-                            onClick={() => {
-                              handleBulkMoveSelected(group.id);
-                              setActiveBulkGroupDropdown(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center justify-between"
+              const hasDeadlineColumn = columns.some(c => 
+                c.id === 'deadline' || 
+                c.id === 'due_date' || 
+                c.id === 'dueDate' || 
+                c.header.toLowerCase() === 'deadline' || 
+                c.header.toLowerCase() === 'due date'
+              );
+
+              return (
+                <div className="flex items-center gap-2">
+                  {/* Move to Group Button with Dropdown Popover */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setActiveBulkGroupDropdown(prev => !prev);
+                        setActiveBulkStatusDropdown(false);
+                        setActiveBulkAssigneeDropdown(false);
+                        setActiveBulkStartDateDropdown(false);
+                        setActiveBulkDeadlineDropdown(false);
+                      }}
+                      className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                    >
+                      <ArrowRight className="w-4 h-4 text-blue-400" />
+                      Move to
+                    </button>
+
+                    {/* Custom Sleek Dropdown */}
+                    <AnimatePresence>
+                      {activeBulkGroupDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setActiveBulkGroupDropdown(false)} />
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
                           >
-                            <span>{group.name}</span>
-                          </button>
-                        ))}
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Change Status Button with Dropdown Popover */}
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setActiveBulkStatusDropdown(prev => !prev);
-                    setActiveBulkGroupDropdown(false);
-                    setActiveBulkAssigneeDropdown(false);
-                  }}
-                  className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
-                >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  Status
-                </button>
-
-                <AnimatePresence>
-                  {activeBulkStatusDropdown && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setActiveBulkStatusDropdown(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
-                      >
-                        <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
-                          Select Status
-                        </div>
-                        {statusOptions.map(opt => (
-                          <button
-                            key={opt}
-                            onClick={() => {
-                              handleBulkStatusSelected(opt);
-                              setActiveBulkStatusDropdown(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center justify-between"
-                          >
-                            <span>{opt}</span>
-                          </button>
-                        ))}
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Set Assignee Button with Dropdown Popover */}
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setActiveBulkAssigneeDropdown(prev => !prev);
-                    setActiveBulkGroupDropdown(false);
-                    setActiveBulkStatusDropdown(false);
-                  }}
-                  className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
-                >
-                  <AtSign className="w-4 h-4 text-indigo-400" />
-                  Assignee
-                </button>
-
-                <AnimatePresence>
-                  {activeBulkAssigneeDropdown && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setActiveBulkAssigneeDropdown(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
-                      >
-                        <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
-                          Select Assignee
-                        </div>
-                        <button
-                          onClick={() => {
-                            handleBulkAssigneeSelected('');
-                            setActiveBulkAssigneeDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-xs font-bold hover:bg-red-500/10 text-red-400 border-b border-white/5 transition-colors"
-                        >
-                          Clear Assignee
-                        </button>
-                        {teamMembers.map(member => (
-                          <button
-                            key={member.id}
-                            onClick={() => {
-                              handleBulkAssigneeSelected(member.id);
-                              setActiveBulkAssigneeDropdown(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center gap-2"
-                          >
-                            <div
-                              className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold shrink-0"
-                              style={{ backgroundColor: member.color }}
-                            >
-                              {member.initials}
+                            <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
+                              Select Group
                             </div>
-                            <span className="truncate">{member.name}</span>
-                          </button>
-                        ))}
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
+                            {groups.map(group => (
+                              <button
+                                key={group.id}
+                                onClick={() => {
+                                  handleBulkMoveSelected(group.id);
+                                  setActiveBulkGroupDropdown(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center justify-between"
+                              >
+                                <span>{group.name}</span>
+                              </button>
+                            ))}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
 
-              {/* Delete Button */}
-              <button
-                onClick={handleBulkDeleteSelected}
-                className="flex items-center gap-2 text-xs font-bold hover:bg-red-500/10 hover:text-red-400 text-red-500 px-4 py-2 rounded-lg transition-all border border-red-500/10 active:scale-95"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </button>
-            </div>
+                  {/* Change Status Button with Dropdown Popover */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setActiveBulkStatusDropdown(prev => !prev);
+                        setActiveBulkGroupDropdown(false);
+                        setActiveBulkAssigneeDropdown(false);
+                        setActiveBulkStartDateDropdown(false);
+                        setActiveBulkDeadlineDropdown(false);
+                      }}
+                      className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      Status
+                    </button>
+
+                    <AnimatePresence>
+                      {activeBulkStatusDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setActiveBulkStatusDropdown(false)} />
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
+                          >
+                            <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
+                              Select Status
+                            </div>
+                            {statusOptions.map(opt => (
+                              <button
+                                key={opt}
+                                onClick={() => {
+                                  handleBulkStatusSelected(opt);
+                                  setActiveBulkStatusDropdown(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center justify-between"
+                              >
+                                <span>{opt}</span>
+                              </button>
+                            ))}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Set Assignee Button with Dropdown Popover */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setActiveBulkAssigneeDropdown(prev => !prev);
+                        setActiveBulkGroupDropdown(false);
+                        setActiveBulkStatusDropdown(false);
+                        setActiveBulkStartDateDropdown(false);
+                        setActiveBulkDeadlineDropdown(false);
+                      }}
+                      className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                    >
+                      <AtSign className="w-4 h-4 text-indigo-400" />
+                      Assignee
+                    </button>
+
+                    <AnimatePresence>
+                      {activeBulkAssigneeDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setActiveBulkAssigneeDropdown(false)} />
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute bottom-full mb-2 left-0 z-50 w-48 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1.5 flex flex-col gap-0.5"
+                          >
+                            <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
+                              Select Assignee
+                            </div>
+                            <button
+                              onClick={() => {
+                                handleBulkAssigneeSelected('');
+                                setActiveBulkAssigneeDropdown(false);
+                              }}
+                              className="w-full text-left px-3 py-2 text-xs font-bold hover:bg-red-500/10 text-red-400 border-b border-white/5 transition-colors"
+                            >
+                              Clear Assignee
+                            </button>
+                            {teamMembers.map(member => (
+                              <button
+                                key={member.id}
+                                onClick={() => {
+                                  handleBulkAssigneeSelected(member.id);
+                                  setActiveBulkAssigneeDropdown(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-white/5 text-gray-200 transition-colors flex items-center gap-2"
+                              >
+                                <div
+                                  className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold shrink-0"
+                                  style={{ backgroundColor: member.color }}
+                                >
+                                  {member.initials}
+                                </div>
+                                <span className="truncate">{member.name}</span>
+                              </button>
+                            ))}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Start Date Button with Popover */}
+                  {hasStartDateColumn && (
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          setActiveBulkStartDateDropdown(prev => !prev);
+                          setActiveBulkDeadlineDropdown(false);
+                          setActiveBulkGroupDropdown(false);
+                          setActiveBulkStatusDropdown(false);
+                          setActiveBulkAssigneeDropdown(false);
+                        }}
+                        className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                      >
+                        <Calendar className="w-4 h-4 text-amber-400" />
+                        Start Date
+                      </button>
+
+                      <AnimatePresence>
+                        {activeBulkStartDateDropdown && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setActiveBulkStartDateDropdown(false)} />
+                            <motion.div
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute bottom-full mb-2 left-0 z-50 w-56 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl p-3 flex flex-col gap-2.5"
+                            >
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 pb-1">
+                                Set Start Date
+                              </div>
+                              <input
+                                type="date"
+                                value={bulkStartDateValue}
+                                onChange={(e) => setBulkStartDateValue(e.target.value)}
+                                className="w-full bg-[#2A2E35] border border-white/10 rounded-md px-2.5 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-[#1061E3] color-scheme-dark"
+                                style={{ colorScheme: 'dark' }}
+                              />
+                              <div className="flex gap-2 justify-end mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleBulkDateUpdate('startDate', '');
+                                    setBulkStartDateValue('');
+                                    setActiveBulkStartDateDropdown(false);
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-bold text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                >
+                                  Clear
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleBulkDateUpdate('startDate', bulkStartDateValue);
+                                    setActiveBulkStartDateDropdown(false);
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-bold bg-[#1061E3] text-white hover:bg-[#1061E3]/95 rounded transition-colors"
+                                >
+                                  Apply
+                                </button>
+                              </div>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Due Date Button with Popover */}
+                  {hasDeadlineColumn && (
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          setActiveBulkDeadlineDropdown(prev => !prev);
+                          setActiveBulkStartDateDropdown(false);
+                          setActiveBulkGroupDropdown(false);
+                          setActiveBulkStatusDropdown(false);
+                          setActiveBulkAssigneeDropdown(false);
+                        }}
+                        className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                      >
+                        <Calendar className="w-4 h-4 text-rose-400" />
+                        Due Date
+                      </button>
+
+                      <AnimatePresence>
+                        {activeBulkDeadlineDropdown && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setActiveBulkDeadlineDropdown(false)} />
+                            <motion.div
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute bottom-full mb-2 left-0 z-50 w-56 bg-[#1C1F23] border border-white/10 rounded-xl shadow-2xl p-3 flex flex-col gap-2.5"
+                            >
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 pb-1">
+                                Set Due Date
+                              </div>
+                              <input
+                                type="date"
+                                value={bulkDeadlineValue}
+                                onChange={(e) => setBulkDeadlineValue(e.target.value)}
+                                className="w-full bg-[#2A2E35] border border-white/10 rounded-md px-2.5 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-[#1061E3] color-scheme-dark"
+                                style={{ colorScheme: 'dark' }}
+                              />
+                              <div className="flex gap-2 justify-end mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleBulkDateUpdate('deadline', '');
+                                    setBulkDeadlineValue('');
+                                    setActiveBulkDeadlineDropdown(false);
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-bold text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                >
+                                  Clear
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleBulkDateUpdate('deadline', bulkDeadlineValue);
+                                    setActiveBulkDeadlineDropdown(false);
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-bold bg-[#1061E3] text-white hover:bg-[#1061E3]/95 rounded transition-colors"
+                                >
+                                  Apply
+                                </button>
+                              </div>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Delete Button */}
+                  <button
+                    onClick={handleBulkDeleteSelected}
+                    className="flex items-center gap-2 text-xs font-bold hover:bg-red-500/10 hover:text-red-400 text-red-500 px-4 py-2 rounded-lg transition-all border border-red-500/10 active:scale-95"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Clear / Dismiss Selection */}
             <button
