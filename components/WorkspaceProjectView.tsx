@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -261,6 +261,24 @@ const safeFormatDate = (value: any, opts: Intl.DateTimeFormatOptions = { dateSty
   } catch {
     return fallback;
   }
+};
+
+const DEFAULT_WIDTHS: Record<string, number> = {
+  projectName: 350,
+  assignee: 125,
+  status: 160,
+  updatesCount: 60,
+  deadline: 120,
+  notes: 300,
+  priority: 110,
+  billableHours: 130,
+  url: 180,
+  planType: 130,
+  category: 130,
+  contactName: 130,
+  email: 180,
+  username: 180,
+  password: 150,
 };
 
 const getColumnWidth = (colId: string): string => {
@@ -792,7 +810,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour, companies, runningLiveCount, holdDownCount }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour, companies, runningLiveCount, holdDownCount, columnWidths }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -838,16 +856,18 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
           </div>
         </div>
       </td>
-      {columns.map((col: any) => (
-        <td
-          key={col.id}
-          style={{
-            width: getColumnWidth(col.id),
-            minWidth: getColumnWidth(col.id),
-            maxWidth: getColumnWidth(col.id),
-          }}
-          className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative"
-        >
+      {columns.map((col: any) => {
+        const colWidth = columnWidths?.[col.id] || DEFAULT_WIDTHS[col.id] || 150;
+        return (
+          <td
+            key={col.id}
+            style={{
+              width: `${colWidth}px`,
+              minWidth: `${colWidth}px`,
+              maxWidth: `${colWidth}px`,
+            }}
+            className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative"
+          >
           {col.id === 'updatesCount' ? (
             <div className="flex items-center justify-center w-full" onClick={(e) => e.stopPropagation()}>
               <button
@@ -1066,7 +1086,8 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
             </div>
           )}
         </td>
-      ))}
+      );
+    })}
       <td style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5] text-right">
         <button
           onClick={(e) => { e.stopPropagation(); deleteRow(row.id); }}
@@ -1374,6 +1395,67 @@ export default function WorkspaceProjectView({
   const [searchQuery, setSearchQuery] = useState('');
   const [subtaskFilters, setSubtaskFilters] = useState<Record<string, string>>({});
   const [subtaskSorts, setSubtaskSorts] = useState<Record<string, string>>({}); // 'none' | 'asc' | 'desc'
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    if (typeof window !== 'undefined') {
+      const storageKey = `awebco_workspace_col_widths_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return DEFAULT_WIDTHS;
+  });
+
+  const [resizing, setResizing] = useState<{ colId: string; startWidth: number; startX: number } | null>(null);
+
+  useEffect(() => {
+    const storageKey = `awebco_workspace_col_widths_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        setColumnWidths(JSON.parse(saved));
+      } catch (e) {
+        console.error(e);
+        setColumnWidths(DEFAULT_WIDTHS);
+      }
+    } else {
+      setColumnWidths(DEFAULT_WIDTHS);
+    }
+  }, [projectType]);
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const deltaX = e.clientX - resizing.startX;
+      const newWidth = Math.max(60, resizing.startWidth + deltaX);
+      setColumnWidths(prev => ({
+        ...prev,
+        [resizing.colId]: newWidth
+      }));
+    };
+
+    const handlePointerUp = () => {
+      const storageKey = `awebco_workspace_col_widths_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+      setColumnWidths(currentWidths => {
+        localStorage.setItem(storageKey, JSON.stringify(currentWidths));
+        return currentWidths;
+      });
+      setResizing(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [resizing, projectType]);
+
   type EditTab = 'details' | 'description' | 'updates' | 'files';
   const [columns, setColumns] = useState<Column[]>(() => {
     if (typeof window !== 'undefined') {
@@ -1442,6 +1524,10 @@ export default function WorkspaceProjectView({
     }
     return result;
   });
+
+  const totalTableWidth = React.useMemo(() => {
+    return columns.reduce((sum, col) => sum + (columnWidths[col.id] || DEFAULT_WIDTHS[col.id] || 150), 90 + 50);
+  }, [columns, columnWidths]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && columns.length > 0) {
@@ -1631,6 +1717,22 @@ export default function WorkspaceProjectView({
         return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
       }
 
+      if (colId === 'status') {
+        const statusA = (a.status || '').trim().toLowerCase();
+        const statusB = (b.status || '').trim().toLowerCase();
+        const completedA = ['done', 'closed', 'running', 'live', 'launched', 's14: launched'].includes(statusA);
+        const completedB = ['done', 'closed', 'running', 'live', 'launched', 's14: launched'].includes(statusB);
+        if (completedA !== completedB) {
+          if (sortConfig.direction === 'asc') {
+            return completedA ? 1 : -1;
+          } else {
+            return completedA ? -1 : 1;
+          }
+        }
+        const cmp = statusA.localeCompare(statusB);
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      }
+
       let aVal = '';
       let bVal = '';
 
@@ -1706,17 +1808,19 @@ export default function WorkspaceProjectView({
     const sortVal = subtaskSorts[parentId] || 'none';
     if (sortVal !== 'none') {
       subRows = [...subRows].sort((a, b) => {
-        const cmp = (a.status || '').localeCompare(b.status || '');
+        const statusA = (a.status || '').trim().toLowerCase();
+        const statusB = (b.status || '').trim().toLowerCase();
+        const completedA = ['done', 'closed', 'running', 'live', 'launched', 's14: launched'].includes(statusA);
+        const completedB = ['done', 'closed', 'running', 'live', 'launched', 's14: launched'].includes(statusB);
+        if (completedA !== completedB) {
+          if (sortVal === 'asc') {
+            return completedA ? 1 : -1;
+          } else {
+            return completedA ? -1 : 1;
+          }
+        }
+        const cmp = statusA.localeCompare(statusB);
         return sortVal === 'asc' ? cmp : -cmp;
-      });
-    } else {
-      subRows = [...subRows].sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        const valA = isNaN(timeA) ? 0 : timeA;
-        const valB = isNaN(timeB) ? 0 : timeB;
-        if (valA !== valB) return valB - valA; // Newest first
-        return (Number(a.order) || 0) - (Number(b.order) || 0);
       });
     }
     return subRows;
@@ -2574,6 +2678,11 @@ export default function WorkspaceProjectView({
     setExpandedIds(prev => new Set(prev).add(parentId));
     const parent = data.find(r => r.id === parentId);
 
+    const siblings = data.filter(r => r.parentId === parentId);
+    const minOrder = siblings.length > 0
+      ? Math.min(...siblings.map(r => Number(r.order) || 0))
+      : 0;
+
     const newSubRow: any = {
       parentId,
       projectName: 'New Sub-Task',
@@ -2587,7 +2696,7 @@ export default function WorkspaceProjectView({
       files: [],
       groupId: parent?.groupId || groups[0]?.id || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
       workspace: projectType,
-      order: data.filter(r => r.parentId === parentId).length,
+      order: minOrder - 1,
     };
 
     if (projectType === 'Local Listings') {
@@ -3345,7 +3454,7 @@ export default function WorkspaceProjectView({
                   />
                   {!isCollapsed && (
                     <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] overflow-x-auto">
-                      <table className="w-full border-collapse text-left table-fixed min-w-[1200px]" style={{ minWidth: '1200px' }}>
+                      <table className="w-full border-collapse text-left table-fixed" style={{ minWidth: `${totalTableWidth}px`, width: `${totalTableWidth}px` }}>
                         <thead className="sticky top-0 z-10 shadow-sm">
                           <tr>
                             <th style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
@@ -3376,17 +3485,21 @@ export default function WorkspaceProjectView({
                                 if (projectType === 'Websites' && group.id === 'group-completed' && col.id === 'deadline') {
                                   displayCol = { ...col, header: 'Launched Date' };
                                 }
-                                return (
-                                  <SortableHeader
-                                    key={`${col.id}-${displayCol.header}`}
-                                    column={displayCol}
-                                    onDelete={(colId) => setColumns(prev => prev.filter(c => c.id !== colId))}
-                                    allowDeletingColumns={allowDeletingColumns}
-                                    sortConfig={sortConfig}
-                                    onSort={handleSort}
-                                    onRename={handleRenameColumn}
-                                  />
-                                );
+                                  return (
+                                    <SortableHeader
+                                      key={`${col.id}-${displayCol.header}`}
+                                      column={displayCol}
+                                      onDelete={(colId) => setColumns(prev => prev.filter(c => c.id !== colId))}
+                                      allowDeletingColumns={allowDeletingColumns}
+                                      sortConfig={sortConfig}
+                                      onSort={handleSort}
+                                      onRename={handleRenameColumn}
+                                      width={columnWidths[col.id] || DEFAULT_WIDTHS[col.id] || 150}
+                                      onResizeStart={(colId, startX, startWidth) => {
+                                        setResizing({ colId, startWidth, startX });
+                                      }}
+                                    />
+                                  );
                               })}
                             </SortableContext>
                             <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
@@ -3454,6 +3567,7 @@ export default function WorkspaceProjectView({
                                   subtaskSort={subtaskSorts[row.id] || 'none'}
                                   onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
                                   uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === row.id).map((s: any) => s.status).filter(Boolean)))}
+                                  columnWidths={columnWidths}
                                 />
                                 {expandedIds.has(row.id) && getSubtaskRows(row.id, visibleData).map(subRow => (
                                   <SortableRow
@@ -3484,6 +3598,7 @@ export default function WorkspaceProjectView({
                                     subtaskSort={subtaskSorts[subRow.id] || 'none'}
                                     onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
                                     uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === subRow.id).map((s: any) => s.status).filter(Boolean)))}
+                                    columnWidths={columnWidths}
                                   />
                                 ))}
                               </React.Fragment>
@@ -3552,7 +3667,7 @@ export default function WorkspaceProjectView({
                 const activeRow = data.find(r => r.id === rowId);
                 return activeRow ? (
                   <div className="bg-white rounded-lg shadow-lg border border-[#E2E4E9] overflow-hidden opacity-95 pointer-events-none select-none">
-                    <table className="w-full border-collapse text-left table-fixed min-w-[1200px]" style={{ minWidth: '1200px', width: '1200px' }}>
+                    <table className="w-full border-collapse text-left table-fixed" style={{ minWidth: `${totalTableWidth}px`, width: `${totalTableWidth}px` }}>
                       <tbody>
                         <tr className="bg-white">
                           <td style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
@@ -3570,9 +3685,9 @@ export default function WorkspaceProjectView({
                               <td
                                 key={col.id}
                                 style={{
-                                  width: getColumnWidth(col.id),
-                                  minWidth: getColumnWidth(col.id),
-                                  maxWidth: getColumnWidth(col.id),
+                                  width: `${columnWidths[col.id] || DEFAULT_WIDTHS[col.id] || 150}px`,
+                                  minWidth: `${columnWidths[col.id] || DEFAULT_WIDTHS[col.id] || 150}px`,
+                                  maxWidth: `${columnWidths[col.id] || DEFAULT_WIDTHS[col.id] || 150}px`,
                                 }}
                                 className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate text-[#1C1F23]"
                               >
