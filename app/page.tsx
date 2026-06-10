@@ -1629,7 +1629,9 @@ export default function Page() {
             </div>
             {NAV_ITEMS_CRM.map(item => {
               let count = 0;
-              if (item.name === 'Deals / Sales') count = deals.length;
+              if (item.name === 'Deals / Sales') {
+                count = deals.filter(d => d.status !== 'WON' && d.status !== 'LOST').length;
+              }
 
               const isActive = activeContentNav === item.name;
 

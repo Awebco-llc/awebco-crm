@@ -31,6 +31,30 @@ function parseTaskLink(text: string) {
   return null;
 }
 
+function renderTextWithLinks(text: string, isMine: boolean) {
+  if (!text) return null;
+  const parts = text.split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi);
+  return parts.map((part, i) => {
+    if (part.match(/^(https?:\/\/|www\.)[^\s]+/i)) {
+      const href = part.toLowerCase().startsWith('http') ? part : `https://${part}`;
+      return (
+        <a
+          key={i}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`underline break-all hover:opacity-85 transition-opacity ${
+            isMine ? 'text-white font-medium' : 'text-[#1061E3] font-medium'
+          }`}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -524,7 +548,11 @@ export default function InboxView({
                                   ? 'bg-[#1061E3] text-white rounded-tr-none' 
                                   : 'bg-white border border-[#E2E4E9] text-[#1C1F23] rounded-tl-none'
                               }`}>
-                                {displayText && <span>{displayText}</span>}
+                                {displayText && (
+                                  <span className="whitespace-pre-wrap break-words">
+                                    {renderTextWithLinks(displayText, isMine)}
+                                  </span>
+                                )}
                                 {parsed && onNavigateTask && (
                                   <button
                                     type="button"
