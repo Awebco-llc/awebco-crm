@@ -84,25 +84,29 @@ function SortableHeader({
   allowDeletingColumns,
   sortConfig,
   onSort,
-  onRename
+  onRename,
+  width,
+  onResizeStart
 }: {
   column: Column,
   onDelete?: (id: string) => void,
   allowDeletingColumns?: boolean,
   sortConfig: { column: string; direction: 'asc' | 'desc' } | null,
   onSort: (colId: string) => void,
-  onRename?: (id: string, newHeader: string) => void
+  onRename?: (id: string, newHeader: string) => void,
+  width: number,
+  onResizeStart?: (colId: string, startX: number, startWidth: number) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? undefined : transition,
     opacity: isDragging ? 0.5 : 1,
     position: 'relative' as const,
     zIndex: isDragging ? 10 : 1,
-    width: getColumnWidth(column.id),
-    minWidth: getColumnWidth(column.id),
-    maxWidth: getColumnWidth(column.id),
+    width: `${width}px`,
+    minWidth: `${width}px`,
+    maxWidth: `${width}px`,
   };
 
   const [isEditing, setIsEditing] = useState(false);
@@ -202,6 +206,20 @@ function SortableHeader({
           </button>
         )}
       </div>
+      {/* Resizer Handle */}
+      <div
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          e.preventDefault();
+          onResizeStart?.(column.id, e.clientX, width);
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-20 hover:bg-[#1061E3] active:bg-[#1061E3] transition-colors group-hover:bg-[#E2E4E9]/80"
+        title="Drag to resize column"
+      />
     </th>
   );
 }
@@ -1690,6 +1708,15 @@ export default function WorkspaceProjectView({
       subRows = [...subRows].sort((a, b) => {
         const cmp = (a.status || '').localeCompare(b.status || '');
         return sortVal === 'asc' ? cmp : -cmp;
+      });
+    } else {
+      subRows = [...subRows].sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const valA = isNaN(timeA) ? 0 : timeA;
+        const valB = isNaN(timeB) ? 0 : timeB;
+        if (valA !== valB) return valB - valA; // Newest first
+        return (Number(a.order) || 0) - (Number(b.order) || 0);
       });
     }
     return subRows;

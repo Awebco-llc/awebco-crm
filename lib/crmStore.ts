@@ -312,7 +312,7 @@ export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]
   );
   return onSnapshot(q, (snap) => {
     const tickets = snap.docs.map((d) => {
-      const data = d.data() as any;
+      const data = d.data({ serverTimestamps: 'estimate' }) as any;
       return {
         id: d.id,
         ...data,
@@ -331,7 +331,7 @@ export function subscribeAllTickets(onChange: (tickets: Ticket[]) => void, onErr
   );
   return onSnapshot(q, (snap) => {
     onChange(snap.docs.map((d) => {
-      const data = d.data() as any;
+      const data = d.data({ serverTimestamps: 'estimate' }) as any;
       return {
         id: d.id,
         ...data,
