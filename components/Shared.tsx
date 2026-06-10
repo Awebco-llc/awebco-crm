@@ -262,6 +262,7 @@ function getStatusBadgeClasses(value: string) {
                 value === 'Done' ? 'bg-[#ECFDF3] text-[#10B981]' :
                   value === 'Running' ? 'bg-[#ECFDF3] text-[#10B981]' :
                     value === 'On Hold' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                      value === 'Down' || value === 'DOWN' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
                       value === 'Planning' ? 'bg-[#E3F2FD] text-[#1976D2]' :
                         value === 'S7: Content Collection' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
                           value === 'S8: Design' ? 'bg-[#F3E8FF] text-[#9333EA]' :
@@ -291,6 +292,7 @@ const DEFAULT_STATUS_OPTIONS = [
   'Running',
   'On Hold',
   'Done',
+  'Down',
   'Planning',
   'S7: Content Collection',
   'S8: Design',

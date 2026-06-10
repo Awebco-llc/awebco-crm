@@ -774,7 +774,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour, companies }: any) {
+function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour, companies, runningLiveCount, holdDownCount }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -860,13 +860,19 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
           ) : col.id === 'status' ? (
             <EditableStatus
               value={row[col.id]}
-              options={projectType === 'Local Listings' || projectType === 'Social Media'
-                ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
-                : row.parentId
-                  ? (projectType === 'Local Listings' || projectType === 'Social Media'
+              options={
+                projectType === 'Local Listings'
+                  ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                  : projectType === 'Social Media'
                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
-                    : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(projectType === 'Support Tickets' ? ['Closed'] : [])])
-                  : (statusOptions || [])}
+                    : row.parentId
+                      ? (projectType === 'Local Listings'
+                        ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                        : projectType === 'Social Media'
+                          ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
+                          : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(projectType === 'Support Tickets' ? ['Closed'] : [])])
+                      : (statusOptions || [])
+              }
               onSave={(newVal) => {
                 const patch: any = { [col.id]: newVal };
                 if (projectType !== 'SEO') {
@@ -1008,6 +1014,24 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                           {subtaskCount}
                         </span>
                       )}
+                      {projectType === 'Local Listings' && !isSubRow && runningLiveCount !== undefined && runningLiveCount > 0 && (
+                        <span
+                          className="px-1.5 py-0.5 rounded bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] text-[10px] font-bold shrink-0 flex items-center gap-0.5 select-none shadow-2xs"
+                          title={`${runningLiveCount} live citations`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#137333]"></span>
+                          <span>{runningLiveCount}</span>
+                        </span>
+                      )}
+                      {projectType === 'Local Listings' && !isSubRow && holdDownCount !== undefined && holdDownCount > 0 && (
+                        <span
+                          className="px-1.5 py-0.5 rounded bg-[#FEE2E2] text-[#B91C1C] border border-[#FDE2E2] text-[10px] font-bold shrink-0 flex items-center gap-0.5 select-none shadow-2xs"
+                          title={`${holdDownCount} down / hold citations`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#B91C1C]"></span>
+                          <span>{holdDownCount}</span>
+                        </span>
+                      )}
                     </div>
                   ) : undefined
                 }
@@ -1055,6 +1079,9 @@ function GroupHeader({
   planNotes,
   itemCount,
   totalHours,
+  runningLiveCount,
+  holdDownCount,
+  projectType,
 }: {
   group: { id: string, name: string },
   onUpdate: (id: string, name: string) => void,
@@ -1066,6 +1093,9 @@ function GroupHeader({
   planNotes?: string,
   itemCount?: number,
   totalHours?: number,
+  runningLiveCount?: number,
+  holdDownCount?: number,
+  projectType?: string,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(group.name);
@@ -1127,12 +1157,13 @@ function GroupHeader({
             </h2>
             {itemCount !== undefined && (
               <span
-                className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-xs font-semibold shrink-0"
+                className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-xs font-semibold shrink-0 select-none"
                 title={`${itemCount} items in this group`}
               >
                 {itemCount}
               </span>
             )}
+
             {totalHours !== undefined && (totalHours > 0 || group.id === 'group-needs-invoiced' || group.name.toLowerCase().includes('invoice')) && (
               <span
                 className="px-2 py-0.5 rounded-full bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] text-xs font-semibold shrink-0"
@@ -1296,7 +1327,8 @@ export default function WorkspaceProjectView({
   onUpdateMemberPermissions,
   useFullScreenUnifiedTicketView,
   allowDeletingGroups = false,
-  allowDeletingColumns = false
+  allowDeletingColumns = false,
+  onCloseRow
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -1319,6 +1351,7 @@ export default function WorkspaceProjectView({
   useFullScreenUnifiedTicketView?: boolean,
   allowDeletingGroups?: boolean,
   allowDeletingColumns?: boolean,
+  onCloseRow?: () => void
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [subtaskFilters, setSubtaskFilters] = useState<Record<string, string>>({});
@@ -1339,6 +1372,9 @@ export default function WorkspaceProjectView({
               if (!parsed.some((c: any) => c.id === 'password')) {
                 parsed.push({ id: 'password', header: 'Password' });
               }
+              if (!parsed.some((c: any) => c.id === 'url')) {
+                parsed.push({ id: 'url', header: 'Link' });
+              }
             }
             return parsed;
           }
@@ -1356,7 +1392,8 @@ export default function WorkspaceProjectView({
         { id: 'status', header: 'Status' },
         { id: 'planType', header: 'Plan Type' },
         { id: 'username', header: 'Username' },
-        { id: 'password', header: 'Password' }
+        { id: 'password', header: 'Password' },
+        { id: 'url', header: 'Link' }
       ];
     } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
       const filtered = INITIAL_COLUMNS.filter(c => {
@@ -1405,7 +1442,8 @@ export default function WorkspaceProjectView({
           { id: 'status', header: 'Status' },
           { id: 'planType', header: 'Plan Type' },
           { id: 'username', header: 'Username' },
-          { id: 'password', header: 'Password' }
+          { id: 'password', header: 'Password' },
+          { id: 'url', header: 'Link' }
         ];
       } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
         const filtered = INITIAL_COLUMNS.filter(c => {
@@ -1612,6 +1650,13 @@ export default function WorkspaceProjectView({
   const [isAddColOpen, setIsAddColOpen] = useState(false);
   const [newColName, setNewColName] = useState('');
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const prevEditingRowId = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingRowId === null && prevEditingRowId.current !== null) {
+      onCloseRow?.();
+    }
+    prevEditingRowId.current = editingRowId;
+  }, [editingRowId, onCloseRow]);
   const [rowToDeleteId, setRowToDeleteId] = useState<string | null>(null);
   const [newUpdateText, setNewUpdateText] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -1973,7 +2018,8 @@ export default function WorkspaceProjectView({
         'Needs Invoiced',
         'Running',
         'On Hold',
-        'Done'
+        'Done',
+        'Down'
       ];
     }
     if (projectType === 'Google Ads' || projectType === 'Social Media') {
@@ -3180,6 +3226,27 @@ export default function WorkspaceProjectView({
               }
               const finalTotalHours = hasBillableHoursCol ? Number(totalHours.toFixed(2)) : undefined;
 
+              let runningLiveCount = 0;
+              let holdDownCount = 0;
+              if (projectType === 'Local Listings') {
+                const countRow = (r: any) => {
+                  const status = (r.status || '').trim().toLowerCase();
+                  if (status === 'running' || status === 'live') {
+                    runningLiveCount++;
+                  } else if (status === 'on hold' || status === 'down') {
+                    holdDownCount++;
+                  }
+                };
+
+                groupRows.forEach(row => {
+                  countRow(row);
+                  const subRows = visibleData.filter(sub => sub.parentId === row.id);
+                  subRows.forEach(sub => {
+                    countRow(sub);
+                  });
+                });
+              }
+
               return (
                 <SortableGroupWrapper key={group.id} group={group}>
                   <GroupHeader
@@ -3202,6 +3269,9 @@ export default function WorkspaceProjectView({
                     }
                     itemCount={groupRows.length}
                     totalHours={finalTotalHours}
+                    runningLiveCount={runningLiveCount}
+                    holdDownCount={holdDownCount}
+                    projectType={projectType}
                   />
                   {!isCollapsed && (
                     <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] overflow-x-auto">
@@ -3280,6 +3350,22 @@ export default function WorkspaceProjectView({
                                   isSubRow={false}
                                   deleteRow={deleteRow}
                                   projectType={projectType}
+                                  runningLiveCount={
+                                    projectType === 'Local Listings'
+                                      ? data.filter(r => r.parentId === row.id).filter(r => {
+                                          const status = (r.status || '').trim().toLowerCase();
+                                          return status === 'running' || status === 'live';
+                                        }).length
+                                      : undefined
+                                  }
+                                  holdDownCount={
+                                    projectType === 'Local Listings'
+                                      ? data.filter(r => r.parentId === row.id).filter(r => {
+                                          const status = (r.status || '').trim().toLowerCase();
+                                          return status === 'on hold' || status === 'down';
+                                        }).length
+                                      : undefined
+                                  }
                                   onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
                                     e.preventDefault();
                                     setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
@@ -4216,13 +4302,20 @@ export default function WorkspaceProjectView({
                                   patch.groupId = 'group-completed';
                                 } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
                                   patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
-                                }
+                                  }
                               }
                               handleUpdateRow(editingRowId, patch);
                             }}
                             className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                           >
-                            {(editingRow?.parentId ? (projectType === 'Local Listings' || projectType === 'Social Media' ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'] : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done']) : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            {(editingRow?.parentId
+                               ? (projectType === 'Local Listings'
+                                 ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                                 : projectType === 'Social Media'
+                                   ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
+                                   : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
+                               : statusOptions
+                             ).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                           </select>
                         ) : col.id === 'priority' ? (
                           <select

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
@@ -280,6 +280,7 @@ export default function DealsView({
   onMention,
   allowDeletingColumns = false,
   openRowId,
+  onCloseRow,
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -301,10 +302,25 @@ export default function DealsView({
   ) => void,
   allowDeletingColumns?: boolean,
   openRowId?: string,
+  onCloseRow?: () => void,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const prevIsAddModalOpen = useRef(false);
+  useEffect(() => {
+    if (!isAddModalOpen && prevIsAddModalOpen.current) {
+      onCloseRow?.();
+    }
+    prevIsAddModalOpen.current = isAddModalOpen;
+  }, [isAddModalOpen, onCloseRow]);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const prevEditingDealId = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingDealId === null && prevEditingDealId.current !== null) {
+      onCloseRow?.();
+    }
+    prevEditingDealId.current = editingDealId;
+  }, [editingDealId, onCloseRow]);
 
   // Auto-open deal details if openRowId is provided
   useEffect(() => {

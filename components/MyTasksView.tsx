@@ -37,7 +37,9 @@ function isCompletedStatus(status?: string) {
     s === 'invoiced' || 
     s === 'closed' || 
     s === 'completed / launched' || 
-    s === 'launched'
+    s === 'launched' ||
+    s === 'running' ||
+    s === 'live'
   );
 }
 
@@ -292,7 +294,7 @@ export default function MyTasksView({
                 <tbody>
                   {sortedTickets.map(ticket => {
                     const isCompleted = isCompletedStatus(ticket.status);
-                    const navName = ticket.workspace === 'Support Tickets' ? 'Tickets' : ticket.workspace;
+                    const navName = ticket.workspace;
                     const rowId = ticket.id;
 
                     const statusClass = isCompleted
