@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Company, Contact, TeamMember, Ticket } from './Shared';
-import { subscribeAllTickets } from '@/lib/crmStore';
+import { Company, Contact, TeamMember, Ticket, getStatusBadgeClasses } from './Shared';
+import { subscribeAllTickets, updateTicket } from '@/lib/crmStore';
 import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar, List, Clock, AlertCircle } from 'lucide-react';
 
 const CATEGORIES = [
@@ -65,6 +65,42 @@ function getDeadlineCategory(deadlineStr?: string): string {
   return 'Later';
 }
 
+function getGroupIdForStatus(status: string, workspace: string, currentGroupId?: string): string | undefined {
+  if (workspace === 'SEO') return undefined;
+  
+  if (workspace === 'Google Ads') {
+    return status === 'Running' ? 'group-running' : 'group-active';
+  }
+  if (status === 'Running') {
+    return 'group-running';
+  }
+  if (status === 'Needs Invoiced') {
+    return 'group-needs-invoiced';
+  }
+  if (status === 'S14: Launched' || status === 'Launched' || status === 'Done' || status === 'Closed') {
+    return 'group-completed';
+  }
+  
+  if (currentGroupId === 'group-needs-invoiced' || currentGroupId === 'group-completed' || currentGroupId === 'group-running') {
+    return workspace === 'Local Listings' ? 'group-setup' : workspace === 'Social Media' ? 'group-smm' : 'group-active';
+  }
+  
+  return currentGroupId;
+}
+
+function getStatusOptionsForWorkspace(workspace: string): string[] {
+  if (workspace === 'Local Listings') {
+    return ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down'];
+  }
+  if (workspace === 'Google Ads' || workspace === 'Social Media') {
+    return ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'];
+  }
+  if (workspace === 'SEO' || workspace === 'Design & Print' || workspace === 'Support Tickets') {
+    return ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(workspace === 'Support Tickets' ? ['Closed'] : [])];
+  }
+  return ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'];
+}
+
 const WORKSPACE_SERVICES: Array<{ key: keyof Company; label: string }> = [
   { key: 'awebco', label: 'Awebco' },
   { key: 'web', label: 'Websites' },
@@ -117,40 +153,78 @@ export default function MyTasksView({
   onOpenTask?: (navName: string, rowId: string) => void
 }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'completed'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('awebco_tasks_active_tab');
+      if (saved === 'active' || saved === 'completed') {
+        return saved;
+      }
+    }
+    return 'active';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('awebco_tasks_active_tab', activeTab);
+    }
+  }, [activeTab]);
+
   const [viewMode, setViewMode] = useState<'list' | 'deadline'>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('awebco_tasks_view_mode') as 'list' | 'deadline') || 'list';
+      const saved = sessionStorage.getItem('awebco_tasks_view_mode');
+      if (saved === 'list' || saved === 'deadline') {
+        return saved;
+      }
     }
     return 'list';
   });
 
   useEffect(() => {
-    localStorage.setItem('awebco_tasks_view_mode', viewMode);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('awebco_tasks_view_mode', viewMode);
+    }
   }, [viewMode]);
 
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    Overdue: true,
-    Today: true,
-    Tomorrow: true,
-    'This Week': true,
-    'Next Week': false,
-    'This Month': false,
-    'Next Month': false,
-    Later: false,
-    'No Deadline': false,
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('awebco_tasks_expanded_sections');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return {
+      Overdue: true,
+      Today: true,
+      Tomorrow: true,
+      'This Week': true,
+      'This Month': true,
+      'Next Month': true,
+      Later: false,
+      'No Deadline': false,
+    };
   });
 
   const toggleSection = (sectionId: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [sectionId]: !prev[sectionId],
-    }));
+    setExpandedSections(prev => {
+      const next = {
+        ...prev,
+        [sectionId]: !prev[sectionId],
+      };
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('awebco_tasks_expanded_sections', JSON.stringify(next));
+      }
+      return next;
+    });
   };
 
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('awebco_tasks_sort_config');
+      const storageKey = `awebco_tasks_sort_config_${viewMode}`;
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
           return JSON.parse(saved);
@@ -163,12 +237,13 @@ export default function MyTasksView({
   });
 
   useEffect(() => {
+    const storageKey = `awebco_tasks_sort_config_${viewMode}`;
     if (sortConfig) {
-      localStorage.setItem('awebco_tasks_sort_config', JSON.stringify(sortConfig));
+      localStorage.setItem(storageKey, JSON.stringify(sortConfig));
     } else {
-      localStorage.removeItem('awebco_tasks_sort_config');
+      localStorage.removeItem(storageKey);
     }
-  }, [sortConfig]);
+  }, [sortConfig, viewMode]);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -221,6 +296,31 @@ export default function MyTasksView({
 
     return categories;
   }, [activeTickets]);
+
+  const [hasInitializedExpanded, setHasInitializedExpanded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && activeTickets.length > 0 && !hasInitializedExpanded) {
+      const saved = sessionStorage.getItem('awebco_tasks_expanded_sections');
+      if (!saved) {
+        const overdueCount = deadlineCategories['Overdue']?.length || 0;
+        const tomorrowCount = deadlineCategories['Tomorrow']?.length || 0;
+        const thisWeekCount = deadlineCategories['This Week']?.length || 0;
+        
+        setExpandedSections({
+          Overdue: overdueCount > 0,
+          Today: true,
+          Tomorrow: tomorrowCount > 0,
+          'This Week': thisWeekCount > 0,
+          'This Month': true,
+          'Next Month': true,
+          Later: false,
+          'No Deadline': false,
+        });
+      }
+      setHasInitializedExpanded(true);
+    }
+  }, [activeTickets, deadlineCategories, hasInitializedExpanded]);
 
   const completedTickets = useMemo(() => {
     return assignedTickets.filter(t => isCompletedStatus(t.status));
@@ -450,10 +550,6 @@ export default function MyTasksView({
                                 priorityBadge = 'bg-[#EFF8FF] text-[#175CD3] border border-[#B2DDFF]';
                               }
 
-                              const statusClass = ticket.status?.toLowerCase() === 'in progress'
-                                ? 'bg-[#EFF8FF] text-[#175CD3]'
-                                : 'bg-gray-100 text-gray-700';
-
                               return (
                                 <div
                                   key={ticket.id}
@@ -482,9 +578,31 @@ export default function MyTasksView({
 
                                   {/* Footer: Status & Deadline */}
                                   <div className="flex items-center justify-between border-t border-gray-50 pt-2.5 mt-1 flex-wrap gap-2">
-                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${statusClass}`}>
-                                      {ticket.status || 'Not Started'}
-                                    </span>
+                                    <select
+                                      value={ticket.status || 'Not Started'}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={async (e) => {
+                                        e.stopPropagation();
+                                        const newStatus = e.target.value;
+                                        const targetGroupId = getGroupIdForStatus(newStatus, ticket.workspace, ticket.groupId);
+                                        const patch: any = { status: newStatus };
+                                        if (targetGroupId) {
+                                          patch.groupId = targetGroupId;
+                                        }
+                                        try {
+                                          await updateTicket(ticket.id, patch);
+                                        } catch (err) {
+                                          console.error('Failed to update ticket status from MyTasksView', err);
+                                        }
+                                      }}
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1061E3] transition-shadow ${getStatusBadgeClasses(ticket.status || 'Not Started')}`}
+                                    >
+                                      {getStatusOptionsForWorkspace(ticket.workspace).map(opt => (
+                                        <option key={opt} value={opt} className="bg-white text-gray-800 normal-case">
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </select>
                                     {ticket.deadline && (
                                       <div className="flex items-center gap-1 text-[11px] text-[#8E9299]">
                                         <Clock className="w-3 h-3" />
@@ -557,15 +675,8 @@ export default function MyTasksView({
                 </thead>
                 <tbody>
                   {sortedTickets.map(ticket => {
-                    const isCompleted = isCompletedStatus(ticket.status);
                     const navName = ticket.workspace;
                     const rowId = ticket.id;
-
-                    const statusClass = isCompleted
-                      ? 'bg-[#ECFDF3] text-[#10B981]'
-                      : ticket.status?.toLowerCase() === 'in progress'
-                        ? 'bg-[#EFF8FF] text-[#175CD3]'
-                        : 'bg-gray-100 text-gray-700';
 
                     let priorityClass = 'bg-gray-50 text-gray-600 border border-gray-200';
                     if (ticket.priority?.toLowerCase() === 'high' || ticket.priority?.toLowerCase() === 'urgent') {
@@ -589,10 +700,30 @@ export default function MyTasksView({
                           </div>
                         </td>
                         <td className="px-4 py-3 text-[13px] text-[#8E9299] font-medium">{ticket.workspace}</td>
-                        <td className="px-4 py-3 text-[13px]">
-                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase ${statusClass}`}>
-                            {ticket.status || 'Not Started'}
-                          </span>
+                        <td className="px-4 py-3 text-[13px]" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={ticket.status || 'Not Started'}
+                            onChange={async (e) => {
+                              const newStatus = e.target.value;
+                              const targetGroupId = getGroupIdForStatus(newStatus, ticket.workspace, ticket.groupId);
+                              const patch: any = { status: newStatus };
+                              if (targetGroupId) {
+                                patch.groupId = targetGroupId;
+                              }
+                              try {
+                                await updateTicket(ticket.id, patch);
+                              } catch (err) {
+                                console.error('Failed to update ticket status from MyTasksView list', err);
+                              }
+                            }}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1061E3] transition-shadow ${getStatusBadgeClasses(ticket.status || 'Not Started')}`}
+                          >
+                            {getStatusOptionsForWorkspace(ticket.workspace).map(opt => (
+                              <option key={opt} value={opt} className="bg-white text-gray-800 normal-case">
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-4 py-3 text-[13px]">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${priorityClass}`}>

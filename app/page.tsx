@@ -695,6 +695,10 @@ export default function Page() {
 
     // 2. Parse URL parameters for automatic navigation routing
     if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('awebco_tasks_view_mode');
+      sessionStorage.removeItem('awebco_tasks_active_tab');
+      sessionStorage.removeItem('awebco_tasks_expanded_sections');
+
       const urlParams = new URLSearchParams(window.location.search);
       const navParam = urlParams.get('nav');
       if (navParam) {
