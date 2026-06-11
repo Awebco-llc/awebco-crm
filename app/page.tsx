@@ -648,6 +648,18 @@ export default function Page() {
       return true;
     }).length;
   }, [supportTickets, companies]);
+  const [dpTickets, setDpTickets] = useState<Ticket[]>([]);
+  const notStartedDpTicketsCount = useMemo(() => {
+    return dpTickets.filter(t => {
+      if (t.status !== 'Not Started') return false;
+      if (t.parentId) return false;
+      if (t.companyId) {
+        const company = companies.find(c => c.id === t.companyId);
+        if (company && company.dp === false) return false;
+      }
+      return true;
+    }).length;
+  }, [dpTickets, companies]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNav, setActiveNav] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -868,6 +880,10 @@ export default function Page() {
       console.error('Firestore support tickets subscribe failed', e);
       setDataError('Could not load support tickets from Firestore.');
     });
+    const unsubDpTickets = subscribeTickets('Design & Print', setDpTickets, (e) => {
+      console.error('Firestore design & print tickets subscribe failed', e);
+      setDataError('Could not load design & print tickets from Firestore.');
+    });
     return () => {
       unsubCompanies();
       unsubContacts();
@@ -878,6 +894,7 @@ export default function Page() {
       unsubMessages();
       unsubContactGroups();
       unsubSupportTickets();
+      unsubDpTickets();
     };
   }, []);
 
@@ -1686,6 +1703,7 @@ export default function Page() {
             {visibleWorkspaceItems.map(item => {
               const isActive = activeContentNav === item.name;
               const isSupportTickets = item.name === 'Support Tickets';
+              const isDesignPrint = item.name === 'Design & Print';
 
               return (
                 <div 
@@ -1704,6 +1722,11 @@ export default function Page() {
                   {isSupportTickets && notStartedSupportTicketsCount > 0 && (
                     <span className="bg-[#EA580C] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full select-none shadow-sm min-w-[18px] text-center">
                       {notStartedSupportTicketsCount}
+                    </span>
+                  )}
+                  {isDesignPrint && notStartedDpTicketsCount > 0 && (
+                    <span className="bg-[#EA580C] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full select-none shadow-sm min-w-[18px] text-center">
+                      {notStartedDpTicketsCount}
                     </span>
                   )}
                 </div>
