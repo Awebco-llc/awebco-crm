@@ -1088,7 +1088,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
         </td>
       );
     })}
-      <td style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5] text-right">
+      <td style={{ minWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5] text-right">
         <button
           onClick={(e) => { e.stopPropagation(); deleteRow(row.id); }}
           className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -3454,7 +3454,7 @@ export default function WorkspaceProjectView({
                   />
                   {!isCollapsed && (
                     <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] overflow-x-auto">
-                      <table className="w-full border-collapse text-left table-fixed" style={{ minWidth: `${totalTableWidth}px`, width: `${totalTableWidth}px` }}>
+                      <table className="w-full border-collapse text-left table-fixed" style={{ minWidth: `${totalTableWidth}px`, width: '100%' }}>
                         <thead className="sticky top-0 z-10 shadow-sm">
                           <tr>
                             <th style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
@@ -3502,10 +3502,10 @@ export default function WorkspaceProjectView({
                                   );
                               })}
                             </SortableContext>
-                            <th style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9]">
+                            <th style={{ minWidth: '50px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] text-right">
                               <button
                                 onClick={() => setIsAddColOpen(true)}
-                                className="p-1 hover:bg-[#E2E4E9] rounded text-[#1C1F23] transition-colors flex items-center justify-center w-6 h-6"
+                                className="p-1 hover:bg-[#E2E4E9] rounded text-[#1C1F23] transition-colors inline-flex items-center justify-center w-6 h-6"
                                 title="Add Column"
                               >
                                 <Plus className="w-4 h-4" />
@@ -3695,7 +3695,7 @@ export default function WorkspaceProjectView({
                               </td>
                             );
                           })}
-                          <td style={{ width: '50px', minWidth: '50px', maxWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5]"></td>
+                          <td style={{ minWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5]"></td>
                         </tr>
                       </tbody>
                     </table>
