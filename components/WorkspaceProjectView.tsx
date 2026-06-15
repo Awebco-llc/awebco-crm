@@ -274,6 +274,7 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   billableHours: 130,
   url: 180,
   planType: 130,
+  companyName: 180,
   category: 130,
   contactName: 130,
   email: 180,
@@ -303,6 +304,8 @@ const getColumnWidth = (colId: string): string => {
       return '180px';
     case 'planType':
       return '130px';
+    case 'companyName':
+      return '180px';
     case 'category':
       return '130px';
     case 'contactName':
@@ -992,6 +995,13 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
                 projectType={projectType}
               />
             </div>
+          ) : col.id === 'companyName' ? (
+            <EditableCell
+              value={row.companyId ? (companies?.find((c: any) => c.id === row.companyId)?.name || row.companyName || '') : (row.companyName || '')}
+              onSave={(newVal) => {
+                onUpdate(row.id, { companyName: newVal });
+              }}
+            />
           ) : col.id === 'url' ? (
             <EditableCell
               value={row[col.id] || ''}
@@ -1475,6 +1485,15 @@ export default function WorkspaceProjectView({
               if (!parsed.some((c: any) => c.id === 'url')) {
                 parsed.push({ id: 'url', header: 'Link' });
               }
+            } else if (projectType === 'Support Tickets') {
+              if (!parsed.some((c: any) => c.id === 'companyName')) {
+                const projIndex = parsed.findIndex((c: any) => c.id === 'projectName');
+                if (projIndex !== -1) {
+                  parsed.splice(projIndex + 1, 0, { id: 'companyName', header: 'Company Name' });
+                } else {
+                  parsed.unshift({ id: 'companyName', header: 'Company Name' });
+                }
+              }
             }
             return parsed;
           }
@@ -1495,7 +1514,20 @@ export default function WorkspaceProjectView({
         { id: 'password', header: 'Password' },
         { id: 'url', header: 'Link' }
       ];
-    } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
+    } else if (projectType === 'Support Tickets') {
+      const filtered = INITIAL_COLUMNS.filter(c => {
+        if (['contactName', 'email', 'category'].includes(c.id)) {
+          return false;
+        }
+        return c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl';
+      });
+      const withoutCompany = filtered.filter(c => c.id !== 'companyName');
+      const companyCol = filtered.find(c => c.id === 'companyName') || { id: 'companyName', header: 'Company Name' };
+      withoutCompany.splice(1, 0, companyCol);
+      withoutCompany.splice(5, 0, { id: 'priority', header: 'Priority' });
+      withoutCompany.splice(7, 0, { id: 'billableHours', header: 'Billable Hours' });
+      result = withoutCompany;
+    } else if (projectType === 'Design & Print') {
       const filtered = INITIAL_COLUMNS.filter(c => {
         if (['companyName', 'contactName', 'email', 'category'].includes(c.id)) {
           return false;
@@ -1503,9 +1535,7 @@ export default function WorkspaceProjectView({
         return c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl';
       });
       filtered.splice(5, 0, { id: 'billableHours', header: 'Billable Hours' });
-      if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
-        filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
-      }
+      filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
       result = filtered;
     } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
       result = INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
@@ -1549,7 +1579,20 @@ export default function WorkspaceProjectView({
           { id: 'password', header: 'Password' },
           { id: 'url', header: 'Link' }
         ];
-      } else if (projectType === 'Design & Print' || projectType === 'Support Tickets') {
+      } else if (projectType === 'Support Tickets') {
+        const filtered = INITIAL_COLUMNS.filter(c => {
+          if (['contactName', 'email', 'category'].includes(c.id)) {
+            return false;
+          }
+          return c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl';
+        });
+        const withoutCompany = filtered.filter(c => c.id !== 'companyName');
+        const companyCol = filtered.find(c => c.id === 'companyName') || { id: 'companyName', header: 'Company Name' };
+        withoutCompany.splice(1, 0, companyCol);
+        withoutCompany.splice(5, 0, { id: 'priority', header: 'Priority' });
+        withoutCompany.splice(7, 0, { id: 'billableHours', header: 'Billable Hours' });
+        result = withoutCompany;
+      } else if (projectType === 'Design & Print') {
         const filtered = INITIAL_COLUMNS.filter(c => {
           if (['companyName', 'contactName', 'email', 'category'].includes(c.id)) {
             return false;
@@ -1557,9 +1600,7 @@ export default function WorkspaceProjectView({
           return c.id !== 'pastelUrl' && c.id !== 'googleDriveUrl';
         });
         filtered.splice(5, 0, { id: 'billableHours', header: 'Billable Hours' });
-        if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
-          filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
-        }
+        filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
         result = filtered;
       } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
         result = INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
@@ -2283,6 +2324,18 @@ export default function WorkspaceProjectView({
   const handleUpdateRow = async (id: string, patch: any) => {
     try {
       const updatedPatch = { ...patch };
+
+      // Automatically link companyId if companyName is updated
+      if (updatedPatch.companyName !== undefined) {
+        const nameVal = (updatedPatch.companyName || '').trim();
+        const matched = companies.find(c => c.name.toLowerCase() === nameVal.toLowerCase());
+        if (matched) {
+          updatedPatch.companyId = matched.id;
+          updatedPatch.companyName = matched.name; // Keep casing consistent
+        } else {
+          updatedPatch.companyId = ''; // Clear ID if name changes
+        }
+      }
 
       // Map status change to the correct groupId dynamically if status is changed
       if (updatedPatch.status && projectType !== 'SEO') {
