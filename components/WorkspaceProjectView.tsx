@@ -648,6 +648,255 @@ function BillableHoursDropdown({ value, onChange, customLabels, onCreateLabel, i
   );
 }
 
+interface CompanyNameDropdownProps {
+  value: string;
+  onChange: (val: string) => void;
+  companies: Company[];
+  isInline?: boolean;
+  placeholder?: string;
+}
+
+function CompanyNameDropdown({ value, onChange, companies, isInline = false, placeholder = '' }: CompanyNameDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setTempValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const sortedCompanies = [...(companies || [])]
+    .filter(c => c && c.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const filtered = sortedCompanies.filter(c =>
+    c.name.toLowerCase().includes(tempValue.toLowerCase())
+  );
+
+  const saveValue = (rawVal: string) => {
+    const trimmed = rawVal.trim();
+    onChange(trimmed);
+    setIsOpen(false);
+  };
+
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (
+        containerRef.current && !containerRef.current.contains(e.target as Node) &&
+        portalRef.current && !portalRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+        if (isInline) {
+          setIsEditing(false);
+        }
+      }
+    };
+
+    const updatePosition = () => {
+      const el = inputRef.current || containerRef.current;
+      if (isOpen && el) {
+        const rect = el.getBoundingClientRect();
+        setPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+    };
+
+    if (isOpen) {
+      updatePosition();
+      document.addEventListener('mousedown', handleGlobalClick);
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen, isInline]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveValue(tempValue);
+      if (isInline) {
+        setIsEditing(false);
+      }
+      inputRef.current?.blur();
+    } else if (e.key === 'Escape') {
+      setTempValue(value);
+      setIsOpen(false);
+      if (isInline) {
+        setIsEditing(false);
+      }
+      inputRef.current?.blur();
+    }
+  };
+
+  const handleBlur = () => {
+    saveValue(tempValue);
+    if (isInline) {
+      setIsEditing(false);
+    }
+  };
+
+  const portalMenu = isOpen && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={portalRef}
+      onMouseDown={(e) => e.preventDefault()}
+      className="fixed z-[9999] bg-[#1F2235] border border-[#2C314D] rounded-lg shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+      style={{
+        top: position.top,
+        left: position.left,
+        width: position.width,
+        minWidth: '220px'
+      }}
+    >
+      <div className="max-h-[200px] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-slate-700">
+        {filtered.map(opt => (
+          <button
+            type="button"
+            key={opt.id}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setTempValue(opt.name);
+              saveValue(opt.name);
+              if (isInline) {
+                setIsEditing(false);
+              }
+            }}
+            className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors flex items-center justify-between ${value === opt.name
+                ? 'bg-[#2C314D] text-white font-semibold'
+                : 'text-gray-300 hover:bg-[#2C314D] hover:text-white'
+              }`}
+          >
+            <span>{opt.name}</span>
+            {value === opt.name && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]" />
+            )}
+          </button>
+        ))}
+
+        {filtered.length === 0 && (
+          <div className="text-center py-4 text-xs text-[#626C8F]">No matching businesses</div>
+        )}
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  if (isInline) {
+    if (!isEditing) {
+      return (
+        <div
+          className="min-h-[20px] min-w-[50px] truncate hover:bg-gray-100/80 rounded px-1 -mx-1 transition-colors cursor-text flex items-center justify-between group/cell"
+          title={value ? `${value} (Click to edit)` : 'Click to edit'}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsEditing(true);
+            setIsOpen(true);
+          }}
+        >
+          <span>{value || '-'}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-[#8E9299] opacity-0 group-hover/cell:opacity-100 transition-opacity shrink-0 ml-1" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full h-full flex items-center relative" ref={containerRef}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={tempValue}
+          onChange={(e) => {
+            setTempValue(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          className="w-full px-1.5 py-0.5 text-[13px] border border-[#1061E3] rounded outline-none bg-white text-[#1C1F23] focus:ring-1 focus:ring-[#1061E3] font-medium"
+        />
+        {portalMenu}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <div className="relative flex items-center w-full">
+        <input
+          ref={inputRef}
+          type="text"
+          value={tempValue}
+          onChange={(e) => {
+            setTempValue(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          placeholder={placeholder || "Select or type company"}
+          className="w-full pl-3 pr-10 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
+        />
+        <div className="absolute right-2 flex items-center gap-1">
+          {value && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setTempValue('');
+                saveValue('');
+              }}
+              className="text-[#8E9299] hover:text-[#1C1F23] p-1 font-bold text-sm leading-none"
+              title="Clear"
+            >
+              &times;
+            </button>
+          )}
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              if (isOpen) {
+                setIsOpen(false);
+              } else {
+                setIsOpen(true);
+                setTimeout(() => inputRef.current?.focus(), 0);
+              }
+            }}
+            className="text-[#8E9299] hover:text-[#1C1F23] p-1 flex items-center justify-center"
+          >
+            <ChevronDown className="w-4 h-4 shrink-0" />
+          </button>
+        </div>
+      </div>
+
+      {portalMenu}
+    </div>
+  );
+}
+
 function RowPlanNotes({ notes, projectType }: { notes: string; projectType: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -996,12 +1245,14 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
               />
             </div>
           ) : col.id === 'companyName' ? (
-            <EditableCell
-              value={row.companyId ? (companies?.find((c: any) => c.id === row.companyId)?.name || row.companyName || '') : (row.companyName || '')}
-              onSave={(newVal) => {
-                onUpdate(row.id, { companyName: newVal });
-              }}
-            />
+            <div onClick={(e) => e.stopPropagation()}>
+              <CompanyNameDropdown
+                value={row.companyId ? (companies?.find((c: any) => c.id === row.companyId)?.name || row.companyName || '') : (row.companyName || '')}
+                onChange={(newVal) => onUpdate(row.id, { companyName: newVal })}
+                companies={companies || []}
+                isInline={true}
+              />
+            </div>
           ) : col.id === 'url' ? (
             <EditableCell
               value={row[col.id] || ''}
@@ -4288,12 +4539,11 @@ export default function WorkspaceProjectView({
                               {/* Company Name */}
                               <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Company Name</label>
-                                <input
-                                  type="text"
+                                <CompanyNameDropdown
                                   value={editingRow.companyName ?? ''}
-                                  onChange={e => handleUpdateRow(editingRowId, { companyName: e.target.value })}
+                                  onChange={(newVal) => handleUpdateRow(editingRowId, { companyName: newVal })}
+                                  companies={companies || []}
                                   placeholder="N/A"
-                                  className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
                                 />
                               </div>
 
@@ -4796,6 +5046,12 @@ export default function WorkspaceProjectView({
                             onChange={(newVal) => handleUpdateRow(editingRowId, { [col.id]: newVal })}
                             customLabels={customBillableHours}
                             onCreateLabel={handleCreateBillableHour}
+                          />
+                        ) : col.id === 'companyName' ? (
+                          <CompanyNameDropdown
+                            value={editingRow?.[col.id] || ''}
+                            onChange={(newVal) => handleUpdateRow(editingRowId, { [col.id]: newVal })}
+                            companies={companies || []}
                           />
                         ) : col.id === 'assignee' ? (
                           <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md bg-white">
