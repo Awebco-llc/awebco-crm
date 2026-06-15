@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -1131,6 +1131,8 @@ function GroupHeader({
   runningLiveCount,
   holdDownCount,
   projectType,
+  hasCopiedTickets = false,
+  onPaste,
 }: {
   group: { id: string, name: string },
   onUpdate: (id: string, name: string) => void,
@@ -1145,6 +1147,8 @@ function GroupHeader({
   runningLiveCount?: number,
   holdDownCount?: number,
   projectType?: string,
+  hasCopiedTickets?: boolean,
+  onPaste?: () => void,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(group.name);
@@ -1262,11 +1266,23 @@ function GroupHeader({
             )}
             <button
               onClick={() => setIsEditing(true)}
-              className="p-1 opacity-0 group-hover/header:opacity-100 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-all"
+              className="p-1 opacity-0 group-hover/header:opacity-100 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-all mr-1"
               title="Rename group"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
+
+            {hasCopiedTickets && onPaste && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onPaste(); }}
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-[#1061E3] hover:bg-blue-700 text-white shadow-sm transition-all flex items-center gap-1 active:scale-95"
+                title="Paste copied rows into this group"
+              >
+                <Clipboard className="w-3 h-3" />
+                <span>Paste Tasks</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1934,6 +1950,18 @@ export default function WorkspaceProjectView({
   };
   const [customBillableHours, setCustomBillableHours] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const [copiedTickets, setCopiedTickets] = useState<any[]>([]);
+
+  const selectedRowIdsRef = useRef(selectedRowIds);
+  const copiedTicketsRef = useRef(copiedTickets);
+
+  useEffect(() => {
+    selectedRowIdsRef.current = selectedRowIds;
+  }, [selectedRowIds]);
+
+  useEffect(() => {
+    copiedTicketsRef.current = copiedTickets;
+  }, [copiedTickets]);
   const [activeBulkGroupDropdown, setActiveBulkGroupDropdown] = useState(false);
   const [activeBulkStatusDropdown, setActiveBulkStatusDropdown] = useState(false);
   const [activeBulkAssigneeDropdown, setActiveBulkAssigneeDropdown] = useState(false);
@@ -1958,6 +1986,54 @@ export default function WorkspaceProjectView({
   const groupsRef = React.useRef(groups);
   React.useEffect(() => { dataRef.current = data; }, [data]);
   React.useEffect(() => { groupsRef.current = groups; }, [groups]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl) {
+        const tagName = activeEl.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || activeEl.getAttribute('contenteditable') === 'true') {
+          return;
+        }
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        const ids = selectedRowIdsRef.current;
+        if (ids.size > 0) {
+          e.preventDefault();
+          const selectedRows = dataRef.current.filter(row => ids.has(row.id));
+          const parentIds = selectedRows.filter(r => !r.parentId).map(r => r.id);
+          const subtasksToInclude = dataRef.current.filter(r => r.parentId && parentIds.includes(r.parentId) && !ids.has(r.id));
+          const allToCopy = [...selectedRows, ...subtasksToInclude];
+          setCopiedTickets(allToCopy);
+        }
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        const copied = copiedTicketsRef.current;
+        if (copied.length > 0) {
+          e.preventDefault();
+          let targetGroupId = groupsRef.current[0]?.id;
+          const ids = selectedRowIdsRef.current;
+          if (ids.size > 0) {
+            const firstSelectedId = Array.from(ids)[0];
+            const firstSelectedRow = dataRef.current.find(r => r.id === firstSelectedId);
+            if (firstSelectedRow) {
+              targetGroupId = getRowGroupId(firstSelectedRow);
+            }
+          }
+          if (targetGroupId) {
+            handlePasteTickets(targetGroupId);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
   const sheetsSyncTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerSheetsSync = React.useCallback(() => {
@@ -2013,17 +2089,33 @@ export default function WorkspaceProjectView({
         const range = orderedIds.slice(start, end + 1);
         setSelectedRowIds(prev => {
           const next = new Set(prev);
-          range.forEach(rid => next.add(rid));
+          range.forEach(rid => {
+            next.add(rid);
+            // Auto-select all subtasks of any main task in range
+            const subtaskIds = data.filter(r => r.parentId === rid).map(r => r.id);
+            subtaskIds.forEach(subId => next.add(subId));
+          });
           return next;
         });
         lastCheckedRowId.current = id;
         return;
       }
     }
+
+    const row = data.find(r => r.id === id);
+    const isMainTask = row && !row.parentId;
+    const subtaskIds = isMainTask ? data.filter(r => r.parentId === id).map(r => r.id) : [];
+
     setSelectedRowIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const wasSelected = next.has(id);
+      if (wasSelected) {
+        next.delete(id);
+        subtaskIds.forEach(subId => next.delete(subId));
+      } else {
+        next.add(id);
+        subtaskIds.forEach(subId => next.add(subId));
+      }
       return next;
     });
     lastCheckedRowId.current = id;
@@ -2699,22 +2791,131 @@ export default function WorkspaceProjectView({
     }
   };
 
-  const duplicateRow = async (id: string) => {
-    const rowToDuplicate = data.find(r => r.id === id);
-    if (!rowToDuplicate) return;
+  const duplicateRows = async (ids: string[]) => {
+    const ticketsToDuplicate = dataRef.current.filter(t => ids.includes(t.id));
+    if (ticketsToDuplicate.length === 0) return;
 
-    const { id: _, createdAt: __, updatedAt: ___, ...rest } = rowToDuplicate;
-    const newRow = {
-      ...rest,
-      projectName: `${rowToDuplicate.projectName} (Copy)`,
-      isManual: true,
-      order: (rowToDuplicate.order || 0) + 0.5, // Simple way to insert after
-    };
+    // Identify parent tickets (those without a parentId)
+    const parents = ticketsToDuplicate.filter(t => !t.parentId);
+
+    // Identify subtasks that are selected but whose parents are NOT in the selection
+    const orphanSubtasks = ticketsToDuplicate.filter(t => t.parentId && !ids.includes(t.parentId));
 
     try {
-      await createTicket(newRow);
+      // Duplicate parent tickets and their subtasks
+      for (const parent of parents) {
+        const { id: oldParentId, createdAt: __, updatedAt: ___, ...parentRest } = parent;
+        const newParentRow = {
+          ...parentRest,
+          projectName: `${parent.projectName} (Copy)`,
+          isManual: true,
+          order: (parent.order || 0) + 0.5,
+        };
+        const newParentId = await createTicket(newParentRow);
+
+        // Find all subtasks of this parent in the database/data
+        const parentSubtasks = dataRef.current.filter(s => s.parentId === oldParentId);
+        for (const sub of parentSubtasks) {
+          const { id: _, createdAt: __, updatedAt: ___, ...subRest } = sub;
+          const newSubRow = {
+            ...subRest,
+            parentId: newParentId,
+            isManual: true,
+          };
+          await createTicket(newSubRow);
+        }
+      }
+
+      // Duplicate orphan subtasks (whose parents were not duplicated)
+      for (const sub of orphanSubtasks) {
+        const { id: _, createdAt: __, updatedAt: ___, ...subRest } = sub;
+        const newSubRow = {
+          ...subRest,
+          projectName: `${sub.projectName} (Copy)`,
+          isManual: true,
+          order: (sub.order || 0) + 0.5,
+        };
+        await createTicket(newSubRow);
+      }
+
+      handleClearSelection();
     } catch (err) {
-      console.error('Failed to duplicate ticket', err);
+      console.error('Failed to duplicate rows', err);
+    }
+  };
+
+  const duplicateRow = async (id: string) => {
+    await duplicateRows([id]);
+  };
+
+  const handleCopySelected = () => {
+    const ids = selectedRowIdsRef.current;
+    if (ids.size === 0) return;
+    const selectedRows = dataRef.current.filter(row => ids.has(row.id));
+    
+    // Auto-include subtasks of copied parents if they aren't selected
+    const parentIds = selectedRows.filter(r => !r.parentId).map(r => r.id);
+    const subtasksToInclude = dataRef.current.filter(r => r.parentId && parentIds.includes(r.parentId) && !ids.has(r.id));
+    
+    const allToCopy = [...selectedRows, ...subtasksToInclude];
+    setCopiedTickets(allToCopy);
+  };
+
+  const handlePasteTickets = async (targetGroupId: string) => {
+    const copied = copiedTicketsRef.current;
+    if (copied.length === 0) return;
+
+    // Partition into parents and subtasks
+    const parents = copied.filter(t => !t.parentId);
+    const orphanSubtasks = copied.filter(t => t.parentId && !parents.some(p => p.id === t.parentId));
+
+    try {
+      const targetGroupRows = dataRef.current.filter(r => getRowGroupId(r) === targetGroupId);
+      const maxOrder = targetGroupRows.length > 0
+        ? Math.max(...targetGroupRows.map(r => Number(r.order) || 0))
+        : 0;
+
+      let orderOffset = 1;
+
+      // 1. Paste parent tickets and their subtasks
+      for (const parent of parents) {
+        const { id: oldParentId, createdAt: __, updatedAt: ___, ...parentRest } = parent;
+        const newParentRow = {
+          ...parentRest,
+          groupId: targetGroupId,
+          order: maxOrder + orderOffset,
+          isManual: true,
+        };
+        const newParentId = await createTicket(newParentRow);
+        orderOffset++;
+
+        const parentSubtasks = copied.filter(s => s.parentId === oldParentId);
+        for (const sub of parentSubtasks) {
+          const { id: _, createdAt: __, updatedAt: ___, ...subRest } = sub;
+          const newSubRow = {
+            ...subRest,
+            parentId: newParentId,
+            groupId: targetGroupId,
+            isManual: true,
+          };
+          await createTicket(newSubRow);
+        }
+      }
+
+      // 2. Paste orphan subtasks
+      for (const sub of orphanSubtasks) {
+        const { id: _, createdAt: __, updatedAt: ___, ...subRest } = sub;
+        const newSubRow = {
+          ...subRest,
+          groupId: targetGroupId,
+          order: maxOrder + orderOffset,
+          isManual: true,
+        };
+        await createTicket(newSubRow);
+        orderOffset++;
+      }
+    } catch (err) {
+      console.error('Failed to paste tickets', err);
     }
   };
 
@@ -3504,6 +3705,8 @@ export default function WorkspaceProjectView({
                     runningLiveCount={runningLiveCount}
                     holdDownCount={holdDownCount}
                     projectType={projectType}
+                    hasCopiedTickets={copiedTickets.length > 0}
+                    onPaste={() => handlePasteTickets(group.id)}
                   />
                   {!isCollapsed && (
                     <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9] overflow-x-auto">
@@ -3521,9 +3724,17 @@ export default function WorkspaceProjectView({
                                     setSelectedRowIds(prev => {
                                       const next = new Set(prev);
                                       if (isChecked) {
-                                        rowIds.forEach(id => next.add(id));
+                                        rowIds.forEach(id => {
+                                          next.add(id);
+                                          const subtaskIds = data.filter(r => r.parentId === id).map(r => r.id);
+                                          subtaskIds.forEach(subId => next.add(subId));
+                                        });
                                       } else {
-                                        rowIds.forEach(id => next.delete(id));
+                                        rowIds.forEach(id => {
+                                          next.delete(id);
+                                          const subtaskIds = data.filter(r => r.parentId === id).map(r => r.id);
+                                          subtaskIds.forEach(subId => next.delete(subId));
+                                        });
                                       }
                                       return next;
                                     });
@@ -5306,6 +5517,26 @@ export default function WorkspaceProjectView({
                       </AnimatePresence>
                     </div>
                   )}
+
+                  {/* Copy Button */}
+                  <button
+                    onClick={handleCopySelected}
+                    className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                    title="Copy selected tasks (Ctrl+C)"
+                  >
+                    <Copy className="w-4 h-4 text-purple-400" />
+                    Copy
+                  </button>
+
+                  {/* Duplicate Button */}
+                  <button
+                    onClick={() => duplicateRows(Array.from(selectedRowIds))}
+                    className="flex items-center gap-2 text-xs font-bold hover:bg-white/10 px-4 py-2 rounded-lg transition-all border border-white/5 active:scale-95 text-gray-200"
+                    title="Duplicate selected tasks"
+                  >
+                    <Clipboard className="w-4 h-4 text-cyan-400" />
+                    Duplicate
+                  </button>
 
                   {/* Delete Button */}
                   <button
