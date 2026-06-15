@@ -4704,66 +4704,8 @@ export default function WorkspaceProjectView({
                         <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm overflow-hidden p-6 md:p-8">
                           <h3 className="text-base font-bold text-[#1C1F23] mb-6">Updates & Activity</h3>
 
-                          <div className="flex flex-col gap-4 mb-6">
-                            {editingRow.updates && editingRow.updates.length > 0 ? (
-                              editingRow.updates.map((update: any) => (
-                                <div key={update.id} className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E2E4E9] shadow-xs flex flex-col gap-2">
-                                  <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div
-                                        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
-                                        style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
-                                      >
-                                        {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
-                                      </div>
-                                      <span className="font-bold text-xs text-[#1C1F23] truncate">{update.author}</span>
-                                    </div>
-                                    <span className="text-[10px] font-medium text-[#8E9299]">
-                                      {safeFormatDate(update.timestamp)}
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-[#4A4D53] whitespace-pre-wrap pl-9">{update.text}</p>
-                                  {update.attachment && (
-                                    <div className="mt-1 ml-9 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5 w-fit">
-                                      <FileIcon className="w-3.5 h-3.5" />
-                                      {update.attachmentUrl ? (
-                                        <a
-                                          href={update.attachmentUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="font-semibold hover:underline truncate max-w-[200px]"
-                                          title={update.attachment}
-                                        >
-                                          {update.attachment}
-                                        </a>
-                                      ) : (
-                                        <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
-                                      )}
-                                      {update.attachmentUrl && (
-                                        <a
-                                          href={update.attachmentUrl}
-                                          download={update.attachment}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-[#8E9299] hover:text-[#1061E3] ml-1 p-0.5 rounded hover:bg-blue-100 transition-colors flex items-center justify-center shrink-0"
-                                          title="Download attachment"
-                                        >
-                                          <Download className="w-3.5 h-3.5" />
-                                        </a>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ))
-                            ) : (
-                              <div className="text-center py-6 text-sm text-[#8E9299] border border-dashed border-[#E2E4E9] rounded-xl bg-[#F9FAFB]">
-                                No updates posted yet.
-                              </div>
-                            )}
-                          </div>
-
                           {/* Add Update Input Area */}
-                          <div className="flex flex-col gap-3 relative border border-[#E2E4E9] rounded-xl p-3 bg-white focus-within:ring-2 focus-within:ring-[#1061E3] focus-within:border-transparent transition-all">
+                          <div className="flex flex-col gap-3 relative border border-[#E2E4E9] rounded-xl p-3 bg-white focus-within:ring-2 focus-within:ring-[#1061E3] focus-within:border-transparent transition-all mb-6">
                             {attachedFile && (
                               <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-2 shrink-0">
                                 <div className="flex items-center gap-2 text-sm text-[#1061E3]">
@@ -4912,6 +4854,64 @@ export default function WorkspaceProjectView({
                                 <AtSign className="w-4 h-4" />
                               </button>
                             </div>
+                          </div>
+
+                          <div className="flex flex-col gap-4">
+                            {editingRow.updates && editingRow.updates.length > 0 ? (
+                              [...editingRow.updates].reverse().map((update: any) => (
+                                <div key={update.id} className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E2E4E9] shadow-xs flex flex-col gap-2">
+                                  <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div
+                                        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+                                        style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
+                                      >
+                                        {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
+                                      </div>
+                                      <span className="font-bold text-xs text-[#1C1F23] truncate">{update.author}</span>
+                                    </div>
+                                    <span className="text-[10px] font-medium text-[#8E9299]">
+                                      {safeFormatDate(update.timestamp)}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-[#4A4D53] whitespace-pre-wrap pl-9">{update.text}</p>
+                                  {update.attachment && (
+                                    <div className="mt-1 ml-9 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5 w-fit">
+                                      <FileIcon className="w-3.5 h-3.5" />
+                                      {update.attachmentUrl ? (
+                                        <a
+                                          href={update.attachmentUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="font-semibold hover:underline truncate max-w-[200px]"
+                                          title={update.attachment}
+                                        >
+                                          {update.attachment}
+                                        </a>
+                                      ) : (
+                                        <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
+                                      )}
+                                      {update.attachmentUrl && (
+                                        <a
+                                          href={update.attachmentUrl}
+                                          download={update.attachment}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[#8E9299] hover:text-[#1061E3] ml-1 p-0.5 rounded hover:bg-blue-100 transition-colors flex items-center justify-center shrink-0"
+                                          title="Download attachment"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-center py-6 text-sm text-[#8E9299] border border-dashed border-[#E2E4E9] rounded-xl bg-[#F9FAFB]">
+                                No updates posted yet.
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -5101,68 +5101,8 @@ export default function WorkspaceProjectView({
                   {activeEditTab === 'updates' && (
                     <div>
                       <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
-                      <div className="flex flex-col gap-4 mb-4">
-                        {(() => {
-                          const editingRow = data.find(r => r.id === editingRowId);
-                          return editingRow?.updates?.map((update: any) => (
-                            <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
-                              <div className="flex justify-between items-center mb-1">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div
-                                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                                    style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
-                                  >
-                                    {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
-                                  </div>
-                                  <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
-                                </div>
-                                <span className="text-[10px] text-[#8E9299]">
-                                  {safeFormatDate(update.timestamp)}
-                                </span>
-                              </div>
-                              <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
-                              {update.attachment && (
-                                <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2 py-1 w-fit">
-                                  <FileIcon className="w-3.5 h-3.5" />
-                                  {update.attachmentUrl ? (
-                                    <a
-                                      href={update.attachmentUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="font-semibold hover:underline truncate max-w-[200px]"
-                                      title={update.attachment}
-                                    >
-                                      {update.attachment}
-                                    </a>
-                                  ) : (
-                                    <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
-                                  )}
-                                  {update.attachmentUrl && (
-                                    <a
-                                      href={update.attachmentUrl}
-                                      download={update.attachment}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[#8E9299] hover:text-[#1061E3] ml-1 p-0.5 rounded hover:bg-blue-100 transition-colors flex items-center justify-center shrink-0"
-                                      title="Download attachment"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                    </a>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ));
-                        })()}
-                        {(() => {
-                          const editingRow = data.find(r => r.id === editingRowId);
-                          if (!editingRow?.updates || editingRow.updates.length === 0) {
-                            return <p className="text-sm text-[#8E9299] text-center py-2">No updates yet.</p>;
-                          }
-                          return null;
-                        })()}
-                      </div>
-                      <div className="flex flex-col gap-2 relative">
+
+                      <div className="flex flex-col gap-2 relative mb-6">
                         {attachedFile && (
                           <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-md p-2">
                             <div className="flex items-center gap-2 text-sm text-[#1061E3]">
@@ -5307,6 +5247,68 @@ export default function WorkspaceProjectView({
                             Post
                           </button>
                         </div>
+                      </div>
+
+                      <div className="flex flex-col gap-4">
+                        {(() => {
+                          const editingRow = data.find(r => r.id === editingRowId);
+                          return [...(editingRow?.updates || [])].reverse().map((update: any) => (
+                            <div key={update.id} className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E2E4E9]">
+                              <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                    style={{ backgroundColor: teamMembers.find(member => member.name === update.author)?.color || getColor(update.author || 'User') }}
+                                  >
+                                    {teamMembers.find(member => member.name === update.author)?.initials || getInitials(update.author)}
+                                  </div>
+                                  <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
+                                </div>
+                                <span className="text-[10px] text-[#8E9299]">
+                                  {safeFormatDate(update.timestamp)}
+                                </span>
+                              </div>
+                              <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
+                              {update.attachment && (
+                                <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1061E3] bg-blue-50 border border-blue-100 rounded px-2 py-1 w-fit">
+                                  <FileIcon className="w-3.5 h-3.5" />
+                                  {update.attachmentUrl ? (
+                                    <a
+                                      href={update.attachmentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-semibold hover:underline truncate max-w-[200px]"
+                                      title={update.attachment}
+                                    >
+                                      {update.attachment}
+                                    </a>
+                                  ) : (
+                                    <span className="truncate max-w-[200px] font-semibold">{update.attachment}</span>
+                                  )}
+                                  {update.attachmentUrl && (
+                                    <a
+                                      href={update.attachmentUrl}
+                                      download={update.attachment}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[#8E9299] hover:text-[#1061E3] ml-1 p-0.5 rounded hover:bg-blue-100 transition-colors flex items-center justify-center shrink-0"
+                                      title="Download attachment"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                        {(() => {
+                          const editingRow = data.find(r => r.id === editingRowId);
+                          if (!editingRow?.updates || editingRow.updates.length === 0) {
+                            return <p className="text-sm text-[#8E9299] text-center py-2">No updates yet.</p>;
+                          }
+                          return null;
+                        })()}
                       </div>
                     </div>
                   )}
