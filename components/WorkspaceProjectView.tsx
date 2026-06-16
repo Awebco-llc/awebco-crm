@@ -29,7 +29,8 @@ import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGr
 import TicketImportModal from './TicketImportModal';
 import RichTextEditor from './RichTextEditor';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { getStorageClient } from '@/lib/firebase';
+import { getStorageClient, getDb } from '@/lib/firebase';
+import { doc, writeBatch } from 'firebase/firestore';
 
 interface Column {
   id: string;
@@ -1062,7 +1063,39 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, expandedIds, toggleExpand, addSubRow, isSubRow = false, deleteRow, projectType, statusOptions, onContextMenu, subtaskCount, isSelected, onToggleSelect, onCommentsClick, isNestTarget = false, selectedCount = 0, customBillableHours, onCreateBillableHour, companies, runningLiveCount, holdDownCount, columnWidths }: any) {
+function SortableRow({
+  row,
+  columns,
+  onUpdate,
+  setEditingRowId,
+  teamMembers,
+  expandedIds,
+  toggleExpand,
+  addSubRow,
+  isSubRow = false,
+  deleteRow,
+  projectType,
+  statusOptions,
+  onContextMenu,
+  subtaskCount,
+  isSelected,
+  onToggleSelect,
+  onCommentsClick,
+  isNestTarget = false,
+  selectedCount = 0,
+  customBillableHours,
+  onCreateBillableHour,
+  companies,
+  runningLiveCount,
+  holdDownCount,
+  columnWidths,
+  activeDragId,
+  isDragOverTarget = false,
+  dragDirection = null,
+  onMoveSubtask,
+  isFirstSubtask = false,
+  isLastSubtask = false
+}: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
   const style = {
@@ -1075,17 +1108,21 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
 
   const isExpanded = expandedIds?.has(row.id);
 
+  const borderClass = isDragOverTarget
+    ? dragDirection === 'up'
+      ? 'shadow-[inset_0_2px_0_0_#1061E3]'
+      : 'shadow-[inset_0_-2px_0_0_#1061E3]'
+    : '';
+
   return (
     <tr
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       onClick={() => setEditingRowId(row.id)}
       onContextMenu={(e) => onContextMenu?.(e, row.id, isSubRow)}
       className={`hover:bg-gray-50 transition-colors cursor-pointer group ${isSubRow ? 'bg-[#FAFAFA]' : ''} ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : ''} ${isNestTarget ? 'outline outline-2 outline-[#1061E3] outline-offset-[-2px] !bg-blue-50/40' : ''}`}
     >
-      <td style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] select-none" onClick={(e) => e.stopPropagation()}>
+      <td style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} className={`px-2 py-3 text-[13px] border-b border-[#F0F2F5] select-none ${borderClass}`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
           {isSubRow && <div className="w-5 shrink-0" />}
           <input
@@ -1095,17 +1132,67 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
             onMouseDown={(e) => { if (e.shiftKey) { e.preventDefault(); onToggleSelect?.(true); } }}
             className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
           />
-          <div
-            data-drag-handle
-            className="text-[#8E9299] group-hover:text-[#1C1F23] relative shrink-0 cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded transition-colors"
-          >
-            <GripVertical className="w-4 h-4" />
-            {isDragging && isSelected && selectedCount > 1 && (
-              <span className="absolute -top-2 -right-2.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm pointer-events-none z-10">
-                {selectedCount}
-              </span>
-            )}
-          </div>
+          {isSubRow ? (
+            <div 
+              className="flex items-center gap-0.5 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                disabled={isFirstSubtask}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveSubtask?.(row.id, 'up');
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className={`p-0.5 rounded transition-colors ${isFirstSubtask ? 'opacity-30 cursor-not-allowed' : 'text-[#8E9299] hover:text-[#1061E3] hover:bg-gray-100'}`}
+                title="Move Up"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={isLastSubtask}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveSubtask?.(row.id, 'down');
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className={`p-0.5 rounded transition-colors ${isLastSubtask ? 'opacity-30 cursor-not-allowed' : 'text-[#8E9299] hover:text-[#1061E3] hover:bg-gray-100'}`}
+                title="Move Down"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <div
+                data-drag-handle
+                {...attributes}
+                {...listeners}
+                className="text-[#8E9299] group-hover:text-[#1C1F23] relative cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded transition-colors ml-0.5"
+              >
+                <GripVertical className="w-4 h-4" />
+                {isDragging && isSelected && selectedCount > 1 && (
+                  <span className="absolute -top-2 -right-2.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm pointer-events-none z-10">
+                    {selectedCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div
+              data-drag-handle
+              {...attributes}
+              {...listeners}
+              className="text-[#8E9299] group-hover:text-[#1C1F23] relative shrink-0 cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded transition-colors"
+            >
+              <GripVertical className="w-4 h-4" />
+              {isDragging && isSelected && selectedCount > 1 && (
+                <span className="absolute -top-2 -right-2.5 bg-[#1061E3] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm pointer-events-none z-10">
+                  {selectedCount}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </td>
       {columns.map((col: any) => {
@@ -1118,7 +1205,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
               minWidth: `${colWidth}px`,
               maxWidth: `${colWidth}px`,
             }}
-            className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative"
+            className={`px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap truncate relative ${borderClass}`}
           >
           {col.id === 'updatesCount' ? (
             <div className="flex items-center justify-center w-full" onClick={(e) => e.stopPropagation()}>
@@ -1349,7 +1436,7 @@ function SortableRow({ row, columns, onUpdate, setEditingRowId, teamMembers, exp
         </td>
       );
     })}
-      <td style={{ minWidth: '50px' }} className="px-4 py-3 border-b border-[#F0F2F5] text-right">
+      <td style={{ minWidth: '50px' }} className={`px-4 py-3 border-b border-[#F0F2F5] text-right ${borderClass}`}>
         <button
           onClick={(e) => { e.stopPropagation(); deleteRow(row.id); }}
           className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -1823,7 +1910,7 @@ export default function WorkspaceProjectView({
   });
 
   const totalTableWidth = React.useMemo(() => {
-    return columns.reduce((sum, col) => sum + (columnWidths[col.id] || DEFAULT_WIDTHS[col.id] || 150), 90 + 50);
+    return columns.reduce((sum, col) => sum + (columnWidths[col.id] || DEFAULT_WIDTHS[col.id] || 150), 140 + 50);
   }, [columns, columnWidths]);
 
   useEffect(() => {
@@ -1889,6 +1976,7 @@ export default function WorkspaceProjectView({
   }, [columns.length, projectType]);
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [overDragId, setOverDragId] = useState<string | null>(null);
 
   const handleRenameColumn = (id: string, newHeader: string) => {
     setColumns(prev => prev.map(col => col.id === id ? { ...col, header: newHeader } : col));
@@ -2000,7 +2088,14 @@ export default function WorkspaceProjectView({
       });
     }
 
-    if (!sortConfig) return filtered;
+    if (!sortConfig) {
+      return [...filtered].sort((a, b) => {
+        const orderA = Number(a.order) || 0;
+        const orderB = Number(b.order) || 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.id.localeCompare(b.id);
+      });
+    }
 
     const getAssigneeName = (row: any) => {
       if (row.assignees && Array.isArray(row.assignees) && row.assignees.length > 0) {
@@ -2664,6 +2759,77 @@ export default function WorkspaceProjectView({
     return () => unsub();
   }, [projectType]);
 
+  const handleMoveSubtask = useCallback(async (subtaskId: string, direction: 'up' | 'down') => {
+    const subtask = rawTickets.find(t => t.id === subtaskId);
+    if (!subtask || !subtask.parentId) return;
+
+    // Get the visible siblings under this parent (exactly as rendered in the UI)
+    const visibleData = data.filter(r => rowMatchesStatus(r));
+    const visibleSiblings = getSubtaskRows(subtask.parentId, visibleData);
+
+    const visibleIdx = visibleSiblings.findIndex(t => t.id === subtaskId);
+    if (visibleIdx === -1) return;
+
+    const targetVisibleIdx = direction === 'up' ? visibleIdx - 1 : visibleIdx + 1;
+    if (targetVisibleIdx < 0 || targetVisibleIdx >= visibleSiblings.length) return;
+
+    const targetSubtask = visibleSiblings[targetVisibleIdx];
+
+    // Get all siblings (both visible and hidden) sorted by current order
+    const allSiblings = rawTickets
+      .filter(t => t.parentId === subtask.parentId)
+      .sort((a, b) => {
+        const orderA = Number(a.order) || 0;
+        const orderB = Number(b.order) || 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.id.localeCompare(b.id); // Tie-breaker for stable sorting!
+      });
+
+    const idxA = allSiblings.findIndex(t => t.id === subtaskId);
+    const idxB = allSiblings.findIndex(t => t.id === targetSubtask.id);
+    if (idxA === -1 || idxB === -1) return;
+
+    // Swap the elements in the allSiblings array
+    const newSiblings = [...allSiblings];
+    const temp = newSiblings[idxA];
+    newSiblings[idxA] = newSiblings[idxB];
+    newSiblings[idxB] = temp;
+
+    // Build the updates and update local state optimistically
+    const updates: { id: string; order: number }[] = [];
+    const localUpdatedTickets = rawTickets.map(t => {
+      if (t.parentId === subtask.parentId) {
+        const siblingIdx = newSiblings.findIndex(s => s.id === t.id);
+        if (siblingIdx !== -1) {
+          const newOrder = siblingIdx + 1;
+          if ((Number(t.order) || 0) !== newOrder) {
+            updates.push({ id: t.id, order: newOrder });
+          }
+          return { ...t, order: newOrder };
+        }
+      }
+      return t;
+    });
+
+    // Optimistically update the UI
+    setRawTickets(localUpdatedTickets);
+
+    // Persist all changed orders to Firestore using batch write
+    if (updates.length > 0) {
+      try {
+        const db = getDb();
+        const batch = writeBatch(db);
+        updates.forEach(u => {
+          const docRef = doc(db, 'tickets', u.id);
+          batch.update(docRef, { order: u.order, updatedAt: new Date() });
+        });
+        await batch.commit();
+      } catch (err) {
+        console.error('Failed to move subtask:', err);
+      }
+    }
+  }, [rawTickets, data, rowMatchesStatus, getSubtaskRows]);
+
   const handleUpdateRow = async (id: string, patch: any) => {
     try {
       const updatedPatch = { ...patch };
@@ -3221,13 +3387,8 @@ export default function WorkspaceProjectView({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        delay: 250,
-        tolerance: 5,
+        distance: 4,
       },
-      bypassActivationConstraint({ event }) {
-        const target = event.target as HTMLElement | null;
-        return !!target?.closest('[data-drag-handle]');
-      }
     }),
     useSensor(KeyboardSensor)
   );
@@ -3617,6 +3778,42 @@ export default function WorkspaceProjectView({
 
   const [isAddingGroup, setIsAddingGroup] = useState(false);
 
+  const visibleData = data.filter(r => rowMatchesStatus(r));
+  const activeRow = activeDragId && activeDragId.startsWith('row-')
+    ? data.find(r => r.id === activeDragId.replace('row-', ''))
+    : null;
+  const isDraggingMain = !!(activeRow && !activeRow.parentId);
+  const activeParentId = activeRow?.parentId || null;
+
+  const shouldShowSubtasks = (parentId: string) => {
+    if (!expandedIds.has(parentId)) return false;
+    if (isDraggingMain) return false;
+    if (activeParentId && activeParentId !== parentId) return false;
+    return true;
+  };
+
+  const orderedRowIds: string[] = [];
+  for (const group of groups) {
+    const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
+    for (const row of groupRows) {
+      orderedRowIds.push(`row-${row.id}`);
+      if (shouldShowSubtasks(row.id)) {
+        const subRows = visibleData.filter((sub: any) => sub.parentId === row.id);
+        for (const sub of subRows) {
+          orderedRowIds.push(`row-${sub.id}`);
+        }
+      }
+    }
+  }
+
+  const dragDirection = (() => {
+    if (!activeDragId || !overDragId) return null;
+    const activeIdx = orderedRowIds.indexOf(activeDragId);
+    const overIdx = orderedRowIds.indexOf(overDragId);
+    if (activeIdx === -1 || overIdx === -1) return null;
+    return activeIdx < overIdx ? 'down' : 'up';
+  })();
+
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
@@ -3866,6 +4063,7 @@ export default function WorkspaceProjectView({
           accessibility={{ restoreFocus: false }}
           onDragStart={(e) => {
             setActiveDragId(e.active.id as string);
+            setOverDragId(null);
             if (String(e.active.id).startsWith('row-')) {
               setSortConfig(null);
             }
@@ -3875,10 +4073,20 @@ export default function WorkspaceProjectView({
             nestTargetIdRef.current = null;
             nestLastOverIdRef.current = null;
             setNestHighlightId(null);
-          }} onDragOver={handleDragOver} onDragEnd={(e) => {
+          }}
+          onDragOver={(e) => {
+            setOverDragId(e.over?.id as string || null);
+            handleDragOver(e);
+          }}
+          onDragEnd={(e) => {
             setActiveDragId(null);
+            setOverDragId(null);
             handleDragEnd(e);
-          }} onDragCancel={() => setActiveDragId(null)}>
+          }}
+          onDragCancel={() => {
+            setActiveDragId(null);
+            setOverDragId(null);
+          }}>
           <SortableContext items={groups.map(g => `group-sortable-${g.id}`)} strategy={verticalListSortingStrategy}>
             {groups.map((group) => {
               const visibleData = data.filter(r => rowMatchesStatus(r));
@@ -3964,7 +4172,7 @@ export default function WorkspaceProjectView({
                       <table className="w-full border-collapse text-left table-fixed" style={{ minWidth: `${totalTableWidth}px`, width: '100%' }}>
                         <thead className="sticky top-0 z-10 shadow-sm">
                           <tr>
-                            <th style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
+                            <th style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} className="sticky top-0 bg-[#F9FAFB] z-10 px-2 py-3 border-b border-[#E2E4E9]">
                               <div className="flex items-center pl-1">
                                 <input
                                   type="checkbox"
@@ -4031,7 +4239,7 @@ export default function WorkspaceProjectView({
                         <GroupDroppableBody groupId={group.id}>
                           <SortableContext items={groupRows.flatMap(r => [
                             `row-${r.id}`,
-                            ...(expandedIds.has(r.id) ? getSubtaskRows(r.id, visibleData).map((sub: any) => `row-${sub.id}`) : [])
+                            ...(shouldShowSubtasks(r.id) ? getSubtaskRows(r.id, visibleData).map((sub: any) => `row-${sub.id}`) : [])
                           ])} strategy={verticalListSortingStrategy}>
                             {groupRows.map(row => (
                               <React.Fragment key={row.id}>
@@ -4083,39 +4291,52 @@ export default function WorkspaceProjectView({
                                   onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
                                   uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === row.id).map((s: any) => s.status).filter(Boolean)))}
                                   columnWidths={columnWidths}
+                                  activeDragId={activeDragId}
+                                  isDragOverTarget={overDragId === `row-${row.id}`}
+                                  dragDirection={dragDirection}
+                                  onMoveSubtask={handleMoveSubtask}
                                 />
-                                {expandedIds.has(row.id) && getSubtaskRows(row.id, visibleData).map(subRow => (
-                                  <SortableRow
-                                    key={subRow.id}
-                                    row={subRow}
-                                    columns={columns}
-                                    onUpdate={handleUpdateRow}
-                                    setEditingRowId={setEditingRowId}
-                                    teamMembers={teamMembers}
-                                    statusOptions={statusOptions}
-                                    isSubRow={true}
-                                    deleteRow={deleteRow}
-                                    projectType={projectType}
-                                    onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
-                                      e.preventDefault();
-                                      setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
-                                    }}
-                                    isSelected={selectedRowIds.has(subRow.id)}
-                                    onToggleSelect={(shiftKey?: boolean) => handleToggleSelectRow(subRow.id, shiftKey)}
-                                    onCommentsClick={handleCommentsButtonClick}
-                                    isNestTarget={nestHighlightId === subRow.id}
-                                    selectedCount={selectedRowIds.size}
-                                    customBillableHours={customBillableHours}
-                                    onCreateBillableHour={handleCreateBillableHour}
-                                    companies={companies}
-                                    subtaskFilter={subtaskFilters[subRow.id] || 'all'}
-                                    onSetSubtaskFilter={(rid: string, val: string) => setSubtaskFilters(prev => ({ ...prev, [rid]: val }))}
-                                    subtaskSort={subtaskSorts[subRow.id] || 'none'}
-                                    onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
-                                    uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === subRow.id).map((s: any) => s.status).filter(Boolean)))}
-                                    columnWidths={columnWidths}
-                                  />
-                                ))}
+                                {shouldShowSubtasks(row.id) && (() => {
+                                  const subRows = getSubtaskRows(row.id, visibleData);
+                                  return subRows.map((subRow, subIndex) => (
+                                    <SortableRow
+                                      key={subRow.id}
+                                      row={subRow}
+                                      columns={columns}
+                                      onUpdate={handleUpdateRow}
+                                      setEditingRowId={setEditingRowId}
+                                      teamMembers={teamMembers}
+                                      statusOptions={statusOptions}
+                                      isSubRow={true}
+                                      deleteRow={deleteRow}
+                                      projectType={projectType}
+                                      onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
+                                        e.preventDefault();
+                                        setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
+                                      }}
+                                      isSelected={selectedRowIds.has(subRow.id)}
+                                      onToggleSelect={(shiftKey?: boolean) => handleToggleSelectRow(subRow.id, shiftKey)}
+                                      onCommentsClick={handleCommentsButtonClick}
+                                      isNestTarget={nestHighlightId === subRow.id}
+                                      selectedCount={selectedRowIds.size}
+                                      customBillableHours={customBillableHours}
+                                      onCreateBillableHour={handleCreateBillableHour}
+                                      companies={companies}
+                                      subtaskFilter={subtaskFilters[subRow.id] || 'all'}
+                                      onSetSubtaskFilter={(rid: string, val: string) => setSubtaskFilters(prev => ({ ...prev, [rid]: val }))}
+                                      subtaskSort={subtaskSorts[subRow.id] || 'none'}
+                                      onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
+                                      uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === subRow.id).map((s: any) => s.status).filter(Boolean)))}
+                                      columnWidths={columnWidths}
+                                      activeDragId={activeDragId}
+                                      isDragOverTarget={overDragId === `row-${subRow.id}`}
+                                      dragDirection={dragDirection}
+                                      onMoveSubtask={handleMoveSubtask}
+                                      isFirstSubtask={subIndex === 0}
+                                      isLastSubtask={subIndex === subRows.length - 1}
+                                    />
+                                  ));
+                                })()}
                               </React.Fragment>
                             ))}
                           </SortableContext>
@@ -4185,7 +4406,7 @@ export default function WorkspaceProjectView({
                     <table className="w-full border-collapse text-left table-fixed" style={{ minWidth: `${totalTableWidth}px`, width: `${totalTableWidth}px` }}>
                       <tbody>
                         <tr className="bg-white">
-                          <td style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }} className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+                          <td style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} className="px-2 py-3 text-[13px] border-b border-[#F0F2F5]">
                             <div className="flex items-center gap-2 text-[#8E9299]">
                               <GripVertical className="w-4 h-4" />
                             </div>
