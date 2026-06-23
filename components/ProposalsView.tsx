@@ -286,7 +286,7 @@ export default function ProposalsView({
     const todayString = new Date().toISOString().split('T')[0];
     
     return (
-      <div className="proposal-print-root flex-grow flex flex-col overflow-hidden absolute inset-0 bg-gray-50 z-10 print:bg-white print:static print:h-auto print:overflow-visible">
+      <div className="proposal-print-root flex-grow flex flex-col overflow-hidden absolute inset-0 bg-gray-50 z-10 print:bg-white print:block print:static print:h-auto print:overflow-visible">
         {/* Editor Top Bar - Hidden when printing */}
         <div className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-4 md:px-6 gap-3 shrink-0 print:hidden">
           <button 
@@ -321,7 +321,7 @@ export default function ProposalsView({
         </div>
 
         {/* Invoice Form Area */}
-        <div className="flex-grow overflow-y-auto p-4 md:p-8 flex justify-center items-start print:p-0 print:overflow-visible">
+        <div className="flex-grow overflow-y-auto p-4 md:p-8 flex justify-center items-start print:p-0 print:overflow-visible print:block">
           <div className="w-full max-w-4xl bg-white rounded-lg shadow-sm border border-[#E2E4E9] p-4 md:p-8 print:shadow-none print:border-none print:p-0">
             {/* Header section */}
             <div className="flex flex-col md:flex-row justify-between items-stretch md:items-start gap-6 mb-8 border-b border-[#E2E4E9] pb-8 print:border-b-2 print:border-gray-300 print:flex-row print:gap-0">
@@ -572,7 +572,7 @@ export default function ProposalsView({
             </div>
 
             {/* Attachments Section */}
-            <div className="mt-8 border-t border-[#E2E4E9] pt-8 print:pt-6">
+            <div className="mt-8 border-t border-[#E2E4E9] pt-8 print:hidden">
               <h4 className="text-sm font-bold text-[#1C1F23] mb-4 uppercase tracking-wider flex items-center gap-2">
                 <Paperclip className="w-4 h-4 text-[#8E9299]" />
                 Attachments
@@ -685,8 +685,11 @@ export default function ProposalsView({
                       type="text"
                       value={currentDoc.cardholderName || ''}
                       onChange={(e) => setCurrentDoc({ ...currentDoc, cardholderName: e.target.value })}
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                     />
+                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                      {currentDoc.cardholderName || ' '}
+                    </div>
                   </div>
                   <div className="col-span-1 sm:col-span-2 md:col-span-3">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Card Number</label>
@@ -694,8 +697,11 @@ export default function ProposalsView({
                       type="text"
                       value={currentDoc.cardNumber || ''}
                       onChange={(e) => setCurrentDoc({ ...currentDoc, cardNumber: e.target.value })}
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                     />
+                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                      {currentDoc.cardNumber || ' '}
+                    </div>
                   </div>
                   <div className="col-span-1">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Expiry</label>
@@ -704,8 +710,11 @@ export default function ProposalsView({
                       value={currentDoc.cardExpiry || ''}
                       onChange={(e) => setCurrentDoc({ ...currentDoc, cardExpiry: e.target.value })}
                       placeholder="MM/YY"
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                     />
+                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                      {currentDoc.cardExpiry || ' '}
+                    </div>
                   </div>
                   <div className="col-span-1">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">CVV</label>
@@ -713,8 +722,11 @@ export default function ProposalsView({
                       type="text"
                       value={currentDoc.cardCvv || ''}
                       onChange={(e) => setCurrentDoc({ ...currentDoc, cardCvv: e.target.value })}
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                     />
+                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                      {currentDoc.cardCvv || ' '}
+                    </div>
                   </div>
                   <div className="col-span-1 sm:col-span-2 md:col-span-1">
                     <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Billing Zip</label>
@@ -722,8 +734,11 @@ export default function ProposalsView({
                       type="text"
                       value={currentDoc.billingZip || ''}
                       onChange={(e) => setCurrentDoc({ ...currentDoc, billingZip: e.target.value })}
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                     />
+                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                      {currentDoc.billingZip || ' '}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -735,8 +750,11 @@ export default function ProposalsView({
                     type="date"
                     value={currentDoc.signatureDate || todayString}
                     onChange={(e) => setCurrentDoc({ ...currentDoc, signatureDate: e.target.value })}
-                    className="w-full max-w-[180px] text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-2 py-1 outline-none bg-white print:border-none print:bg-transparent print:p-0"
+                    className="w-full max-w-[180px] text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-2 py-1 outline-none bg-white print:hidden"
                   />
+                  <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                    {currentDoc.signatureDate || todayString || ' '}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Client Printed Name</label>
@@ -745,8 +763,11 @@ export default function ProposalsView({
                     value={currentDoc.clientPrintedName || ''}
                     onChange={(e) => setCurrentDoc({ ...currentDoc, clientPrintedName: e.target.value })}
                     placeholder="Printed name"
-                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                   />
+                  <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                    {currentDoc.clientPrintedName || ' '}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Signature</label>
@@ -755,8 +776,11 @@ export default function ProposalsView({
                     value={currentDoc.signatureName || ''}
                     onChange={(e) => setCurrentDoc({ ...currentDoc, signatureName: e.target.value })}
                     placeholder="Signature"
-                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                   />
+                  <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                    {currentDoc.signatureName || ' '}
+                  </div>
                 </div>
               </div>
             </div>

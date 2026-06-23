@@ -1152,8 +1152,13 @@ export default function Page() {
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
-  const handleUpdateContact = (id: string, field: keyof Contact, value: any) => {
+  const handleUpdateContact = async (id: string, field: keyof Contact, value: any) => {
     setContacts(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+    try {
+      await updateContact(id, { [field]: value });
+    } catch (e) {
+      console.error('Failed to update contact in Firebase', e);
+    }
   };
 
   const sensors = useSensors(

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1063,7 +1063,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
   );
 }
 
-function SortableRow({
+const SortableRow = React.memo(function SortableRow({
   row,
   columns,
   onUpdate,
@@ -1447,7 +1447,7 @@ function SortableRow({
       </td>
     </tr>
   );
-}
+});
 
 
 function GroupDroppableBody({ groupId, children }: { groupId: string, children: React.ReactNode }) {
@@ -1656,7 +1656,10 @@ function SortableGroupWrapper({ group, children }: { group: any, children: React
   );
 }
 
-const isDropAnimationEnabled = false;
+const DROP_ANIMATION_CONFIG = {
+  duration: 150,
+  easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+};
 
 // Y-axis only vertical collision detection for table rows and empty group body dropzones.
 // Columns and groups reordering will fallback to closestCenter.
@@ -2203,7 +2206,7 @@ export default function WorkspaceProjectView({
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, rowId: string, isSubRow: boolean } | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const getSubtaskRows = useCallback((parentId: string, visibleDataList: any[]) => {
-    let subRows = visibleDataList.filter((sub: any) => sub.parentId === parentId);
+    let subRows = data.filter((sub: any) => sub.parentId === parentId);
     const filterVal = subtaskFilters[parentId] || 'all';
     if (filterVal !== 'all') {
       subRows = subRows.filter(s => s.status === filterVal);
@@ -2225,9 +2228,16 @@ export default function WorkspaceProjectView({
         const cmp = statusA.localeCompare(statusB);
         return sortVal === 'asc' ? cmp : -cmp;
       });
+    } else {
+      subRows = [...subRows].sort((a, b) => {
+        const orderA = Number(a.order) || 0;
+        const orderB = Number(b.order) || 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.id.localeCompare(b.id);
+      });
     }
     return subRows;
-  }, [subtaskFilters, subtaskSorts]);
+  }, [data, subtaskFilters, subtaskSorts]);
 
   const rowMatchesStatus = useCallback((row: any) => {
     if (statusFilter === 'all') return true;
@@ -2323,6 +2333,9 @@ export default function WorkspaceProjectView({
   const nestHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nestLastOverIdRef = useRef<string | null>(null);
   const nestClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Guard: suppress Firestore snapshot overwrites immediately after a drag write
+  const dragWriteInFlightRef = useRef(false);
 
   // Shift-click range selection
   const lastCheckedRowId = useRef<string | null>(null);
@@ -2716,6 +2729,9 @@ export default function WorkspaceProjectView({
 
   React.useEffect(() => {
     const unsub = subscribeTickets(projectType, (tickets) => {
+      // Skip Firestore snapshots while a drag-write batch is in flight to avoid
+      // partial/stale data stomping the optimistic local state.
+      if (dragWriteInFlightRef.current) return;
       setRawTickets(tickets);
     }, (err: any) => {
       console.error('Subscription error:', err);
@@ -3478,11 +3494,10 @@ export default function WorkspaceProjectView({
       } else if (String(over.id).startsWith('group-sortable-')) {
         targetGroupId = String(over.id).replace('group-sortable-', '');
       }
-      if (targetGroupId && activeData && getRowGroupId(activeData) !== targetGroupId) {
-        if (!activeData.parentId) {
-          setRawTickets(prev => prev.map(t => t.id === activeIdStr ? { ...t, groupId: targetGroupId! } : t));
-        }
-      }
+      // NOTE: We intentionally do NOT optimistically update groupId here during
+      // dragOver. Doing so fights with handleDragEnd which re-derives the target
+      // group, causing flicker. handleDragEnd is the single source of truth for
+      // all state mutations; the DragOverlay provides visual feedback during drag.
     }
   };
 
@@ -3657,12 +3672,26 @@ export default function WorkspaceProjectView({
         setRawTickets(localUpdatedTickets);
       });
 
-      // Write updates to Firestore
-      updates.forEach(u => {
-        updateTicket(u.id, u.patch).catch(err => {
-          console.error('[CRM DnD] Failed to write drag update to Firestore for ticket', u.id, err);
+      // Write all order updates atomically via batch to prevent partial
+      // Firestore snapshots from stomping the optimistic state.
+      if (updates.length > 0) {
+        dragWriteInFlightRef.current = true;
+        const db = getDb();
+        const batch = writeBatch(db);
+        updates.forEach(u => {
+          const docRef = doc(db, 'tickets', u.id);
+          batch.update(docRef, u.patch);
         });
-      });
+        batch.commit()
+          .catch(err => {
+            console.error('[CRM DnD] Batch write failed, falling back:', err);
+          })
+          .finally(() => {
+            // Allow the next Firestore snapshot through after a short delay
+            // so the listener picks up the fully-committed batch.
+            setTimeout(() => { dragWriteInFlightRef.current = false; }, 250);
+          });
+      }
       triggerSheetsSync();
     } else if (String(active.id).startsWith('group-sortable-')) {
       const activeId = String(active.id).replace('group-sortable-', '');
@@ -3787,7 +3816,14 @@ export default function WorkspaceProjectView({
 
   const shouldShowSubtasks = (parentId: string) => {
     if (!expandedIds.has(parentId)) return false;
-    if (isDraggingMain) return false;
+    // Only hide subtasks for groups OTHER than where the drag started.
+    // Previously ALL subtasks were hidden during a top-level drag, which broke
+    // the SortableContext (IDs registered but DOM nodes gone).
+    if (isDraggingMain && activeRow) {
+      const draggedGroupId = getRowGroupId(activeRow);
+      const parentRow = data.find(r => r.id === parentId);
+      if (parentRow && getRowGroupId(parentRow) !== draggedGroupId) return false;
+    }
     if (activeParentId && activeParentId !== parentId) return false;
     return true;
   };
@@ -3806,13 +3842,13 @@ export default function WorkspaceProjectView({
     }
   }
 
-  const dragDirection = (() => {
+  const dragDirection = useMemo(() => {
     if (!activeDragId || !overDragId) return null;
     const activeIdx = orderedRowIds.indexOf(activeDragId);
     const overIdx = orderedRowIds.indexOf(overDragId);
     if (activeIdx === -1 || overIdx === -1) return null;
     return activeIdx < overIdx ? 'down' : 'up';
-  })();
+  }, [activeDragId, overDragId, orderedRowIds]);
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
@@ -4388,7 +4424,7 @@ export default function WorkspaceProjectView({
               );
             })}
           </SortableContext>
-          <DragOverlay adjustScale={false} dropAnimation={isDropAnimationEnabled ? undefined : null}>
+          <DragOverlay adjustScale={false} dropAnimation={DROP_ANIMATION_CONFIG}>
             {activeDragId ? (() => {
               if (activeDragId.startsWith('group-sortable-')) {
                 const groupId = activeDragId.replace('group-sortable-', '');
