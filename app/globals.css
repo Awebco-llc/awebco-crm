@@ -166,3 +166,19 @@
   transform: rotate(45deg) !important;
 }
 
+/* Hyperlinks inside rich editor and preview containers */
+.rich-editor-content a,
+.rich-text-content a {
+  color: #1061E3 !important;
+  text-decoration: underline !important;
+  cursor: pointer !important;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.rich-editor-content a:hover,
+.rich-text-content a:hover {
+  color: #0b4cb2 !important;
+}
+
+

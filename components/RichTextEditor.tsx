@@ -11,7 +11,10 @@ import {
   Type, 
   Palette, 
   RotateCcw,
-  ChevronDown
+  ChevronDown,
+  Link,
+  Unlink,
+  ExternalLink
 } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -57,8 +60,176 @@ export default function RichTextEditor({
     underline: false,
     strikethrough: false,
     bullet: false,
-    checklist: false
+    checklist: false,
+    link: false
   });
+
+  const [linkMenu, setLinkMenu] = useState<{
+    element: HTMLAnchorElement;
+    url: string;
+    top: number;
+    left: number;
+  } | null>(null);
+
+  const savedRangeRef = useRef<Range | null>(null);
+
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      savedRangeRef.current = sel.getRangeAt(0);
+    } else {
+      savedRangeRef.current = null;
+    }
+  };
+
+  const restoreSelection = () => {
+    const sel = window.getSelection();
+    if (sel && savedRangeRef.current) {
+      sel.removeAllRanges();
+      sel.addRange(savedRangeRef.current);
+    }
+  };
+
+  const handleAddLink = () => {
+    saveSelection();
+    const selection = window.getSelection();
+    let selectedText = '';
+    if (selection) {
+      selectedText = selection.toString().trim();
+    }
+
+    const url = window.prompt('Enter URL:', 'https://');
+    if (url !== null && url.trim()) {
+      restoreSelection();
+      let formattedUrl = url.trim();
+      if (!/^https?:\/\//i.test(formattedUrl)) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+
+      if (selectedText.length === 0) {
+        const anchorHtml = `<a href="${formattedUrl}" target="_blank" rel="noopener noreferrer">${formattedUrl}</a>`;
+        document.execCommand('insertHTML', false, anchorHtml);
+      } else {
+        document.execCommand('createLink', false, formattedUrl);
+        // Add target="_blank" to created link
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          let node: Node | null = sel.getRangeAt(0).startContainer;
+          while (node && node !== editorRef.current) {
+            if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === 'A') {
+              const a = node as HTMLAnchorElement;
+              a.setAttribute('target', '_blank');
+              a.setAttribute('rel', 'noopener noreferrer');
+              break;
+            }
+            node = node.parentNode;
+          }
+        }
+      }
+      handleInput();
+      setTimeout(updateLinkMenu, 50);
+    }
+  };
+
+  const updateLinkMenu = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) {
+      setLinkMenu(null);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    let node: Node | null = range.startContainer;
+
+    let anchor: HTMLAnchorElement | null = null;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === 'A') {
+        anchor = node as HTMLAnchorElement;
+        break;
+      }
+      node = node.parentNode;
+    }
+
+    if (anchor && containerRef.current) {
+      const rect = anchor.getBoundingClientRect();
+      const containerRect = containerRef.current.getBoundingClientRect();
+      setLinkMenu({
+        element: anchor,
+        url: anchor.getAttribute('href') || '',
+        top: rect.bottom - containerRect.top + 4,
+        left: Math.max(8, rect.left - containerRect.left),
+      });
+    } else {
+      setLinkMenu(null);
+    }
+  };
+
+  const handleEditLink = () => {
+    if (!linkMenu) return;
+    const newUrl = window.prompt('Edit URL:', linkMenu.url);
+    if (newUrl !== null) {
+      let formattedUrl = newUrl.trim();
+      if (formattedUrl) {
+        if (!/^https?:\/\//i.test(formattedUrl)) {
+          formattedUrl = 'https://' + formattedUrl;
+        }
+        linkMenu.element.setAttribute('href', formattedUrl);
+        if (linkMenu.element.innerText.trim() === linkMenu.url.trim()) {
+          linkMenu.element.innerText = formattedUrl;
+        }
+        handleInput();
+        updateLinkMenu();
+      }
+    }
+  };
+
+  const handleUnlink = () => {
+    if (!linkMenu) return;
+    const parent = linkMenu.element.parentNode;
+    if (parent) {
+      while (linkMenu.element.firstChild) {
+        parent.insertBefore(linkMenu.element.firstChild, parent.contains(linkMenu.element) ? linkMenu.element : null);
+      }
+      if (parent.contains(linkMenu.element)) {
+        parent.removeChild(linkMenu.element);
+      }
+      handleInput();
+      setLinkMenu(null);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      return;
+    }
+
+    const pastedText = e.clipboardData.getData('text').trim();
+    const isUrl = /^https?:\/\/[^\s]+$/i.test(pastedText) || /^www\.[^\s]+$/i.test(pastedText);
+    if (isUrl) {
+      e.preventDefault();
+      let url = pastedText;
+      if (/^www\./i.test(url)) {
+        url = 'https://' + url;
+      }
+      document.execCommand('createLink', false, url);
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node: Node | null = sel.getRangeAt(0).startContainer;
+        while (node && node !== editorRef.current) {
+          if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === 'A') {
+            const a = node as HTMLAnchorElement;
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener noreferrer');
+            break;
+          }
+          node = node.parentNode;
+        }
+      }
+      handleInput();
+      setTimeout(updateLinkMenu, 50);
+    }
+  };
 
   // Custom Undo/Redo history stack
   const historyRef = useRef<string[]>([value || '']);
@@ -138,6 +309,7 @@ export default function RichTextEditor({
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setShowColors(false);
         setShowSizes(false);
+        setLinkMenu(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -347,16 +519,21 @@ export default function RichTextEditor({
 
   const updateActiveFormats = () => {
     let isChecklist = false;
+    let isLink = false;
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0 && editorRef.current) {
       const range = selection.getRangeAt(0);
       let node: Node | null = range.startContainer;
       while (node && node !== editorRef.current) {
-        if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === 'UL') {
-          if ((node as HTMLElement).classList.contains('rich-checklist')) {
-            isChecklist = true;
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          if ((node as HTMLElement).tagName === 'UL') {
+            if ((node as HTMLElement).classList.contains('rich-checklist')) {
+              isChecklist = true;
+            }
           }
-          break;
+          if ((node as HTMLElement).tagName === 'A') {
+            isLink = true;
+          }
         }
         node = node.parentNode;
       }
@@ -368,7 +545,8 @@ export default function RichTextEditor({
       underline: document.queryCommandState('underline'),
       strikethrough: document.queryCommandState('strikeThrough'),
       bullet: document.queryCommandState('insertUnorderedList') && !isChecklist,
-      checklist: isChecklist
+      checklist: isChecklist,
+      link: isLink
     });
   };
 
@@ -496,6 +674,18 @@ export default function RichTextEditor({
           >
             <CheckSquare className="w-3.5 h-3.5" />
           </button>
+
+          <div className="w-[1px] h-4 bg-[#E2E4E9] mx-1" />
+
+          {/* Link button */}
+          <button
+            type="button"
+            onClick={handleAddLink}
+            className={`p-1.5 rounded-lg transition-colors ${activeFormats.link ? 'bg-[#1061E3]/10 text-[#1061E3]' : 'text-[#4A4D53] hover:bg-gray-100'}`}
+            title="Insert Link"
+          >
+            <Link className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {/* Clear formatting button */}
@@ -516,12 +706,56 @@ export default function RichTextEditor({
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onClick={handleEditorClick}
-        onKeyUp={updateActiveFormats}
-        onMouseUp={updateActiveFormats}
+        onKeyUp={() => { updateActiveFormats(); updateLinkMenu(); }}
+        onMouseUp={() => { updateActiveFormats(); updateLinkMenu(); }}
+        onScroll={updateLinkMenu}
+        onPaste={handlePaste}
         data-placeholder={placeholder}
         style={{ minHeight }}
         className="rich-editor-content p-4 outline-none text-sm text-[#1C1F23] overflow-y-auto bg-white cursor-text select-text focus:outline-none flex-grow"
       />
+
+      {/* Floating Link Control Toolbar */}
+      {linkMenu && (
+        <div
+          style={{
+            position: 'absolute',
+            top: `${linkMenu.top}px`,
+            left: `${linkMenu.left}px`,
+            transform: 'translateY(0)',
+          }}
+          className="z-50 flex items-center gap-1.5 bg-white border border-[#E2E4E9] rounded-lg shadow-lg px-2.5 py-1.5 text-xs select-none animate-fade-in pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.preventDefault()} // prevent editor blur
+        >
+          <a
+            href={linkMenu.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[#1061E3] hover:underline font-semibold truncate max-w-[160px] mr-1"
+            title={linkMenu.url}
+          >
+            <ExternalLink className="w-3 h-3 shrink-0" />
+            <span className="truncate">{linkMenu.url}</span>
+          </a>
+          <div className="w-[1px] h-3 bg-[#E2E4E9] mx-0.5" />
+          <button
+            type="button"
+            onClick={handleEditLink}
+            className="px-1.5 py-0.5 rounded text-[#4A4D53] hover:bg-gray-100 hover:text-[#1C1F23] font-medium"
+          >
+            Change
+          </button>
+          <button
+            type="button"
+            onClick={handleUnlink}
+            className="px-1.5 py-0.5 rounded text-[#D32F2F] hover:bg-red-50 font-medium flex items-center gap-0.5"
+          >
+            <Unlink className="w-3 h-3 shrink-0" />
+            Unlink
+          </button>
+        </div>
+      )}
     </div>
   );
 }

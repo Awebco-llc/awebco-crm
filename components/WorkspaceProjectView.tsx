@@ -79,6 +79,30 @@ const INITIAL_DATA = [
 
 const SUPPORT_TICKETS_BOARD_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_TICKETS_EMAIL || 'tickets@awebco.com';
 
+function linkifyText(text: string) {
+  if (!text) return '';
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-[#1061E3] hover:underline font-medium inline-flex items-center gap-0.5"
+        >
+          {part}
+          <ExternalLink className="w-3 h-3 inline-block shrink-0 align-middle" />
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 function SortableHeader({
   column,
   onDelete,
@@ -1340,7 +1364,7 @@ const SortableRow = React.memo(function SortableRow({
                 isInline={true}
               />
             </div>
-          ) : col.id === 'url' ? (
+          ) : (col.id === 'url' || col.id === 'pastelUrl' || col.id === 'googleDriveUrl' || (typeof row[col.id] === 'string' && /(https?:\/\/[^\s]+)/.test(row[col.id] || ''))) ? (
             <EditableCell
               value={row[col.id] || ''}
               onSave={(newVal) => {
@@ -1348,19 +1372,24 @@ const SortableRow = React.memo(function SortableRow({
               }}
               renderValue={(v) => {
                 if (!v) return <span className="text-[#C8CDD5] text-xs">—</span>;
-                const url = /^https?:\/\//i.test(v) ? v : `https://${v}`;
-                return (
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1 text-[#1061E3] hover:text-blue-800 hover:underline font-medium truncate max-w-[180px] transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{v.replace(/^https?:\/\//i, '')}</span>
-                  </a>
-                );
+                const trimmed = v.trim();
+                const isSingleUrl = /^https?:\/\/[^\s]+$/i.test(trimmed);
+                if (isSingleUrl || ['url', 'pastelUrl', 'googleDriveUrl'].includes(col.id)) {
+                  const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+                  return (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1 text-[#1061E3] hover:text-blue-800 hover:underline font-medium truncate max-w-[180px] transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{trimmed.replace(/^https?:\/\//i, '')}</span>
+                    </a>
+                  );
+                }
+                return <span className="whitespace-pre-wrap">{linkifyText(v)}</span>;
               }}
             />
           ) : (
@@ -4839,6 +4868,37 @@ export default function WorkspaceProjectView({
                                   className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC]"
                                 />
                               </div>
+
+                              {/* Dynamic Columns not hardcoded */}
+                              {(() => {
+                                const hardcodedIds = ['projectName', 'status', 'priority', 'assignee', 'deadline', 'billableHours', 'companyName', 'contactName', 'email', 'category', 'updatesCount'];
+                                return columns.filter(c => !hardcodedIds.includes(c.id)).map(col => (
+                                  <div key={col.id} className="flex-grow flex-shrink-0 min-w-[200px] md:min-w-[240px]">
+                                    <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">{col.header}</label>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={editingRow[col.id] ?? ''}
+                                        onChange={e => handleUpdateRow(editingRowId, { [col.id]: e.target.value })}
+                                        placeholder="N/A"
+                                        className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23] h-[38px] transition-all hover:border-[#CCCCCC] flex-grow"
+                                      />
+                                      {/* Link Open Button */}
+                                      {(['url', 'pastelUrl', 'googleDriveUrl'].includes(col.id) || (typeof editingRow[col.id] === 'string' && /^https?:\/\//i.test(editingRow[col.id]))) && editingRow[col.id] && (
+                                        <a
+                                          href={/^https?:\/\//i.test(editingRow[col.id]) ? editingRow[col.id] : `https://${editingRow[col.id]}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="p-2 text-[#1061E3] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100 shrink-0 h-[38px] flex items-center justify-center"
+                                          title="Open link in new tab"
+                                        >
+                                          <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                ));
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -5324,14 +5384,27 @@ export default function WorkspaceProjectView({
                             />
                           </div>
                         ) : (
-                          <input
-                            type={col.id === 'deadline' ? 'date' : 'text'}
-                            value={editingRow?.[col.id] ?? ''}
-                            onChange={e => {
-                              handleUpdateRow(editingRowId, { [col.id]: e.target.value });
-                            }}
-                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent"
-                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type={col.id === 'deadline' ? 'date' : 'text'}
+                              value={editingRow?.[col.id] ?? ''}
+                              onChange={e => {
+                                handleUpdateRow(editingRowId, { [col.id]: e.target.value });
+                              }}
+                              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent flex-grow"
+                            />
+                            {(['url', 'pastelUrl', 'googleDriveUrl'].includes(col.id) || (typeof editingRow?.[col.id] === 'string' && /^https?:\/\//i.test(editingRow[col.id]))) && editingRow?.[col.id] && (
+                              <a
+                                href={/^https?:\/\//i.test(editingRow[col.id]) ? editingRow[col.id] : `https://${editingRow[col.id]}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 text-[#1061E3] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100 shrink-0"
+                                title="Open link in new tab"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            )}
+                          </div>
                         )}
                       </div>
                     ));
