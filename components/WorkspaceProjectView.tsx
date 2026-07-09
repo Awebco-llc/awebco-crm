@@ -1118,7 +1118,9 @@ const SortableRow = React.memo(function SortableRow({
   dragDirection = null,
   onMoveSubtask,
   isFirstSubtask = false,
-  isLastSubtask = false
+  isLastSubtask = false,
+  onPasteAsSubtasks,
+  hasCopiedTickets
 }: any) {
   const sortable = useSortable({ id: `row-${row.id}` });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
@@ -1452,13 +1454,26 @@ const SortableRow = React.memo(function SortableRow({
                 }
               />
               {col.id === 'projectName' && !isSubRow && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); addSubRow(row.id); }}
-                  className="p-1 opacity-0 group-hover:opacity-100 hover:bg-[#E2E4E9] rounded text-[#1061E3] transition-colors ml-2 shrink-0 border border-transparent hover:border-[#1061E3]/20"
-                  title="Add Sub Row"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 shrink-0 ml-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); addSubRow(row.id); }}
+                    className="p-1 hover:bg-[#E2E4E9] rounded text-[#1061E3] transition-colors border border-transparent hover:border-[#1061E3]/20"
+                    title="Add Sub Row"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                  {hasCopiedTickets && onPasteAsSubtasks && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onPasteAsSubtasks(row.id); }}
+                      className="p-1 hover:bg-[#E2E4E9] rounded text-[#10B981] transition-colors border border-transparent hover:border-[#10B981]/20"
+                      title="Paste Copied Tasks as Subtasks"
+                    >
+                      <Clipboard className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -3381,6 +3396,31 @@ export default function WorkspaceProjectView({
     }
   };
 
+  const handlePasteAsSubtasks = async (targetParentId: string) => {
+    const copied = copiedTicketsRef.current;
+    if (copied.length === 0) return;
+
+    const parentRow = dataRef.current.find(r => r.id === targetParentId);
+    if (!parentRow) return;
+
+    const targetGroupId = getRowGroupId(parentRow);
+
+    try {
+      for (const item of copied) {
+        const { id: _, parentId: __, createdAt: ___, updatedAt: ____, ...itemRest } = item;
+        const newSubRow = {
+          ...itemRest,
+          parentId: targetParentId,
+          groupId: targetGroupId,
+          isManual: true,
+        };
+        await createTicket(newSubRow);
+      }
+    } catch (err) {
+      console.error('Failed to paste as subtasks', err);
+    }
+  };
+
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
@@ -4360,6 +4400,8 @@ export default function WorkspaceProjectView({
                                   isDragOverTarget={overDragId === `row-${row.id}`}
                                   dragDirection={dragDirection}
                                   onMoveSubtask={handleMoveSubtask}
+                                  onPasteAsSubtasks={handlePasteAsSubtasks}
+                                  hasCopiedTickets={copiedTickets.length > 0}
                                 />
                                 {shouldShowSubtasks(row.id) && (() => {
                                   const subRows = getSubtaskRows(row.id, visibleData);
@@ -4527,6 +4569,21 @@ export default function WorkspaceProjectView({
               >
                 <ArrowRight className="w-4 h-4 rotate-180" />
                 Convert to Main Task
+              </button>
+              <div className="h-px bg-[#E2E4E9] my-1" />
+            </>
+          )}
+          {!contextMenu.isSubRow && copiedTickets.length > 0 && (
+            <>
+              <button
+                onClick={async () => {
+                  await handlePasteAsSubtasks(contextMenu.rowId);
+                  setContextMenu(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-[#10B981] hover:bg-green-50/60 flex items-center gap-2 font-medium"
+              >
+                <Clipboard className="w-4 h-4 text-[#10B981]" />
+                Paste as Subtask
               </button>
               <div className="h-px bg-[#E2E4E9] my-1" />
             </>
