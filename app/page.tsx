@@ -2049,9 +2049,21 @@ export default function Page() {
             allowDeletingColumns={allowDeletingColumns} 
             openRowId={workspaceOpenRequest?.navName === 'Deals / Sales' ? workspaceOpenRequest.rowId : undefined}
             onCloseRow={handleCloseRow}
+            onOpenTask={handleOpenTask}
           />
         ) : canAccessCRM && activeContentNav === 'Proposals' ? (
-          <ProposalsView teamMembers={teamMembers} companies={companies} contacts={contacts} deals={deals} products={products} proposals={proposals} setProposals={setProposals} currentUserId={currentTeamMember?.id} />
+          <ProposalsView
+            teamMembers={teamMembers}
+            companies={companies}
+            contacts={contacts}
+            deals={deals}
+            products={products}
+            proposals={proposals}
+            setProposals={setProposals}
+            currentUserId={currentTeamMember?.id}
+            openRowId={workspaceOpenRequest?.navName === 'Proposals' ? workspaceOpenRequest.rowId : undefined}
+            onCloseRow={handleCloseRow}
+          />
         ) : canAccessCRM && activeContentNav === 'Price Catalog' ? (
           <ProductsServicesView products={products} setProducts={setProducts} proposals={proposals} />
         ) : canAccessCRM && activeContentNav === 'Files' ? (

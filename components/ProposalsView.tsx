@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Search, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft, ChevronUp, ChevronDown, ChevronsUpDown, Paperclip, Loader2, File, AlertCircle } from 'lucide-react';
 import { Company, Contact, TeamMember, ProductService, Proposal, ProposalItem, Deal } from './Shared';
-import { createProposal, updateProposal, deleteProposal } from '@/lib/crmStore';
+import { createProposal, updateProposal, deleteProposal, updateDeal } from '@/lib/crmStore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getStorageClient } from '@/lib/firebase';
 
@@ -34,7 +34,9 @@ export default function ProposalsView({
   products = [],
   proposals,
   setProposals,
-  currentUserId
+  currentUserId,
+  openRowId,
+  onCloseRow
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -43,11 +45,23 @@ export default function ProposalsView({
   products?: ProductService[],
   proposals: Proposal[],
   setProposals: React.Dispatch<React.SetStateAction<Proposal[]>>,
-  currentUserId?: string
+  currentUserId?: string,
+  openRowId?: string,
+  onCloseRow?: () => void
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'list' | 'edit'>('list');
   const [currentDoc, setCurrentDoc] = useState<Proposal | null>(null);
+
+  React.useEffect(() => {
+    if (openRowId) {
+      const propToOpen = proposals.find(p => p.id === openRowId);
+      if (propToOpen) {
+        setCurrentDoc(propToOpen);
+        setActiveView('edit');
+      }
+    }
+  }, [openRowId, proposals]);
 
   const [uploadProgress, setUploadProgress] = useState<{ [filename: string]: number }>({});
   const [isUploading, setIsUploading] = useState(false);
@@ -266,11 +280,21 @@ export default function ProposalsView({
           const { id, ...docWithoutId } = currentDoc;
           await createProposal(docWithoutId);
         }
+
+        // Bidirectional sync: if proposal is Accepted or Declined and has a linked deal
+        if (currentDoc.dealId) {
+          if (currentDoc.status === 'Accepted') {
+            await updateDeal(currentDoc.dealId, { status: 'WON' });
+          } else if (currentDoc.status === 'Declined') {
+            await updateDeal(currentDoc.dealId, { status: 'LOST' });
+          }
+        }
       } catch (e) {
         console.error('Failed to save proposal to Firebase', e);
       }
       
       setActiveView('list');
+      onCloseRow?.();
     }
   };
 
@@ -290,7 +314,7 @@ export default function ProposalsView({
         {/* Editor Top Bar - Hidden when printing */}
         <div className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-4 md:px-6 gap-3 shrink-0 print:hidden">
           <button 
-            onClick={() => setActiveView('list')}
+            onClick={() => { setActiveView('list'); onCloseRow?.(); }}
             className="flex items-center gap-2 text-[#4A4D53] hover:text-[#1061E3] font-semibold transition-colors justify-center sm:justify-start"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -406,6 +430,18 @@ export default function ProposalsView({
                   {availableDeals.map(deal => (
                     <option key={deal.id} value={deal.id}>{deal.name}</option>
                   ))}
+                </select>
+
+                <label className="block text-xs font-semibold text-[#8E9299] mt-2 mb-1 uppercase tracking-wider">Status</label>
+                <select
+                  value={currentDoc.status}
+                  onChange={(e) => setCurrentDoc({...currentDoc, status: e.target.value as Proposal['status']})}
+                  className="w-full text-sm text-[#4A4D53] bg-transparent border-none outline-none focus:ring-2 focus:ring-[#1061E3] rounded -ml-1 py-1 appearance-none cursor-pointer print:appearance-none print:pointer-events-none"
+                >
+                  <option value="Draft">Draft</option>
+                  <option value="Sent">Sent</option>
+                  <option value="Accepted">Accepted</option>
+                  <option value="Declined">Declined</option>
                 </select>
               </div>
             </div>
@@ -895,15 +931,37 @@ export default function ProposalsView({
                       <td className="py-3 px-4 text-sm font-semibold text-[#4A4D53]">
                         ${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase ${
-                          proposal.status === 'Draft' ? 'bg-gray-100 text-gray-700' :
-                          proposal.status === 'Sent' ? 'bg-blue-100 text-blue-700' :
-                          proposal.status === 'Accepted' ? 'bg-green-100 text-green-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {proposal.status}
-                        </span>
+                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={proposal.status}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value as Proposal['status'];
+                            setProposals(prev => prev.map(p => p.id === proposal.id ? { ...p, status: newStatus } : p));
+                            try {
+                              await updateProposal(proposal.id, { status: newStatus });
+                              if (proposal.dealId) {
+                                if (newStatus === 'Accepted') {
+                                  await updateDeal(proposal.dealId, { status: 'WON' });
+                                } else if (newStatus === 'Declined') {
+                                  await updateDeal(proposal.dealId, { status: 'LOST' });
+                                }
+                              }
+                            } catch (err) {
+                              console.error('Failed to update proposal status inline', err);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase border border-transparent outline-none cursor-pointer focus:ring-1 focus:ring-[#1061E3] ${
+                            proposal.status === 'Draft' ? 'bg-gray-100 text-gray-700 border-gray-200' :
+                            proposal.status === 'Sent' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                            proposal.status === 'Accepted' ? 'bg-green-100 text-green-700 border-green-200' :
+                            'bg-red-100 text-red-700 border-red-200'
+                          }`}
+                        >
+                          <option value="Draft">Draft</option>
+                          <option value="Sent">Sent</option>
+                          <option value="Accepted">Accepted</option>
+                          <option value="Declined">Declined</option>
+                        </select>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button 

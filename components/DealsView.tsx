@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Search, Plus, X, GripVertical, Paperclip, AtSign, File as FileIcon, FileText, Trash2, Upload, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, Proposal, Deal } from '@/components/Shared';
-import { createDeal, updateDeal, deleteDeal, createMessage } from '@/lib/crmStore';
+import { createDeal, updateDeal, deleteDeal, createMessage, updateProposal, createProposal } from '@/lib/crmStore';
 import DealImportModal from '@/components/DealImportModal';
 import {
   DndContext,
@@ -281,6 +281,7 @@ export default function DealsView({
   allowDeletingColumns = false,
   openRowId,
   onCloseRow,
+  onOpenTask,
 }: {
   teamMembers: TeamMember[],
   companies: Company[],
@@ -303,6 +304,7 @@ export default function DealsView({
   allowDeletingColumns?: boolean,
   openRowId?: string,
   onCloseRow?: () => void,
+  onOpenTask?: (navName: string, rowId: string) => void,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -662,6 +664,25 @@ export default function DealsView({
           }).catch(e => console.error('Failed to send deal assignee message', e));
         }
       }
+      if (field === 'status') {
+        if (value === 'WON') {
+          const linkedProposals = proposals.filter(p => p.dealId === id);
+          for (const prop of linkedProposals) {
+            if (prop.status !== 'Accepted') {
+              setProposals(prev => prev.map(p => p.id === prop.id ? { ...p, status: 'Accepted' } : p));
+              await updateProposal(prop.id, { status: 'Accepted' });
+            }
+          }
+        } else if (value === 'LOST') {
+          const linkedProposals = proposals.filter(p => p.dealId === id);
+          for (const prop of linkedProposals) {
+            if (prop.status !== 'Declined') {
+              setProposals(prev => prev.map(p => p.id === prop.id ? { ...p, status: 'Declined' } : p));
+              await updateProposal(prop.id, { status: 'Declined' });
+            }
+          }
+        }
+      }
       await updateDeal(id, { [field]: value });
     } catch (e) {
       console.error('Failed to update deal in Firebase', e);
@@ -724,6 +745,23 @@ export default function DealsView({
     if (editingDealId) {
       try {
         await updateDeal(editingDealId, { ...formData, notes: updatedNotes });
+        if (formData.status === 'WON') {
+          const linkedProposals = proposals.filter(p => p.dealId === editingDealId);
+          for (const prop of linkedProposals) {
+            if (prop.status !== 'Accepted') {
+              setProposals(prev => prev.map(p => p.id === prop.id ? { ...p, status: 'Accepted' } : p));
+              await updateProposal(prop.id, { status: 'Accepted' });
+            }
+          }
+        } else if (formData.status === 'LOST') {
+          const linkedProposals = proposals.filter(p => p.dealId === editingDealId);
+          for (const prop of linkedProposals) {
+            if (prop.status !== 'Declined') {
+              setProposals(prev => prev.map(p => p.id === prop.id ? { ...p, status: 'Declined' } : p));
+              await updateProposal(prop.id, { status: 'Declined' });
+            }
+          }
+        }
       } catch (err) {
         console.error('Failed to update deal', err);
       }
@@ -764,27 +802,46 @@ export default function DealsView({
   const currentDealId = editingDealId || formData.id;
   const dealProposals = proposals.filter(proposal => proposal.dealId === currentDealId);
   const assignableProposals = proposals.filter(proposal => {
-    const companyMatches = !formData.companyId || proposal.companyId === formData.companyId;
-    const alreadyAssignedElsewhere = proposal.dealId && proposal.dealId !== currentDealId;
-    return companyMatches && !alreadyAssignedElsewhere;
+    const alreadyAssignedElsewhere = !!proposal.dealId && proposal.dealId !== currentDealId;
+    return !alreadyAssignedElsewhere;
   });
   const calculateProposalTotal = (proposal: Proposal) => proposal.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
-  const assignProposalToDeal = (proposalId: string) => {
+  const assignProposalToDeal = async (proposalId: string) => {
     if (!proposalId || !currentDealId) return;
+    const proposal = proposals.find(p => p.id === proposalId);
+    if (!proposal) return;
+
+    const updatedCompanyId = formData.companyId || proposal.companyId;
+    const updatedContactId = formData.contactId || proposal.contactId;
+
     setProposals(prev =>
-      prev.map(proposal =>
-        proposal.id === proposalId ? { ...proposal, dealId: currentDealId } : proposal
+      prev.map(p =>
+        p.id === proposalId ? { ...p, dealId: currentDealId, companyId: updatedCompanyId, contactId: updatedContactId } : p
       )
     );
+    try {
+      await updateProposal(proposalId, {
+        dealId: currentDealId,
+        companyId: updatedCompanyId,
+        contactId: updatedContactId
+      });
+    } catch (err) {
+      console.error('Failed to assign proposal to deal in Firebase', err);
+    }
   };
 
-  const unassignProposalFromDeal = (proposalId: string) => {
+  const unassignProposalFromDeal = async (proposalId: string) => {
     setProposals(prev =>
       prev.map(proposal =>
         proposal.id === proposalId ? { ...proposal, dealId: undefined } : proposal
       )
     );
+    try {
+      await updateProposal(proposalId, { dealId: '' });
+    } catch (err) {
+      console.error('Failed to unassign proposal from deal in Firebase', err);
+    }
   };
 
   return (
@@ -1254,24 +1311,76 @@ export default function DealsView({
 
                   {activeTab === 'proposals' && (
                     <div className="flex flex-col gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Assign Proposal</label>
-                        <select
-                          value=""
-                          onChange={e => {
-                            assignProposalToDeal(e.target.value);
-                            e.target.value = '';
-                          }}
-                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
-                          disabled={!currentDealId}
-                        >
-                          <option value="" disabled>{currentDealId ? 'Select proposal to assign' : 'Save the deal first to assign proposals'}</option>
-                          {assignableProposals
-                            .filter(proposal => proposal.dealId !== currentDealId)
-                            .map(proposal => (
-                              <option key={proposal.id} value={proposal.id}>{proposal.title}</option>
-                            ))}
-                        </select>
+                      <div className="flex gap-2">
+                        <div className="flex-grow">
+                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Assign Proposal</label>
+                          <select
+                            value=""
+                            onChange={e => {
+                              assignProposalToDeal(e.target.value);
+                              e.target.value = '';
+                            }}
+                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
+                            disabled={!currentDealId}
+                          >
+                            <option value="" disabled>{currentDealId ? 'Select proposal to assign' : 'Save the deal first to assign proposals'}</option>
+                            {assignableProposals
+                              .filter(proposal => proposal.dealId !== currentDealId)
+                              .map(proposal => {
+                                const compName = companies.find(c => c.id === proposal.companyId)?.name;
+                                return (
+                                  <option key={proposal.id} value={proposal.id}>
+                                    {proposal.title}{compName ? ` (${compName})` : ''}
+                                  </option>
+                                );
+                              })}
+                          </select>
+                        </div>
+                        {currentDealId && (
+                          <div className="flex items-end">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const newProposalId = Date.now().toString();
+                                const today = new Date().toISOString().split('T')[0];
+                                const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                                const newProp: Proposal = {
+                                  id: newProposalId,
+                                  title: `Proposal for ${formData.name || 'Deal'}`,
+                                  companyId: formData.companyId || '',
+                                  contactId: formData.contactId || '',
+                                  dealId: currentDealId,
+                                  date: today,
+                                  validUntil: validUntil,
+                                  items: [{ id: Date.now().toString(), name: '', description: '', quantity: 1, price: 0 }],
+                                  status: 'Draft',
+                                  notes: '',
+                                  clientPrintedName: '',
+                                  signatureName: '',
+                                  signatureDate: today,
+                                  cardholderName: '',
+                                  cardNumber: '',
+                                  cardExpiry: '',
+                                  cardCvv: '',
+                                  billingZip: '',
+                                  attachments: [],
+                                };
+                                
+                                setProposals(prev => [...prev, newProp]);
+                                try {
+                                  const { id, ...docWithoutId } = newProp;
+                                  await createProposal(docWithoutId);
+                                } catch (err) {
+                                  console.error('Failed to create new proposal from deal modal', err);
+                                }
+                              }}
+                              className="px-4 py-2 border border-[#E2E4E9] bg-white text-[#1061E3] hover:bg-blue-50 hover:border-blue-200 rounded-md text-sm font-semibold h-[38px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none"
+                              title="Create New Proposal"
+                            >
+                              <Plus className="w-4 h-4" /> New
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {dealProposals.length === 0 ? (
@@ -1304,13 +1413,26 @@ export default function DealsView({
                                   }`}>
                                     {proposal.status}
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => unassignProposalFromDeal(proposal.id)}
-                                    className="text-xs font-semibold text-[#D32F2F] hover:text-red-700 transition-colors"
-                                  >
-                                    Remove
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsAddModalOpen(false);
+                                        onOpenTask?.('Proposals', proposal.id);
+                                      }}
+                                      className="text-xs font-semibold text-[#1061E3] hover:text-blue-700 transition-colors cursor-pointer"
+                                    >
+                                      Edit
+                                    </button>
+                                    <span className="text-[#E2E4E9] text-xs">|</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => unassignProposalFromDeal(proposal.id)}
+                                      className="text-xs font-semibold text-[#D32F2F] hover:text-red-700 transition-colors cursor-pointer"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                               <div className="mt-3 flex items-center justify-between text-sm">
