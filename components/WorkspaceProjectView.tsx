@@ -2440,7 +2440,7 @@ export default function WorkspaceProjectView({
   const sheetsSyncTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerSheetsSync = React.useCallback(() => {
-    if (projectType !== 'SEO') return;
+    if (projectType !== 'SEO' && projectType !== 'Local Listings') return;
     if (sheetsSyncTimerRef.current) clearTimeout(sheetsSyncTimerRef.current);
     sheetsSyncTimerRef.current = setTimeout(async () => {
       setSheetsSyncStatus('syncing');
@@ -2455,6 +2455,7 @@ export default function WorkspaceProjectView({
             tickets: dataRef.current,
             groups: groupsRef.current,
             teamMembers,
+            projectType,
           }),
         });
         if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
@@ -3934,7 +3935,7 @@ export default function WorkspaceProjectView({
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          {projectType === 'SEO' && (
+          {(projectType === 'SEO' || projectType === 'Local Listings') && (
             <button
               onClick={() => triggerSheetsSync()}
               disabled={sheetsSyncStatus === 'syncing'}

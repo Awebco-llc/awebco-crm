@@ -47,10 +47,12 @@ function getGoogleAuth() {
 }
 
 /** Write all group sections to the spreadsheet, one tab per group. */
-export async function syncGroupsToSheet(sections: GroupSection[]): Promise<number> {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+export async function syncGroupsToSheet(sections: GroupSection[], workspace: string = 'SEO'): Promise<number> {
+  const spreadsheetId = workspace === 'Local Listings'
+    ? process.env.GOOGLE_SHEETS_LOCAL_LISTINGS_SPREADSHEET_ID
+    : process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) {
-    throw new Error('Missing GOOGLE_SHEETS_SPREADSHEET_ID in environment.');
+    throw new Error(`Missing spreadsheet ID for workspace "${workspace}" in environment.`);
   }
 
   const auth = getGoogleAuth();

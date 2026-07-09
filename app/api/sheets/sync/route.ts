@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { tickets = [], groups = [], teamMembers = [] } = await req.json();
+    const { tickets = [], groups = [], teamMembers = [], projectType = 'SEO' } = await req.json();
 
     // ── Lookup maps ──────────────────────────────────────────────────────────
     const memberMap = new Map<string, string>(
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, rowsWritten: 0, groupsWritten: 0, note: 'No data to sync' });
     }
 
-    const rowsWritten = await syncGroupsToSheet(sections);
+    const rowsWritten = await syncGroupsToSheet(sections, projectType);
 
     return NextResponse.json({
       ok: true,
