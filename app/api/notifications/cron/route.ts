@@ -260,8 +260,26 @@ if (typeof globalThis !== 'undefined') {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const isProd = process.env.NODE_ENV === 'production';
+    if (isProd) {
+      const authHeader = req.headers.get('authorization');
+      const cronSecret = process.env.CRON_SECRET;
+      
+      const isVercelCronAuthorized = cronSecret && authHeader === `Bearer ${cronSecret}`;
+      
+      if (!isVercelCronAuthorized) {
+        const { searchParams } = new URL(req.url);
+        const secret = searchParams.get('secret');
+        const expectedSecret = process.env.WEBHOOK_SECRET || process.env.NEXT_PUBLIC_API_SECRET;
+        
+        if (!secret || secret !== expectedSecret) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+      }
+    }
+
     const res = await runNotificationCheck();
     return NextResponse.json({ status: 'Success', ...res });
   } catch (err: any) {
@@ -270,8 +288,26 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    const isProd = process.env.NODE_ENV === 'production';
+    if (isProd) {
+      const authHeader = req.headers.get('authorization');
+      const cronSecret = process.env.CRON_SECRET;
+      
+      const isVercelCronAuthorized = cronSecret && authHeader === `Bearer ${cronSecret}`;
+      
+      if (!isVercelCronAuthorized) {
+        const { searchParams } = new URL(req.url);
+        const secret = searchParams.get('secret');
+        const expectedSecret = process.env.WEBHOOK_SECRET || process.env.NEXT_PUBLIC_API_SECRET;
+        
+        if (!secret || secret !== expectedSecret) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+      }
+    }
+
     const res = await runNotificationCheck();
     return NextResponse.json({ status: 'Success', ...res });
   } catch (err: any) {
@@ -279,3 +315,5 @@ export async function POST() {
     return NextResponse.json({ status: 'Error', error: err.message }, { status: 500 });
   }
 }
+
+

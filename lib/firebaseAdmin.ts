@@ -26,3 +26,10 @@ export function getFirestoreAdmin() {
   const db = admin.firestore();
   return db;
 }
+
+export function getStorageAdmin() {
+  getFirestoreAdmin(); // Ensure Admin app is initialized
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'awebco-crm'}.appspot.com`;
+  return admin.storage().bucket(bucketName);
+}
+
