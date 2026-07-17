@@ -5,6 +5,7 @@ import path from 'path';
 import crypto from 'crypto';
 
 function writeLog(message: string) {
+  console.log(`[Email Log] ${message}`);
   try {
     const logPath = path.join(process.cwd(), 'email_logs.txt');
     const timestamp = new Date().toISOString();
