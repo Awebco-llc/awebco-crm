@@ -22,7 +22,7 @@ import ProfileView from '@/components/ProfileView';
 import FilesView from '@/components/FilesView';
 import ImportModal from '@/components/ImportModal';
 import ContactTimelinePane from '@/components/ContactTimelinePane';
-import { EditableStatus, AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup, ContactActivity, Ticket } from '@/components/Shared';
+import { AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup, ContactActivity, Ticket } from '@/components/Shared';
 import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages, createMessage, subscribeActivities, createActivity, deleteActivity, subscribeTickets } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -289,9 +289,7 @@ function SortableRow({
           </button>
         </div>
       </td>
-      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
-        <EditableStatus value={contact.status} onSave={v => onUpdate(contact.id, 'status', v)} />
-      </td>
+
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] text-right w-12">
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(contact.id); }}
@@ -583,22 +581,14 @@ function DroppableTable({
                 {renderSortIcon('email')}
               </div>
             </th>
-            <th 
-              onClick={() => onSort('status')}
-              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
-            >
-              <div className="flex items-center gap-1">
-                <span>STATUS</span>
-                {renderSortIcon('status')}
-              </div>
-            </th>
+
             <th className="w-12 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]"></th>
           </tr>
         </thead>
         <tbody ref={setNodeRef} className="min-h-[50px]">
           {contacts.length === 0 ? (
             <tr>
-              <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
+              <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
             </tr>
           ) : contacts.map(contact => (
             <SortableRow 
@@ -1235,9 +1225,6 @@ export default function Page() {
         } else if (sortConfig.column === 'email') {
           aVal = a.email || '';
           bVal = b.email || '';
-        } else if (sortConfig.column === 'status') {
-          aVal = a.status || '';
-          bVal = b.status || '';
         }
 
         const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
@@ -2240,19 +2227,7 @@ export default function Page() {
                           ))}
                         </select>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Status</label>
-                          <select 
-                            value={newStatus || 'Lead'}
-                            onChange={e => setNewStatus(e.target.value as Status)}
-                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                          >
-                            <option value="Lead">Lead</option>
-                            <option value="Active">Active</option>
-                          </select>
-                        </div>
-                      </div>
+
                     </div>
 
                     {/* Right Pane: Timeline */}

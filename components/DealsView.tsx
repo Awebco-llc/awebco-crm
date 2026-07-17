@@ -700,7 +700,7 @@ export default function DealsView({
     }
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!newNoteText.trim() && !attachedFile) return;
     
     const author = currentUserName || teamMembers?.[0]?.name || 'You';
@@ -709,16 +709,30 @@ export default function DealsView({
       author,
       text: newNoteText.trim(), 
       createdAt: new Date().toISOString(),
-      attachment: attachedFile ? attachedFile.name : undefined
+      ...(attachedFile ? { attachment: attachedFile.name } : {})
     };
 
+    const updatedNotes = [...(formData.notes || []), newNote];
     setFormData(prev => ({
       ...prev,
-      notes: [...(prev.notes || []), newNote]
+      notes: updatedNotes
     }));
     
     setNewNoteText('');
     setAttachedFile(null);
+
+    if (editingDealId) {
+      try {
+        await updateDeal(editingDealId, { notes: updatedNotes });
+        const sourceTitle = formData.name || 'Untitled Deal';
+        if (newNote.text.trim()) {
+          onMention?.(newNote.text, 'Deal Comment', sourceTitle, newNote.author || currentUserName, currentUserId, 'Deals / Sales', editingDealId);
+        }
+      } catch (err) {
+        console.error('Failed to save note to Firestore', err);
+        alert('Failed to save note to Firestore.');
+      }
+    }
   };
 
   const handleSaveDeal = async (e: React.FormEvent) => {
@@ -733,7 +747,7 @@ export default function DealsView({
         author,
         text: newNoteText.trim(), 
         createdAt: new Date().toISOString(),
-        attachment: attachedFile ? attachedFile.name : undefined
+        ...(attachedFile ? { attachment: attachedFile.name } : {})
       }];
     }
 
