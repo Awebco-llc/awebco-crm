@@ -402,6 +402,17 @@ export function subscribeGroups(workspace: string, onUpdate: (groups: any[]) => 
   }, (err) => onError?.(err));
 }
 
+export function subscribeAllGroups(onUpdate: (groups: any[]) => void, onError?: (err: any) => void) {
+  const q = collection(getDb(), 'groups');
+  return onSnapshot(q, (snapshot) => {
+    const groups = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as any[];
+    onUpdate(groups);
+  }, (err) => onError?.(err));
+}
+
 export async function updateGroup(groupId: string, patch: any) {
   const docRef = doc(getDb(), 'groups', groupId);
   await updateDoc(docRef, {

@@ -2062,14 +2062,45 @@ export default function WorkspaceProjectView({
     });
   };
 
+  const [rawGroups, setRawGroups] = useState<any[]>([]);
+
   const data = React.useMemo(() => {
     let filtered = rawTickets.filter(r => {
+      // 1. Direct company match on ticket
       if (r.companyId) {
         const company = companies.find(c => c.id === r.companyId);
         if (company && flagKey && company[flagKey] === false) {
           return false;
         }
       }
+
+      // 2. Check ticket's group in rawGroups
+      if (r.groupId) {
+        const targetGroup = rawGroups.find(g => g.id === r.groupId);
+        if (targetGroup) {
+          if (targetGroup.companyId) {
+            const comp = companies.find(c => c.id === targetGroup.companyId);
+            if (comp && flagKey && comp[flagKey] === false) {
+              return false;
+            }
+          }
+          if (targetGroup.name) {
+            const compByName = companies.find(c => c.name.toLowerCase() === targetGroup.name.toLowerCase());
+            if (compByName && flagKey && compByName[flagKey] === false) {
+              return false;
+            }
+          }
+        }
+      }
+
+      // 3. Direct companyName match on ticket
+      if (r.companyName) {
+        const company = companies.find(c => c.name.toLowerCase() === r.companyName.toLowerCase());
+        if (company && flagKey && company[flagKey] === false) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -2197,11 +2228,10 @@ export default function WorkspaceProjectView({
       const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
-  }, [rawTickets, companies, flagKey, sortConfig, teamMembers, searchQuery, columns]);
-
-  const [rawGroups, setRawGroups] = useState<any[]>([]);
+  }, [rawTickets, rawGroups, companies, flagKey, sortConfig, teamMembers, searchQuery, columns]);
 
   const groups = React.useMemo(() => {
+
     return rawGroups.filter(g => {
       if (g.companyId) {
         const company = companies.find(c => c.id === g.companyId);
@@ -4463,6 +4493,8 @@ export default function WorkspaceProjectView({
                           try {
                             const orders = (data || []).map((r: any) => Number(r.order) || 0);
                             const maxOrder = orders.length > 0 ? Math.max(...orders) : 0;
+                            const targetCompanyId = group.companyId || companies.find(c => c.name.toLowerCase() === group.name?.toLowerCase())?.id || '';
+                            const targetCompanyName = targetCompanyId ? (companies.find(c => c.id === targetCompanyId)?.name || group.name) : group.name;
                             const newTicket: any = {
                               projectName: 'New Project',
                               assignee: '',
@@ -4476,8 +4508,11 @@ export default function WorkspaceProjectView({
                               isManual: true,
                               groupId: group.id,
                               workspace: projectType,
+                              companyId: targetCompanyId,
+                              companyName: targetCompanyName,
                               order: maxOrder + 1,
                             };
+
                             if (projectType === 'Local Listings') newTicket.planType = 'Basic Plan';
                             if (projectType === 'Support Tickets' || projectType === 'Design & Print') newTicket.priority = 'Medium';
                             await createTicket(newTicket);

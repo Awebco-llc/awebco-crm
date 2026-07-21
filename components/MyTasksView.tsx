@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, Contact, TeamMember, Ticket, getStatusBadgeClasses } from './Shared';
-import { subscribeAllTickets, updateTicket } from '@/lib/crmStore';
+import { subscribeAllTickets, subscribeAllGroups, updateTicket } from '@/lib/crmStore';
+
 import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar, List, Clock, AlertCircle } from 'lucide-react';
 
 const CATEGORIES = [
@@ -245,6 +246,26 @@ export default function MyTasksView({
     }
   }, [sortConfig, viewMode]);
 
+  const WORKSPACE_FLAG_MAP: Record<string, keyof Company> = useMemo(() => ({
+    'SEO': 'seo',
+    'Websites': 'web',
+    'Local Listings': 'll',
+    'Google Ads': 'ppc',
+    'Social Media': 'smm',
+    'Design & Print': 'dp',
+    'Awebco': 'awebco',
+    'Support Tickets': 'support',
+  }), []);
+
+  const [allGroups, setAllGroups] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeAllGroups((groups) => {
+      setAllGroups(groups);
+    });
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     if (!currentUserId) return;
     
@@ -261,12 +282,42 @@ export default function MyTasksView({
   const assignedTickets = useMemo(() => {
     if (!currentUserId) return [];
     return tickets.filter(t => {
-      if (t.assignees && Array.isArray(t.assignees)) {
-        return t.assignees.includes(currentUserId);
+      const isAssigned = (t.assignees && Array.isArray(t.assignees))
+        ? t.assignees.includes(currentUserId)
+        : t.assignee === currentUserId;
+
+      if (!isAssigned) return false;
+
+      // Filter out tasks if the company/group service flag is unchecked (false)
+      const flagKey = WORKSPACE_FLAG_MAP[t.workspace];
+      if (flagKey) {
+        let company: Company | undefined;
+        if (t.companyId) {
+          company = companies.find(c => c.id === t.companyId);
+        }
+        if (!company && t.groupId) {
+          const group = allGroups.find(g => g.id === t.groupId);
+          if (group?.companyId) {
+            company = companies.find(c => c.id === group.companyId);
+          } else if (group?.name) {
+            company = companies.find(c => c.name.toLowerCase() === group.name.toLowerCase());
+          }
+        }
+        if (!company && t.companyName) {
+          const cName = t.companyName.toLowerCase();
+          company = companies.find(c => c.name.toLowerCase() === cName);
+        }
+
+
+        if (company && company[flagKey] === false) {
+          return false;
+        }
       }
-      return t.assignee === currentUserId;
+
+      return true;
     });
-  }, [tickets, currentUserId]);
+  }, [tickets, currentUserId, companies, allGroups, WORKSPACE_FLAG_MAP]);
+
 
   const activeTickets = useMemo(() => {
     return assignedTickets.filter(t => !isCompletedStatus(t.status));
