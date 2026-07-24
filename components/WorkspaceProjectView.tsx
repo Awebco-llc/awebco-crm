@@ -5453,9 +5453,16 @@ export default function WorkspaceProjectView({
                   {activeEditTab === 'details' && (() => {
                     const editingRow = data.find(r => r.id === editingRowId);
                     const displayCols = [...columns.filter(c => c.id !== 'updatesCount')];
+                    if (!displayCols.some(c => c.id === 'companyName')) {
+                      const assigneeIndex = displayCols.findIndex(c => c.id === 'assignee' || c.id === 'projectName');
+                      if (assigneeIndex !== -1) {
+                        displayCols.splice(assigneeIndex + 1, 0, { id: 'companyName', header: 'Company (Auto Sync)' });
+                      } else {
+                        displayCols.push({ id: 'companyName', header: 'Company (Auto Sync)' });
+                      }
+                    }
                     if (projectType === 'Support Tickets' || projectType === 'Design & Print') {
                       const extraFields = [
-                        { id: 'companyName', header: 'Company Name' },
                         { id: 'contactName', header: 'Contact Name' },
                         { id: 'email', header: 'Contact Email' },
                         { id: 'category', header: 'Category' }
@@ -5466,115 +5473,142 @@ export default function WorkspaceProjectView({
                         }
                       });
                     }
-                    return displayCols.map(col => (
-                      <div key={col.id}>
-                        <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
-                        {col.id === 'status' ? (
-                          <select
-                            value={editingRow?.[col.id] ?? ''}
-                            onChange={e => {
-                              const patch: any = { [col.id]: e.target.value };
-                              if (projectType !== 'SEO') {
-                                if (projectType === 'Google Ads') {
-                                  patch.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
-                                } else if (e.target.value === 'Running') {
-                                  patch.groupId = 'group-running';
-                                } else if (e.target.value === 'Needs Invoiced') {
-                                  patch.groupId = 'group-needs-invoiced';
-                                } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
-                                  patch.groupId = 'group-completed';
-                                } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
-                                  patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
-                                  }
-                              }
-                              handleUpdateRow(editingRowId, patch);
-                            }}
-                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                          >
-                            {(editingRow?.parentId
-                               ? (projectType === 'Local Listings'
-                                 ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
-                                 : projectType === 'Social Media'
-                                   ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
-                                   : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
-                               : statusOptions
-                             ).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                          </select>
-                        ) : col.id === 'priority' ? (
-                          <select
-                            value={editingRow?.[col.id] ?? ''}
-                            onChange={e => {
-                              handleUpdateRow(editingRowId, { [col.id]: e.target.value });
-                            }}
-                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                          >
-                            <option value="">Select Priority</option>
-                            {['Low', 'Medium', 'High', 'Urgent'].map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        ) : col.id === 'planType' ? (
-                          <select
-                            value={editingRow?.[col.id] ?? 'Basic Plan'}
-                            onChange={e => {
-                              handleUpdateRow(editingRowId, { [col.id]: e.target.value });
-                            }}
-                            className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
-                          >
-                            <option value="Basic Plan">Basic Plan</option>
-                            <option value="Plus Plan">Plus Plan</option>
-                          </select>
-                        ) : col.id === 'billableHours' ? (
-                          <BillableHoursDropdown
-                            value={editingRow?.[col.id] || ''}
-                            onChange={(newVal) => handleUpdateRow(editingRowId, { [col.id]: newVal })}
-                            customLabels={customBillableHours}
-                            onCreateLabel={handleCreateBillableHour}
-                          />
-                        ) : col.id === 'companyName' ? (
-                          <CompanyNameDropdown
-                            value={editingRow?.[col.id] || ''}
-                            onChange={(newVal) => handleUpdateRow(editingRowId, { [col.id]: newVal })}
-                            companies={companies || []}
-                          />
-                        ) : col.id === 'assignee' ? (
-                          <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md bg-white">
-                            <AssigneeDropdown
-                              values={editingRow?.assignees || (editingRow?.[col.id] ? [editingRow[col.id]] : [])}
-                              onSaveMultiple={(newVals) => {
-                                handleUpdateRow(editingRowId, {
-                                  assignees: newVals,
-                                  assignee: newVals[0] || ''
-                                });
-                              }}
-                              teamMembers={teamMembers}
+                    return displayCols.map(col => {
+                      if (col.id === 'companyName') {
+                        return (
+                          <div key={col.id}>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <label className="block text-sm font-semibold text-[#4A4D53]">Company (Auto Sync)</label>
+                              {editingRow?.companyId && projectType !== 'Support Tickets' && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-[#1061E3] border border-blue-200 text-[10px] font-semibold" title="Auto-synced with Company tab checkmark">
+                                  <Bot className="w-3 h-3 text-[#1061E3]" />
+                                  <span>Linked</span>
+                                </span>
+                              )}
+                            </div>
+                            <CompanyNameDropdown
+                              value={editingRow?.companyName || ''}
+                              onChange={(newVal) => handleUpdateRow(editingRowId, { companyName: newVal })}
+                              companies={companies || []}
+                              placeholder="Select or type Company..."
                             />
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type={col.id === 'deadline' ? 'date' : 'text'}
+                        );
+                      }
+
+                      return (
+                        <div key={col.id}>
+                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
+                          {col.id === 'status' ? (
+                            <select
+                              value={editingRow?.[col.id] ?? ''}
+                              onChange={e => {
+                                const patch: any = { [col.id]: e.target.value };
+                                if (projectType !== 'SEO') {
+                                  if (projectType === 'Google Ads') {
+                                    patch.groupId = e.target.value === 'Running' ? 'group-running' : 'group-active';
+                                  } else if (e.target.value === 'Running') {
+                                    patch.groupId = 'group-running';
+                                  } else if (e.target.value === 'Needs Invoiced') {
+                                    patch.groupId = 'group-needs-invoiced';
+                                  } else if (e.target.value === 'S14: Launched' || e.target.value === 'Launched' || e.target.value === 'Done') {
+                                    patch.groupId = 'group-completed';
+                                  } else if (editingRow.groupId === 'group-needs-invoiced' || editingRow.groupId === 'group-completed' || editingRow.groupId === 'group-running') {
+                                    patch.groupId = projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active';
+                                  }
+                                }
+                                handleUpdateRow(editingRowId, patch);
+                              }}
+                              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                            >
+                              {(editingRow?.parentId
+                                 ? (projectType === 'Local Listings'
+                                   ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                                   : projectType === 'Social Media'
+                                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
+                                     : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
+                                 : statusOptions
+                              ).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          ) : col.id === 'priority' ? (
+                            <select
                               value={editingRow?.[col.id] ?? ''}
                               onChange={e => {
                                 handleUpdateRow(editingRowId, { [col.id]: e.target.value });
                               }}
-                              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent flex-grow"
+                              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                            >
+                              <option value="">Select Priority</option>
+                              {['Low', 'Medium', 'High', 'Urgent'].map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : col.id === 'planType' ? (
+                            <select
+                              value={editingRow?.[col.id] ?? 'Basic Plan'}
+                              onChange={e => {
+                                handleUpdateRow(editingRowId, { [col.id]: e.target.value });
+                              }}
+                              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
+                            >
+                              <option value="Basic Plan">Basic Plan</option>
+                              <option value="Plus Plan">Plus Plan</option>
+                            </select>
+                          ) : col.id === 'billableHours' ? (
+                            <BillableHoursDropdown
+                              value={editingRow?.[col.id] || ''}
+                              onChange={(newVal) => handleUpdateRow(editingRowId, { [col.id]: newVal })}
+                              customLabels={customBillableHours}
+                              onCreateLabel={handleCreateBillableHour}
                             />
-                            {(['url', 'pastelUrl', 'googleDriveUrl'].includes(col.id) || (typeof editingRow?.[col.id] === 'string' && /^https?:\/\//i.test(editingRow[col.id]))) && editingRow?.[col.id] && (
-                              <a
-                                href={/^https?:\/\//i.test(editingRow[col.id]) ? editingRow[col.id] : `https://${editingRow[col.id]}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 text-[#1061E3] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100 shrink-0"
-                                title="Open link in new tab"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ));
+                          ) : col.id === 'assignee' ? (
+                            <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md bg-white">
+                              <AssigneeDropdown
+                                values={editingRow?.assignees || (editingRow?.[col.id] ? [editingRow[col.id]] : [])}
+                                onSaveMultiple={(newVals) => {
+                                  handleUpdateRow(editingRowId, {
+                                    assignees: newVals,
+                                    assignee: newVals[0] || ''
+                                  });
+                                }}
+                                teamMembers={teamMembers}
+                              />
+                            </div>
+                          ) : col.id === 'projectName' ? (
+                            <input
+                              type="text"
+                              value={editingRow?.projectName ?? ''}
+                              onChange={e => handleUpdateRow(editingRowId, { projectName: e.target.value })}
+                              placeholder="Enter project/task name..."
+                              className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white font-medium text-[#1C1F23]"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type={col.id === 'deadline' ? 'date' : 'text'}
+                                value={editingRow?.[col.id] ?? ''}
+                                onChange={e => {
+                                  handleUpdateRow(editingRowId, { [col.id]: e.target.value });
+                                }}
+                                placeholder="N/A"
+                                className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white flex-grow font-medium text-[#1C1F23]"
+                              />
+                              {(['url', 'pastelUrl', 'googleDriveUrl'].includes(col.id) || (typeof editingRow?.[col.id] === 'string' && /^https?:\/\//i.test(editingRow?.[col.id]))) && editingRow?.[col.id] && (
+                                <a
+                                  href={/^https?:\/\//i.test(editingRow[col.id]) ? editingRow[col.id] : `https://${editingRow[col.id]}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 text-[#1061E3] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors border border-blue-100 shrink-0 h-[38px] flex items-center justify-center"
+                                  title="Open link in new tab"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
                   })()}
 
                   {/* Updates Section */}
