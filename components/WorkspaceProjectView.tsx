@@ -2967,21 +2967,18 @@ export default function WorkspaceProjectView({
         }
       }
 
-      // Reorder subtask to bottom after rename if setting enabled
+      // Reorder subtask to bottom after initial rename if setting enabled and row is a newly created draft
       if (updatedPatch.projectName !== undefined) {
-        const nameVal = (updatedPatch.projectName || '').trim();
         const row = data.find(r => r.id === id);
         const moveSubtaskToBottom = typeof window !== 'undefined' && localStorage.getItem('moveSubtaskToBottomAfterRename') === 'true';
 
-        if (row && row.parentId && moveSubtaskToBottom) {
-          if (row.isDraft || row.projectName === 'New Sub-Task' || (nameVal && nameVal !== 'New Sub-Task')) {
-            const siblings = data.filter(r => r.parentId === row.parentId && r.id !== id);
-            const maxOrder = siblings.length > 0
-              ? Math.max(...siblings.map(r => Number(r.order) || 0))
-              : 0;
-            updatedPatch.order = maxOrder + 1;
-            updatedPatch.isDraft = false;
-          }
+        if (row && row.parentId && row.isDraft === true && moveSubtaskToBottom) {
+          const siblings = data.filter(r => r.parentId === row.parentId && r.id !== id);
+          const maxOrder = siblings.length > 0
+            ? Math.max(...siblings.map(r => Number(r.order) || 0))
+            : 0;
+          updatedPatch.order = maxOrder + 1;
+          updatedPatch.isDraft = false;
         }
       }
 
