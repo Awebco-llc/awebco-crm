@@ -1155,8 +1155,11 @@ const SortableRow = React.memo(function SortableRow({
           <input
             type="checkbox"
             checked={isSelected || false}
-            onChange={() => onToggleSelect?.(false)}
-            onMouseDown={(e) => { if (e.shiftKey) { e.preventDefault(); onToggleSelect?.(true); } }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.(e.shiftKey);
+            }}
+            onChange={() => {}}
             className="rounded border-[#C8CDD5] text-[#1061E3] focus:ring-[#1061E3] cursor-pointer w-4 h-4 shrink-0 transition-all hover:border-[#1061E3]"
           />
           {isSubRow ? (
