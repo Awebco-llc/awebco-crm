@@ -5,7 +5,7 @@ import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink, F
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
 import RichTextEditor from './RichTextEditor';
-import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket } from '@/lib/crmStore';
+import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket, deleteGroup, deleteTicket } from '@/lib/crmStore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase';
 import {
@@ -549,7 +549,6 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           ppc: 'Google Ads',
           smm: 'Social Media',
           dp: 'Design & Print',
-          support: 'Support Tickets',
         };
 
         const workspaceName = SERVICE_TO_WORKSPACE_MAP[field as string];

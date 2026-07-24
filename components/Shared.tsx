@@ -56,6 +56,9 @@ export interface StorageFile {
 export interface TeamMemberPermissions {
   canViewCRM?: boolean;
   allowedWorkspaces?: string[];
+  canDeleteRows?: boolean;
+  canDeleteColumns?: boolean;
+  canDeleteGroups?: boolean;
 }
 
 export interface TeamMember {

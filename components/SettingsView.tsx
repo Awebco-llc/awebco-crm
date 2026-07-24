@@ -29,6 +29,8 @@ export default function SettingsView({
   currentUserRole,
   useFullScreenUnifiedTicketView,
   setUseFullScreenUnifiedTicketView,
+  allowDeletingRows = true,
+  setAllowDeletingRows,
   allowDeletingGroups = false,
   setAllowDeletingGroups,
   allowDeletingColumns = false,
@@ -39,6 +41,8 @@ export default function SettingsView({
   currentUserRole?: TeamMember['role'],
   useFullScreenUnifiedTicketView?: boolean,
   setUseFullScreenUnifiedTicketView?: React.Dispatch<React.SetStateAction<boolean>>,
+  allowDeletingRows?: boolean,
+  setAllowDeletingRows?: React.Dispatch<React.SetStateAction<boolean>>,
   allowDeletingGroups?: boolean,
   setAllowDeletingGroups?: React.Dispatch<React.SetStateAction<boolean>>,
   allowDeletingColumns?: boolean,
@@ -57,6 +61,9 @@ export default function SettingsView({
   const [editMemberColor, setEditMemberColor] = useState('#1061E3');
   const [editMemberCanViewCRM, setEditMemberCanViewCRM] = useState(true);
   const [editMemberWorkspaces, setEditMemberWorkspaces] = useState<string[]>(ALL_WORKSPACES);
+  const [editMemberCanDeleteRows, setEditMemberCanDeleteRows] = useState(true);
+  const [editMemberCanDeleteColumns, setEditMemberCanDeleteColumns] = useState(false);
+  const [editMemberCanDeleteGroups, setEditMemberCanDeleteGroups] = useState(false);
   const [editMemberEmailNotificationsEnabled, setEditMemberEmailNotificationsEnabled] = useState(true);
   const canEditProfiles = currentUserRole === 'master_admin';
 
@@ -129,6 +136,9 @@ export default function SettingsView({
     setEditMemberColor(member.color || '#1061E3');
     setEditMemberCanViewCRM(member.permissions?.canViewCRM ?? true);
     setEditMemberWorkspaces(member.permissions?.allowedWorkspaces ?? ALL_WORKSPACES);
+    setEditMemberCanDeleteRows(member.permissions?.canDeleteRows ?? true);
+    setEditMemberCanDeleteColumns(member.permissions?.canDeleteColumns ?? false);
+    setEditMemberCanDeleteGroups(member.permissions?.canDeleteGroups ?? false);
     setEditMemberEmailNotificationsEnabled(member.emailNotificationsEnabled ?? true);
   };
 
@@ -154,6 +164,9 @@ export default function SettingsView({
         permissions: {
           canViewCRM: editMemberCanViewCRM,
           allowedWorkspaces: editMemberWorkspaces,
+          canDeleteRows: editMemberCanDeleteRows,
+          canDeleteColumns: editMemberCanDeleteColumns,
+          canDeleteGroups: editMemberCanDeleteGroups,
         }
       };
       updatedMember = val;
@@ -236,22 +249,54 @@ export default function SettingsView({
                             />
                             Can View CRM
                           </label>
-                          <div className="text-xs font-semibold text-[#8E9299] mt-1 mb-0.5">Allowed Workspaces</div>
-                          <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto pr-1">
-                            {ALL_WORKSPACES.map(ws => (
-                              <label key={ws} className="flex items-center gap-2 text-[13px] text-[#4A4D53] cursor-pointer hover:text-[#1C1F23]">
-                                <input
-                                  type="checkbox"
-                                  checked={editMemberWorkspaces.includes(ws)}
-                                  onChange={e => {
-                                    if (e.target.checked) setEditMemberWorkspaces([...editMemberWorkspaces, ws]);
-                                    else setEditMemberWorkspaces(editMemberWorkspaces.filter(w => w !== ws));
-                                  }}
-                                  className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3]"
-                                />
-                                {ws}
-                              </label>
-                            ))}
+                          <div className="border-t border-[#E2E4E9] my-1 pt-2 flex flex-col gap-1.5">
+                            <div className="text-xs font-bold text-[#4A4D53] uppercase">Deletion Permissions</div>
+                            <label className="flex items-center gap-2 text-xs font-semibold text-[#1C1F23]">
+                              <input 
+                                type="checkbox"
+                                checked={editMemberCanDeleteRows}
+                                onChange={e => setEditMemberCanDeleteRows(e.target.checked)}
+                                className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3]"
+                              />
+                              Can Delete Rows
+                            </label>
+                            <label className="flex items-center gap-2 text-xs font-semibold text-[#1C1F23]">
+                              <input 
+                                type="checkbox"
+                                checked={editMemberCanDeleteColumns}
+                                onChange={e => setEditMemberCanDeleteColumns(e.target.checked)}
+                                className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3]"
+                              />
+                              Can Delete Columns
+                            </label>
+                            <label className="flex items-center gap-2 text-xs font-semibold text-[#1C1F23]">
+                              <input 
+                                type="checkbox"
+                                checked={editMemberCanDeleteGroups}
+                                onChange={e => setEditMemberCanDeleteGroups(e.target.checked)}
+                                className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3]"
+                              />
+                              Can Delete Groups
+                            </label>
+                          </div>
+                          <div className="border-t border-[#E2E4E9] my-1 pt-2">
+                            <div className="text-xs font-semibold text-[#8E9299] mb-1">Allowed Workspaces</div>
+                            <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto pr-1">
+                              {ALL_WORKSPACES.map(ws => (
+                                <label key={ws} className="flex items-center gap-2 text-[13px] text-[#4A4D53] cursor-pointer hover:text-[#1C1F23]">
+                                  <input
+                                    type="checkbox"
+                                    checked={editMemberWorkspaces.includes(ws)}
+                                    onChange={e => {
+                                      if (e.target.checked) setEditMemberWorkspaces([...editMemberWorkspaces, ws]);
+                                      else setEditMemberWorkspaces(editMemberWorkspaces.filter(w => w !== ws));
+                                    }}
+                                    className="rounded border-[#D0D5DD] text-[#1061E3] focus:ring-[#1061E3]"
+                                  />
+                                  {ws}
+                                </label>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -472,8 +517,30 @@ export default function SettingsView({
               <>
                 <div className="flex items-center justify-between gap-4 p-4 border border-red-100 rounded-lg bg-red-50/30">
                   <div>
-                    <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Groups (Admin Only)</h3>
-                    <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Enabling this will show a &quot;Remove group&quot; button next to all workspace groups. Deleting a group will permanently delete all task data inside that group!</p>
+                    <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Rows Globally</h3>
+                    <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Disabling this prevents non-admin staff members from deleting rows unless individually granted in member permissions.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={allowDeletingRows}
+                      onChange={(e) => {
+                        const newVal = e.target.checked;
+                        if (setAllowDeletingRows) {
+                          setAllowDeletingRows(newVal);
+                        }
+                        localStorage.setItem('allowDeletingRows', String(newVal));
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 p-4 border border-red-100 rounded-lg bg-red-50/30 mt-3">
+                  <div>
+                    <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Groups (Global Option)</h3>
+                    <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Enabling this will show a &quot;Remove group&quot; button next to workspace groups. Deleting a group will permanently delete all task data inside that group!</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer select-none">
                     <input 
@@ -494,8 +561,8 @@ export default function SettingsView({
 
                 <div className="flex items-center justify-between gap-4 p-4 border border-red-100 rounded-lg bg-red-50/30 mt-3">
                   <div>
-                    <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Columns (Admin Only)</h3>
-                    <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Enabling this will allow admins to permanently delete/hide columns from tables across the CRM and Workspace boards.</p>
+                    <h3 className="font-semibold text-[#1C1F23] text-sm">Allow Deleting Columns (Global Option)</h3>
+                    <p className="text-xs text-red-600 font-medium mt-0.5">⚠️ WARNING: Enabling this will allow permanently deleting/hiding columns from tables across the CRM and Workspace boards.</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer select-none">
                     <input 

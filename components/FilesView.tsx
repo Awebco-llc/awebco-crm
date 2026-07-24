@@ -157,6 +157,10 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
 
   const removeFile = async (id: string, storagePath: string, e: React.MouseEvent) => {
     e.stopPropagation();
+
+    if (!window.confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+      return;
+    }
     
     // Optimistic UI delete
     setFiles(prev => prev.filter(f => f.id !== id));
@@ -198,6 +202,9 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
   };
 
   const handleDeleteFolder = async (folderId: string) => {
+    if (!window.confirm('Are you sure you want to delete this folder? All files inside will be unassigned.')) {
+      return;
+    }
     try {
       await deleteFolder(folderId);
       const filesInFolder = files.filter(f => f.folderId === folderId);

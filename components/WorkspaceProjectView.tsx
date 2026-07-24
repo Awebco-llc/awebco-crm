@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -1098,6 +1098,7 @@ const SortableRow = React.memo(function SortableRow({
   addSubRow,
   isSubRow = false,
   deleteRow,
+  allowDeletingRows = true,
   projectType,
   statusOptions,
   onContextMenu,
@@ -1426,6 +1427,15 @@ const SortableRow = React.memo(function SortableRow({
                   col.id === 'projectName' ? (v) => (
                     <div className="flex items-center gap-2 min-w-0">
                       <strong className={`truncate ${isSubRow ? 'font-medium text-[#4A4D53]' : ''}`}>{v}</strong>
+                      {row.companyId && projectType !== 'Support Tickets' && (
+                        <span
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-[#1061E3] border border-blue-200 text-[10px] font-semibold shrink-0 select-none"
+                          title="Auto-created from Company tab checkmark"
+                        >
+                          <Bot className="w-3 h-3 text-[#1061E3]" />
+                          <span>Auto Sync</span>
+                        </span>
+                      )}
                       {!isSubRow && subtaskCount > 0 && (
                         <span className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-[10px] font-semibold shrink-0">
                           {subtaskCount}
@@ -1481,13 +1491,15 @@ const SortableRow = React.memo(function SortableRow({
       );
     })}
       <td style={{ minWidth: '50px' }} className={`px-4 py-3 border-b border-[#F0F2F5] text-right ${borderClass}`}>
-        <button
-          onClick={(e) => { e.stopPropagation(); deleteRow(row.id); }}
-          className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-          title="Delete Row"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {allowDeletingRows && (
+          <button
+            onClick={(e) => { e.stopPropagation(); deleteRow(row.id); }}
+            className="p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+            title="Delete Row"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -1516,7 +1528,7 @@ function GroupHeader({
   hasCopiedTickets = false,
   onPaste,
 }: {
-  group: { id: string, name: string },
+  group: { id: string, name: string, companyId?: string },
   onUpdate: (id: string, name: string) => void,
   onRemove: (id: string) => void,
   dragHandleProps?: any,
@@ -1590,6 +1602,15 @@ function GroupHeader({
             >
               {group.name}
             </h2>
+            {group.companyId && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-[#1061E3] border border-blue-200 text-xs font-semibold shrink-0 select-none"
+                title="Auto-created from Company tab checkmark"
+              >
+                <Bot className="w-3.5 h-3.5 text-[#1061E3]" />
+                <span>Auto Sync</span>
+              </span>
+            )}
             {itemCount !== undefined && (
               <span
                 className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-xs font-semibold shrink-0 select-none"
@@ -1671,8 +1692,12 @@ function GroupHeader({
       {allowDeletingGroups && (
         <button
           onClick={() => onRemove(group.id)}
-          className="opacity-0 group-hover/header:opacity-100 p-1.5 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors"
-          title="Remove group"
+          className={`opacity-0 group-hover/header:opacity-100 p-1.5 rounded transition-colors ${
+            group.companyId
+              ? 'text-gray-300 hover:text-gray-400 cursor-not-allowed'
+              : 'text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2]'
+          }`}
+          title={group.companyId ? "Groups created from company checkmarks cannot be deleted directly. Uncheck on Company profile." : "Remove group"}
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -1776,6 +1801,7 @@ export default function WorkspaceProjectView({
   canManageBoardMembers,
   onUpdateMemberPermissions,
   useFullScreenUnifiedTicketView,
+  allowDeletingRows = true,
   allowDeletingGroups = false,
   allowDeletingColumns = false,
   onCloseRow
@@ -1799,6 +1825,7 @@ export default function WorkspaceProjectView({
   canManageBoardMembers: boolean,
   onUpdateMemberPermissions?: (memberId: string, workspaceName: string, hasAccess: boolean) => void,
   useFullScreenUnifiedTicketView?: boolean,
+  allowDeletingRows?: boolean,
   allowDeletingGroups?: boolean,
   allowDeletingColumns?: boolean,
   onCloseRow?: () => void
@@ -3050,6 +3077,16 @@ export default function WorkspaceProjectView({
 
   const handleRemoveGroup = async (id: string) => {
     try {
+      const targetGroup = groups.find(g => g.id === id);
+      if (targetGroup?.companyId) {
+        alert(`"${targetGroup.name}" was created from a company service checkmark. To remove this group, please uncheck the service on the company's profile.`);
+        return;
+      }
+
+      if (!window.confirm(`Are you sure you want to delete the group "${targetGroup?.name || 'this group'}"?`)) {
+        return;
+      }
+
       const fallbackGroup = groups.find(g => g.id !== id)?.id;
 
       // Move tickets belonging to the deleted group
@@ -4390,7 +4427,8 @@ export default function WorkspaceProjectView({
                                   toggleExpand={toggleExpand}
                                   addSubRow={addSubRow}
                                   isSubRow={false}
-                                  deleteRow={deleteRow}
+                                  deleteRow={(id: string) => setRowToDeleteId(id)}
+                                  allowDeletingRows={allowDeletingRows}
                                   projectType={projectType}
                                   runningLiveCount={
                                     projectType === 'Local Listings'
@@ -4446,7 +4484,8 @@ export default function WorkspaceProjectView({
                                       teamMembers={teamMembers}
                                       statusOptions={statusOptions}
                                       isSubRow={true}
-                                      deleteRow={deleteRow}
+                                      deleteRow={(id: string) => setRowToDeleteId(id)}
+                                      allowDeletingRows={allowDeletingRows}
                                       projectType={projectType}
                                       onContextMenu={(e: React.MouseEvent, rowId: string, isSubRow: boolean) => {
                                         e.preventDefault();
@@ -4644,17 +4683,21 @@ export default function WorkspaceProjectView({
             <Copy className="w-4 h-4 text-[#8E9299]" />
             Duplicate
           </button>
-          <div className="h-px bg-[#E2E4E9] my-1" />
-          <button
-            onClick={() => {
-              setRowToDeleteId(contextMenu.rowId);
-              setContextMenu(null);
-            }}
-            className="w-full text-left px-4 py-2 text-sm text-[#D32F2F] hover:bg-[#FEE2E2] flex items-center gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
+          {allowDeletingRows && (
+            <>
+              <div className="h-px bg-[#E2E4E9] my-1" />
+              <button
+                onClick={() => {
+                  setRowToDeleteId(contextMenu.rowId);
+                  setContextMenu(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-[#D32F2F] hover:bg-[#FEE2E2] flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -4787,17 +4830,19 @@ export default function WorkspaceProjectView({
                       <X className="w-4 h-4" />
                       Back to {projectType}
                     </button>
-                    <button
-                      onClick={() => {
-                        setRowToDeleteId(editingRowId);
-                        setEditingRowId(null);
-                      }}
-                      className="flex items-center gap-2 text-sm font-semibold text-[#D32F2F] hover:text-white border border-[#D32F2F] hover:bg-[#D32F2F] transition-all px-3 py-2 rounded-lg shadow-sm ml-2"
-                      title="Delete Project"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </button>
+                    {allowDeletingRows && (
+                      <button
+                        onClick={() => {
+                          setRowToDeleteId(editingRowId);
+                          setEditingRowId(null);
+                        }}
+                        className="flex items-center gap-2 text-sm font-semibold text-[#D32F2F] hover:text-white border border-[#D32F2F] hover:bg-[#D32F2F] transition-all px-3 py-2 rounded-lg shadow-sm ml-2"
+                        title="Delete Project"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    )}
                   </div>
                   <h2 className="text-base font-bold text-[#1C1F23]">{projectType} — Detail View</h2>
                   <button
@@ -5846,16 +5891,18 @@ export default function WorkspaceProjectView({
                   })()}
                 </div>
                 <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-between items-center shrink-0">
-                  <button
-                    onClick={() => {
-                      setRowToDeleteId(editingRowId);
-                      setEditingRowId(null);
-                    }}
-                    className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 border border-[#D32F2F]/20"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
+                  {allowDeletingRows && (
+                    <button
+                      onClick={() => {
+                        setRowToDeleteId(editingRowId);
+                        setEditingRowId(null);
+                      }}
+                      className="px-4 py-2 rounded-md text-sm font-semibold text-[#D32F2F] hover:bg-[#FEE2E2] transition-colors flex items-center gap-2 border border-[#D32F2F]/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
+                  )}
                   <button
                     onClick={() => setEditingRowId(null)}
                     className="px-4 py-2 rounded-md text-sm font-semibold bg-[#1061E3] text-white hover:bg-blue-700 transition-colors"
@@ -6220,13 +6267,15 @@ export default function WorkspaceProjectView({
                   </button>
 
                   {/* Delete Button */}
-                  <button
-                    onClick={handleBulkDeleteSelected}
-                    className="flex items-center gap-2 text-xs font-bold hover:bg-red-500/10 hover:text-red-400 text-red-500 px-4 py-2 rounded-lg transition-all border border-red-500/10 active:scale-95"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
+                  {allowDeletingRows && (
+                    <button
+                      onClick={handleBulkDeleteSelected}
+                      className="flex items-center gap-2 text-xs font-bold hover:bg-red-500/10 hover:text-red-400 text-red-500 px-4 py-2 rounded-lg transition-all border border-red-500/10 active:scale-95"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
+                  )}
                 </div>
               );
             })()}
