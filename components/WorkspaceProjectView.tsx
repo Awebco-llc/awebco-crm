@@ -2964,6 +2964,24 @@ export default function WorkspaceProjectView({
         }
       }
 
+      // Reorder subtask to bottom after rename if setting enabled
+      if (updatedPatch.projectName !== undefined) {
+        const nameVal = (updatedPatch.projectName || '').trim();
+        const row = data.find(r => r.id === id);
+        const moveSubtaskToBottom = typeof window !== 'undefined' && localStorage.getItem('moveSubtaskToBottomAfterRename') === 'true';
+
+        if (row && row.parentId && moveSubtaskToBottom) {
+          if (row.isDraft || row.projectName === 'New Sub-Task' || (nameVal && nameVal !== 'New Sub-Task')) {
+            const siblings = data.filter(r => r.parentId === row.parentId && r.id !== id);
+            const maxOrder = siblings.length > 0
+              ? Math.max(...siblings.map(r => Number(r.order) || 0))
+              : 0;
+            updatedPatch.order = maxOrder + 1;
+            updatedPatch.isDraft = false;
+          }
+        }
+      }
+
       // Map status change to the correct groupId dynamically if status is changed
       if (updatedPatch.status && projectType !== 'SEO') {
         const status = updatedPatch.status;
@@ -3507,6 +3525,8 @@ export default function WorkspaceProjectView({
       ? Math.min(...siblings.map(r => Number(r.order) || 0))
       : 0;
 
+    const moveSubtaskToBottom = typeof window !== 'undefined' && localStorage.getItem('moveSubtaskToBottomAfterRename') === 'true';
+
     const newSubRow: any = {
       parentId,
       projectName: 'New Sub-Task',
@@ -3521,6 +3541,7 @@ export default function WorkspaceProjectView({
       groupId: parent?.groupId || groups[0]?.id || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
       workspace: projectType,
       order: minOrder - 1,
+      isDraft: moveSubtaskToBottom,
     };
 
     if (projectType === 'Local Listings') {
@@ -4960,14 +4981,22 @@ export default function WorkspaceProjectView({
                                 />
                               </div>
 
-                              {/* Company Name */}
-                              <div className="flex-grow flex-shrink-0 min-w-[160px] md:min-w-[180px]">
-                                <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Company Name</label>
+                              {/* Company Name / Auto Sync Link */}
+                              <div className="flex-grow flex-shrink-0 min-w-[200px] md:min-w-[220px]">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider">Company (Auto Sync)</label>
+                                  {editingRow.companyId && projectType !== 'Support Tickets' && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-[#1061E3] border border-blue-200 text-[10px] font-semibold" title="Auto-synced with Company tab checkmark">
+                                      <Bot className="w-3 h-3 text-[#1061E3]" />
+                                      <span>Linked</span>
+                                    </span>
+                                  )}
+                                </div>
                                 <CompanyNameDropdown
                                   value={editingRow.companyName ?? ''}
                                   onChange={(newVal) => handleUpdateRow(editingRowId, { companyName: newVal })}
                                   companies={companies || []}
-                                  placeholder="N/A"
+                                  placeholder="Select or type Company..."
                                 />
                               </div>
 

@@ -65,6 +65,12 @@ export default function SettingsView({
   const [editMemberCanDeleteColumns, setEditMemberCanDeleteColumns] = useState(false);
   const [editMemberCanDeleteGroups, setEditMemberCanDeleteGroups] = useState(false);
   const [editMemberEmailNotificationsEnabled, setEditMemberEmailNotificationsEnabled] = useState(true);
+  const [moveSubtaskToBottomAfterRename, setMoveSubtaskToBottomAfterRename] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('moveSubtaskToBottomAfterRename') === 'true';
+    }
+    return false;
+  });
   const canEditProfiles = currentUserRole === 'master_admin';
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -506,6 +512,26 @@ export default function SettingsView({
                       setUseFullScreenUnifiedTicketView(newVal);
                     }
                     localStorage.setItem('useFullScreenUnifiedTicketView', String(newVal));
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1061E3] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1061E3]"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 p-4 border border-[#E2E4E9] rounded-lg bg-[#F9FAFB]">
+              <div>
+                <h3 className="font-semibold text-[#1C1F23] text-sm">New Subtask Initial Placement</h3>
+                <p className="text-xs text-[#8E9299] mt-0.5">When enabled, newly created subtasks appear at the top of the list while editing, and automatically move to the bottom once renamed or saved.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={moveSubtaskToBottomAfterRename}
+                  onChange={(e) => {
+                    const newVal = e.target.checked;
+                    setMoveSubtaskToBottomAfterRename(newVal);
+                    localStorage.setItem('moveSubtaskToBottomAfterRename', String(newVal));
                   }}
                   className="sr-only peer"
                 />
