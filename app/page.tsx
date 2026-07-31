@@ -5,7 +5,7 @@ import {
   Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown, X, Mail, GripVertical, Bell,
   Users, Building2, Handshake, Package, Globe, Palette,
   LineChart, MapPin, MousePointerClick, Share2, Ticket as TicketIcon, Settings as SettingsIcon, LayoutList,
-  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu, Rocket, Download
+  FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu, Rocket, Download, Copy, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import WorkspaceProjectView from '@/components/WorkspaceProjectView';
@@ -207,7 +207,6 @@ function SortableRow({
   onUpdate, 
   teamMembers, 
   companies, 
-  onEmailClick, 
   onDelete,
   isSelected,
   onToggleSelect
@@ -217,11 +216,11 @@ function SortableRow({
   onUpdate: (id: string, field: keyof Contact, value: any) => void; 
   teamMembers: TeamMember[], 
   companies: Company[], 
-  onEmailClick: (contact: Contact) => void; 
   onDelete: (id: string) => void;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
 }) {
+  const [emailCopied, setEmailCopied] = useState(false);
   const {
     attributes,
     listeners,
@@ -281,11 +280,19 @@ function SortableRow({
         <div className="flex items-center justify-between group">
           <EditableCell value={contact.email} onSave={v => onUpdate(contact.id, 'email', v)} />
           <button
-            onClick={(e) => { e.stopPropagation(); onEmailClick(contact); }}
-            className="opacity-0 group-hover:opacity-100 p-1 text-[#8E9299] hover:text-[#1061E3] transition-all"
-            title="Send Email"
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (!contact.email) return;
+              await navigator.clipboard.writeText(contact.email);
+              setEmailCopied(true);
+              window.setTimeout(() => setEmailCopied(false), 1500);
+            }}
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 text-[#8E9299] hover:text-[#1061E3] transition-all disabled:cursor-not-allowed disabled:opacity-0"
+            title={emailCopied ? 'Email copied' : 'Copy email'}
+            aria-label={emailCopied ? `Copied ${contact.email}` : `Copy ${contact.email || 'email'}`}
+            disabled={!contact.email}
           >
-            <Mail className="w-4 h-4" />
+            {emailCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
       </td>
@@ -310,7 +317,6 @@ function SortableGroupSection({
   onDelete, 
   onRowClick, 
   onUpdateContact, 
-  onEmailClick, 
   onDeleteContact,
   teamMembers,
   companies,
@@ -334,7 +340,6 @@ function SortableGroupSection({
   onDelete: () => void;
   onRowClick: (c: Contact) => void;
   onUpdateContact: (id: string, field: keyof Contact, value: any) => void;
-  onEmailClick: (contact: Contact) => void;
   onDeleteContact: (id: string) => void;
   teamMembers: TeamMember[];
   companies: Company[];
@@ -455,7 +460,6 @@ function SortableGroupSection({
           onUpdateContact={onUpdateContact} 
           teamMembers={teamMembers} 
           companies={companies} 
-          onEmailClick={onEmailClick} 
           onDeleteContact={onDeleteContact} 
           sortConfig={sortConfig}
           onSort={onSort}
@@ -475,7 +479,6 @@ function DroppableTable({
   onUpdateContact, 
   teamMembers, 
   companies, 
-  onEmailClick, 
   onDeleteContact,
   sortConfig,
   onSort,
@@ -489,7 +492,6 @@ function DroppableTable({
   onUpdateContact: (id: string, field: keyof Contact, value: any) => void; 
   teamMembers: TeamMember[], 
   companies: Company[], 
-  onEmailClick: (contact: Contact) => void; 
   onDeleteContact: (id: string) => void;
   sortConfig: { column: string; direction: 'asc' | 'desc' } | null;
   onSort: (column: string) => void;
@@ -598,7 +600,6 @@ function DroppableTable({
               onUpdate={onUpdateContact} 
               teamMembers={teamMembers} 
               companies={companies} 
-              onEmailClick={onEmailClick} 
               onDelete={onDeleteContact} 
               isSelected={selectedContactIds.has(contact.id)}
               onToggleSelect={onToggleSelectContact}
@@ -1963,7 +1964,6 @@ export default function Page() {
                       onDelete={() => handleDeleteContactGroup(group.id)}
                       onRowClick={openEditModal}
                       onUpdateContact={handleUpdateContact}
-                      onEmailClick={setEmailingContact}
                       onDeleteContact={handleDeleteContact}
                       teamMembers={teamMembers}
                       companies={companies}
