@@ -261,6 +261,7 @@ export function getStatusBadgeClasses(value: string) {
         value === 'Not Started' ? 'bg-gray-100 text-gray-700' :
           value === 'Setup' ? 'bg-[#E3F2FD] text-[#1976D2]' :
             value === 'Awaiting Customer' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
+              value === 'Awaiting Review' || value === 'Awaiting review' || value === 'awaiting review' ? 'bg-[#F3E8FF] text-[#9333EA]' :
               value === 'Needs Invoiced' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
                 value === 'Done' ? 'bg-[#ECFDF3] text-[#10B981]' :
                   value === 'Running' ? 'bg-[#ECFDF3] text-[#10B981]' :
@@ -291,6 +292,7 @@ const DEFAULT_STATUS_OPTIONS = [
   'Setup',
   'In Progress',
   'Awaiting Customer',
+  'Awaiting Review',
   'Needs Invoiced',
   'Running',
   'On Hold',

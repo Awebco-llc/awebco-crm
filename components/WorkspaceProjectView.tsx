@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot, Building2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -1272,13 +1272,15 @@ const SortableRow = React.memo(function SortableRow({
                   ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
                   : projectType === 'Social Media'
                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
-                    : row.parentId
-                      ? (projectType === 'Local Listings'
-                        ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
-                        : projectType === 'Social Media'
-                          ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
-                          : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(projectType === 'Support Tickets' ? ['Closed'] : [])])
-                      : (statusOptions || [])
+                    : projectType === 'Awebco'
+                      ? ['Not Started', 'Planning', 'In Progress', 'On Hold', 'Awaiting Review', 'Done']
+                      : row.parentId
+                        ? (projectType === 'Local Listings'
+                          ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                          : projectType === 'Social Media'
+                            ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
+                            : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(projectType === 'Support Tickets' ? ['Closed'] : [])])
+                        : (statusOptions || [])
               }
               onSave={(newVal) => {
                 const patch: any = { [col.id]: newVal };
@@ -1430,7 +1432,7 @@ const SortableRow = React.memo(function SortableRow({
                   col.id === 'projectName' ? (v) => (
                     <div className="flex items-center gap-2 min-w-0">
                       <strong className={`truncate ${isSubRow ? 'font-medium text-[#4A4D53]' : ''}`}>{v}</strong>
-                      {row.companyId && projectType !== 'Support Tickets' && (
+                      {row.companyId && projectType === 'Local Listings' && (
                         <span
                           className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-[#1061E3] border border-blue-200 text-[10px] font-semibold shrink-0 select-none"
                           title="Auto-created from Company tab checkmark"
@@ -1516,6 +1518,7 @@ function GroupDroppableBody({ groupId, children }: { groupId: string, children: 
 
 function GroupHeader({
   group,
+  companies = [],
   onUpdate,
   onRemove,
   dragHandleProps,
@@ -1532,7 +1535,8 @@ function GroupHeader({
   onPaste,
 }: {
   group: { id: string, name: string, companyId?: string },
-  onUpdate: (id: string, name: string) => void,
+  companies?: any[],
+  onUpdate: (id: string, updates: string | Partial<{ name: string; companyId: string }>) => void,
   onRemove: (id: string) => void,
   dragHandleProps?: any,
   isCollapsed?: boolean,
@@ -1552,6 +1556,10 @@ function GroupHeader({
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const notesRef = useRef<HTMLDivElement>(null);
 
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const [companySearch, setCompanySearch] = useState('');
+  const companyDropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!isNotesOpen) return;
     const handleClick = (e: MouseEvent) => {
@@ -1563,11 +1571,24 @@ function GroupHeader({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [isNotesOpen]);
 
+  useEffect(() => {
+    if (!isCompanyDropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (companyDropdownRef.current && !companyDropdownRef.current.contains(e.target as Node)) {
+        setIsCompanyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isCompanyDropdownOpen]);
+
   const save = () => {
     setIsEditing(false);
-    if (name.trim()) onUpdate(group.id, name);
+    if (name.trim()) onUpdate(group.id, { name: name.trim() });
     else setName(group.name);
   };
+
+  const affiliatedCompany = group.companyId ? companies.find(c => c.id === group.companyId) : null;
 
   return (
     <div className="flex items-center justify-between mb-3 group/header">
@@ -1605,15 +1626,124 @@ function GroupHeader({
             >
               {group.name}
             </h2>
-            {group.companyId && (
-              <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-[#1061E3] border border-blue-200 text-xs font-semibold shrink-0 select-none"
-                title="Auto-created from Company tab checkmark"
-              >
-                <Bot className="w-3.5 h-3.5 text-[#1061E3]" />
-                <span>Auto Sync</span>
-              </span>
-            )}
+
+            <div className="relative" ref={companyDropdownRef}>
+              {group.companyId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCompanyDropdownOpen(prev => !prev);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 select-none transition-all border ${
+                    isCompanyDropdownOpen
+                      ? 'bg-blue-100 text-[#1061E3] border-blue-300 shadow-2xs'
+                      : 'bg-blue-50 hover:bg-blue-100 text-[#1061E3] border-blue-200'
+                  }`}
+                  title={`Auto Sync linked to ${affiliatedCompany?.name || 'Company'}. Click to change or unlink.`}
+                >
+                  <Bot className="w-3.5 h-3.5 text-[#1061E3]" />
+                  <span>Auto Sync{affiliatedCompany ? `: ${affiliatedCompany.name}` : ''}</span>
+                  <ChevronDown className={`w-3 h-3 text-[#1061E3] transition-transform ${isCompanyDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCompanyDropdownOpen(prev => !prev);
+                  }}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium shrink-0 transition-all border ${
+                    isCompanyDropdownOpen
+                      ? 'bg-gray-100 text-[#1C1F23] border-gray-300 shadow-2xs'
+                      : 'bg-gray-50 hover:bg-gray-100 text-[#6E727A] hover:text-[#1C1F23] border-gray-200 border-dashed opacity-80 group-hover/header:opacity-100'
+                  }`}
+                  title="Link this group to a company for Auto Sync"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-[#8E9299]" />
+                  <span>Link Company</span>
+                  <ChevronDown className={`w-3 h-3 text-[#8E9299] transition-transform ${isCompanyDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+
+              {isCompanyDropdownOpen && (
+                <div
+                  className="absolute left-0 top-full mt-2 z-50 w-72 bg-white rounded-xl shadow-xl border border-[#E2E4E9] overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-3 py-2 bg-[#F9FAFB] border-b border-[#E2E4E9] flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-[#1061E3]" />
+                      <span className="text-xs font-bold text-[#1C1F23] uppercase tracking-wide">Affiliated Company</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsCompanyDropdownOpen(false)}
+                      className="p-0.5 text-[#8E9299] hover:text-[#1C1F23] rounded transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="p-2 border-b border-[#E2E4E9]">
+                    <input
+                      type="text"
+                      placeholder="Search companies..."
+                      value={companySearch}
+                      onChange={(e) => setCompanySearch(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs border border-[#E2E4E9] rounded-md outline-none focus:border-[#1061E3]"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="max-h-56 overflow-y-auto p-1">
+                    {group.companyId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdate(group.id, { companyId: '' });
+                          setIsCompanyDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs font-medium text-[#D32F2F] hover:bg-red-50 rounded-md transition-colors flex items-center justify-between mb-1"
+                      >
+                        <span>Unlink / None</span>
+                        <X className="w-3 h-3 text-[#D32F2F]" />
+                      </button>
+                    )}
+
+                    {companies
+                      .filter(c => (c.name || '').toLowerCase().includes(companySearch.toLowerCase()))
+                      .map(c => {
+                        const isSelected = c.id === group.companyId;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              onUpdate(group.id, { companyId: c.id });
+                              setIsCompanyDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs rounded-md transition-colors flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-blue-50 text-[#1061E3] font-semibold'
+                                : 'text-[#1C1F23] hover:bg-[#F0F2F5]'
+                            }`}
+                          >
+                            <span className="truncate">{c.name}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-[#1061E3] shrink-0 ml-2" />}
+                          </button>
+                        );
+                      })}
+
+                    {companies.filter(c => (c.name || '').toLowerCase().includes(companySearch.toLowerCase())).length === 0 && (
+                      <div className="px-3 py-3 text-xs text-[#8E9299] text-center italic">
+                        No matching companies found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             {itemCount !== undefined && (
               <span
                 className="px-2 py-0.5 rounded-full bg-[#F0F2F5] text-[#4A4D53] text-xs font-semibold shrink-0 select-none"
@@ -2805,6 +2935,16 @@ export default function WorkspaceProjectView({
         'Done'
       ];
     }
+    if (projectType === 'Awebco') {
+      return [
+        'Not Started',
+        'Planning',
+        'In Progress',
+        'On Hold',
+        'Awaiting Review',
+        'Done'
+      ];
+    }
     if (projectType === 'SEO' || projectType === 'Design & Print' || projectType === 'Support Tickets') {
       return [
         'Not Started',
@@ -3073,20 +3213,26 @@ export default function WorkspaceProjectView({
     }
   };
 
-  const handleUpdateGroup = async (id: string, name: string) => {
+  const handleUpdateGroup = async (id: string, updates: string | Partial<{ name: string; companyId: string }>) => {
     try {
+      const patch = typeof updates === 'string' ? { name: updates } : updates;
       if (isDefaultGroups) {
-        // Initialize default groups in Firestore first, changing the name of the target group
+        // Initialize default groups in Firestore first, changing the target group
         for (let i = 0; i < groups.length; i++) {
           const defGroup = groups[i];
-          await createGroupWithId(defGroup.id, {
-            name: defGroup.id === id ? name : defGroup.name,
+          const payload: any = {
+            name: defGroup.name,
             workspace: projectType,
-            order: i
-          });
+            order: i,
+            ...(defGroup.companyId ? { companyId: defGroup.companyId } : {})
+          };
+          if (defGroup.id === id) {
+            Object.assign(payload, patch);
+          }
+          await createGroupWithId(defGroup.id, payload);
         }
       } else {
-        await updateGroup(id, { name });
+        await updateGroup(id, patch);
       }
     } catch (err) {
       console.error('Failed to update group:', err);
@@ -4337,6 +4483,7 @@ export default function WorkspaceProjectView({
                 <SortableGroupWrapper key={group.id} group={group}>
                   <GroupHeader
                     group={group}
+                    companies={companies}
                     onUpdate={handleUpdateGroup}
                     onRemove={handleRemoveGroup}
                     isCollapsed={isCollapsed}
@@ -5521,13 +5668,15 @@ export default function WorkspaceProjectView({
                               }}
                               className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                             >
-                              {(editingRow?.parentId
-                                 ? (projectType === 'Local Listings'
-                                   ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
-                                   : projectType === 'Social Media'
-                                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
-                                     : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
-                                 : statusOptions
+                              {(projectType === 'Awebco'
+                                 ? ['Not Started', 'Planning', 'In Progress', 'On Hold', 'Awaiting Review', 'Done']
+                                 : editingRow?.parentId
+                                   ? (projectType === 'Local Listings'
+                                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                                     : projectType === 'Social Media'
+                                       ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
+                                       : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
+                                   : statusOptions
                               ).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
                           ) : col.id === 'priority' ? (
