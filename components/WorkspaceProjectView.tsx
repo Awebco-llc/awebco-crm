@@ -4694,7 +4694,6 @@ export default function WorkspaceProjectView({
                           )}
                         </GroupDroppableBody>
                       </table>
-                      {/* Add Row to this group */}
                       <button
                         onClick={async () => {
                           try {
@@ -4727,7 +4726,7 @@ export default function WorkspaceProjectView({
                             console.error('Failed to add row:', err);
                           }
                         }}
-                        className="mt-1 w-full flex items-center gap-2 px-4 py-2 text-sm text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50/60 rounded-b-lg transition-colors font-medium group/addrow"
+                        className="mt-1 w-fit flex items-center gap-2 px-4 py-2 text-sm text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50/60 rounded-lg transition-colors font-medium group/addrow"
                       >
                         <Plus className="w-4 h-4 opacity-50 group-hover/addrow:opacity-100 transition-opacity" />
                         Add Row
