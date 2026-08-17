@@ -96,7 +96,7 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
 
   const processFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
-    
+
     Array.from(newFiles).forEach(file => {
       const storage = getStorageClient();
       const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -122,16 +122,20 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
           });
         },
         async () => {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          await saveFileMetadata({
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            storagePath: uploadTask.snapshot.ref.fullPath,
-            downloadUrl,
-            uploadedBy: currentUserId || 'anonymous',
-            folderId: currentFolderId || undefined,
-          });
+          try {
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            await saveFileMetadata({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              storagePath: uploadTask.snapshot.ref.fullPath,
+              downloadUrl,
+              uploadedBy: currentUserId || 'anonymous',
+              ...(currentFolderId ? { folderId: currentFolderId } : {}),
+            });
+          } catch (err) {
+            console.error('Failed to save file metadata:', err);
+          }
           setUploadProgress(prev => {
             const next = { ...prev };
             delete next[file.name];
