@@ -289,15 +289,14 @@ export function subscribeFiles(onChange: (files: StorageFile[]) => void, onError
 
 export async function saveFileMetadata(input: Omit<StorageFile, 'id'>): Promise<string> {
   const db = getDb();
-  const docData = {
-    ...input,
+  const cleanedInput = Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  );
+  const ref = await addDoc(collection(db, 'files'), {
+    ...cleanedInput,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
-  const cleanedData = Object.fromEntries(
-    Object.entries(docData).filter(([, value]) => value !== undefined),
-  ) as StorageFileDoc;
-  const ref = await addDoc(collection(db, 'files'), cleanedData);
+  } satisfies StorageFileDoc);
   return ref.id;
 }
 

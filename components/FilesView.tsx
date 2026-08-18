@@ -94,55 +94,54 @@ export default function FilesView({ currentUserId }: { currentUserId?: string })
     setIsDragging(false);
   };
 
+  const uploadSingleFile = async (file: File) => {
+    const storage = getStorageClient();
+    const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const userPath = currentUserId || 'anonymous';
+    const storageRef = ref(storage, `uploads/${userPath}/${uniqueName}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(prev => ({ ...prev, [file.name]: progress }));
+          },
+          reject,
+          resolve,
+        );
+      });
+
+      const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+      await saveFileMetadata({
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        storagePath: uploadTask.snapshot.ref.fullPath,
+        downloadUrl,
+        uploadedBy: currentUserId || 'anonymous',
+        ...(currentFolderId ? { folderId: currentFolderId } : {}),
+      });
+    } catch (err) {
+      console.error('Failed to upload file:', err);
+      alert(`Failed to upload "${file.name}". Please try again.`);
+    } finally {
+      setUploadProgress(prev => {
+        const next = { ...prev };
+        delete next[file.name];
+        return next;
+      });
+    }
+  };
+
   const processFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
-
-    Array.from(newFiles).forEach(file => {
-      const storage = getStorageClient();
-      const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const userPath = currentUserId || 'anonymous';
-      const storageRef = ref(storage, `uploads/${userPath}/${uniqueName}`);
-
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(prev => ({ ...prev, [file.name]: progress }));
-        },
-        (error) => {
-          console.error('Upload failed:', error);
-          setUploadProgress(prev => {
-            const next = { ...prev };
-            delete next[file.name];
-            return next;
-          });
-        },
-        async () => {
-          try {
-            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-            await saveFileMetadata({
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              storagePath: uploadTask.snapshot.ref.fullPath,
-              downloadUrl,
-              uploadedBy: currentUserId || 'anonymous',
-              ...(currentFolderId ? { folderId: currentFolderId } : {}),
-            });
-          } catch (err) {
-            console.error('Failed to save file metadata:', err);
-          }
-          setUploadProgress(prev => {
-            const next = { ...prev };
-            delete next[file.name];
-            return next;
-          });
-        }
-      );
+    Array.from(newFiles).forEach((file) => {
+      void uploadSingleFile(file);
     });
   };
 
