@@ -96,6 +96,9 @@ function getStatusOptionsForWorkspace(workspace: string): string[] {
   if (workspace === 'Google Ads' || workspace === 'Social Media') {
     return ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done'];
   }
+  if (workspace === 'Awebco') {
+    return ['Not Started', 'Planning', 'In Progress', 'On Hold', 'Awaiting Review', 'Done'];
+  }
   if (workspace === 'SEO' || workspace === 'Design & Print' || workspace === 'Support Tickets') {
     return ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(workspace === 'Support Tickets' ? ['Closed'] : [])];
   }

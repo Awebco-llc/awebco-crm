@@ -307,6 +307,7 @@ export default function SettingsView({
                         </div>
                       )}
                       
+                      {/* Hide email notifications settings as the feature is currently down
                       <div className="flex flex-col gap-2 mt-1 p-3 bg-white border border-[#E2E4E9] rounded-md">
                         <h4 className="text-xs font-bold text-[#4A4D53] uppercase">Notifications</h4>
                         <label className="flex items-center gap-2 text-sm font-semibold text-[#1C1F23] cursor-pointer">
@@ -319,6 +320,7 @@ export default function SettingsView({
                           Email Notifications
                         </label>
                       </div>
+                      */}
                       {editMemberEmail && (
                         <button
                           type="button"

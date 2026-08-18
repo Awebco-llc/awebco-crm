@@ -324,6 +324,7 @@ export default function ProfileView({
               <p className="text-xs text-[#8E9299] mt-2">This photo will be used as your avatar where profile photos are supported.</p>
             </div>
 
+            {/* Hide email notifications settings as the feature is currently down
             <div className="flex flex-col gap-2 p-4 bg-[#F9FAFB] border border-[#E2E4E9] rounded-md">
               <label className="flex items-center gap-2 text-sm font-semibold text-[#1C1F23] cursor-pointer">
                 <input 
@@ -338,6 +339,7 @@ export default function ProfileView({
                 Receive periodic email digests summarizing unread messages and new task/deal assignments.
               </p>
             </div>
+            */}
 
             <div className="pt-4 flex justify-end">
               <button 
