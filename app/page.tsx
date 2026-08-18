@@ -2270,10 +2270,6 @@ export default function Page() {
                           contactName={`${newFirstName} ${newLastName}`}
                           contactEmail={newEmail}
                           currentTeamMember={currentTeamMember}
-                          onSendEmailClick={() => {
-                            const contactObj = contacts.find(c => c.id === editingContactId);
-                            if (contactObj) setEmailingContact(contactObj);
-                          }}
                         />
                       </div>
                     )}

@@ -11,7 +11,6 @@ interface ContactTimelinePaneProps {
   contactName: string;
   contactEmail: string;
   currentTeamMember: TeamMember | undefined;
-  onSendEmailClick?: () => void;
 }
 
 export default function ContactTimelinePane({
@@ -20,7 +19,6 @@ export default function ContactTimelinePane({
   contactName,
   contactEmail,
   currentTeamMember,
-  onSendEmailClick,
 }: ContactTimelinePaneProps) {
   const [noteText, setNoteText] = useState('');
   const [replyText, setReplyText] = useState('');
@@ -70,8 +68,9 @@ export default function ContactTimelinePane({
     return '📎';
   };
 
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddNote = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (!noteText.trim()) return;
 
     setIsSubmittingNote(true);
@@ -94,8 +93,9 @@ export default function ContactTimelinePane({
     }
   };
 
-  const handleSimulateReply = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSimulateReply = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (!replyText.trim()) return;
 
     setIsSimulating(true);
@@ -163,16 +163,6 @@ export default function ContactTimelinePane({
           <p className="text-xs text-[#8E9299]">Log notes, sent emails, and replies</p>
         </div>
         <div className="flex items-center gap-2">
-          {onSendEmailClick && (
-            <button
-              type="button"
-              onClick={onSendEmailClick}
-              className="text-xs font-semibold text-white bg-[#1061E3] hover:bg-blue-700 px-3 py-1.5 rounded-md border border-blue-700 transition-colors flex items-center gap-1"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              Send Email
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setShowSimulator(prev => !prev)}
@@ -187,7 +177,7 @@ export default function ContactTimelinePane({
       {/* Simulator Modal Form */}
       {showSimulator && (
         <div className="bg-[#FFF9E6] border-b border-[#FFE082] p-4 shrink-0">
-          <form onSubmit={handleSimulateReply} className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#B7791F] uppercase tracking-wide flex items-center gap-1.5">
                 <CornerUpLeft className="w-4 h-4" />
@@ -211,39 +201,55 @@ export default function ContactTimelinePane({
                 placeholder={`Type reply from ${contactName}...`}
                 value={replyText}
                 onChange={e => setReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handleSimulateReply(e);
+                  }
+                }}
                 className="flex-grow px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <button
-                type="submit"
+                type="button"
+                onClick={handleSimulateReply}
                 disabled={isSimulating}
                 className="px-4 py-2 bg-[#D97706] hover:bg-amber-700 text-white rounded-md text-sm font-semibold transition-colors disabled:opacity-50"
               >
                 {isSimulating ? 'Sending...' : 'Mock Send'}
               </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
       {/* Note Creator Form */}
       <div className="p-4 bg-white border-b border-[#E2E4E9] shrink-0">
-        <form onSubmit={handleAddNote} className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <textarea
             value={noteText}
             onChange={e => setNoteText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleAddNote(e);
+              }
+            }}
             placeholder="Write an internal activity note..."
             className="w-full min-h-[70px] px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] resize-y"
           />
           <div className="flex justify-end">
             <button
-              type="submit"
+              type="button"
+              onClick={handleAddNote}
               disabled={isSubmittingNote || !noteText.trim()}
               className="px-4 py-1.5 bg-[#1061E3] hover:bg-blue-700 text-white rounded-md text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmittingNote ? 'Saving...' : 'Add Note'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
 
       {/* Activity Timeline List */}
