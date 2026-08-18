@@ -462,6 +462,22 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     }
   };
 
+  const handleDeleteUpdate = async (updateId: string) => {
+    if (!confirm('Delete this update? This cannot be undone.')) return;
+
+    const updatedUpdates = (formData.updates || []).filter(update => update.id !== updateId);
+    setFormData(prev => ({ ...prev, updates: updatedUpdates }));
+
+    if (editingCompanyId) {
+      try {
+        await updateCompany(editingCompanyId, { updates: updatedUpdates });
+      } catch (err) {
+        console.error('Failed to delete company update', err);
+        alert('Failed to delete update. Check console.');
+      }
+    }
+  };
+
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1575,7 +1591,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                       {formData.updates && formData.updates.length > 0 ? (
                         <div className="flex flex-col gap-3 mb-4 max-h-[280px] overflow-y-auto">
                           {formData.updates.map(update => (
-                            <div key={update.id} className="bg-[#F9FAFB] p-3 rounded-md border border-[#E2E4E9]">
+                            <div key={update.id} className="group bg-[#F9FAFB] p-3 rounded-md border border-[#E2E4E9]">
                               <div className="flex justify-between items-center mb-1">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <div
@@ -1586,9 +1602,19 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                                   </div>
                                   <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author || 'User'}</span>
                                 </div>
-                                <span className="text-[10px] text-[#8E9299]">
-                                  {safeFormatDate(update.createdAt)}
-                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[10px] text-[#8E9299]">
+                                    {safeFormatDate(update.createdAt)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteUpdate(update.id)}
+                                    className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Delete update"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                               <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
                             </div>
