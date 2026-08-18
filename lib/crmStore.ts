@@ -291,7 +291,7 @@ export async function saveFileMetadata(input: Omit<StorageFile, 'id'>): Promise<
   const db = getDb();
   const cleanedInput = Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
-  );
+  ) as Omit<StorageFile, 'id'>;
   const ref = await addDoc(collection(db, 'files'), {
     ...cleanedInput,
     createdAt: serverTimestamp(),
