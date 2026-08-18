@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
-import { Search, Plus, FileText, Download, Mail, X, Trash2, ArrowLeft, ChevronUp, ChevronDown, ChevronsUpDown, Paperclip, Loader2, File, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Search, Plus, FileText, Download, Mail, Trash2, ArrowLeft, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { Company, Contact, TeamMember, ProductService, Proposal, ProposalItem, Deal } from './Shared';
 import { createProposal, updateProposal, deleteProposal, updateDeal } from '@/lib/crmStore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { getStorageClient } from '@/lib/firebase';
 
 function formatCatalogPrice(value: string) {
   const trimmedValue = value.trim();
@@ -62,90 +60,6 @@ export default function ProposalsView({
       }
     }
   }, [openRowId, proposals]);
-
-  const [uploadProgress, setUploadProgress] = useState<{ [filename: string]: number }>({});
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleAttachFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || !currentDoc) return;
-
-    const storage = getStorageClient();
-    setIsUploading(true);
-
-    Array.from(files).forEach((file) => {
-      const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const storageRef = ref(storage, `proposals/${currentDoc.id}/${uniqueName}`);
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(prev => ({ ...prev, [file.name]: progress }));
-        },
-        (error) => {
-          console.error('File upload failed:', error);
-          setUploadProgress(prev => {
-            const next = { ...prev };
-            delete next[file.name];
-            return next;
-          });
-          setIsUploading(false);
-        },
-        async () => {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          
-          setCurrentDoc(prevDoc => {
-            if (!prevDoc) return null;
-            const currentAttachments = prevDoc.attachments || [];
-            return {
-              ...prevDoc,
-              attachments: [...currentAttachments, { name: file.name, url: downloadUrl }]
-            };
-          });
-
-          setUploadProgress(prev => {
-            const next = { ...prev };
-            delete next[file.name];
-            return next;
-          });
-          setIsUploading(false);
-        }
-      );
-    });
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleRemoveAttachment = async (indexToRemove: number) => {
-    if (!currentDoc) return;
-    const attachment = currentDoc.attachments?.[indexToRemove];
-    if (!attachment) return;
-
-    try {
-      const storage = getStorageClient();
-      const decodedUrl = decodeURIComponent(attachment.url);
-      const storagePathMatch = decodedUrl.match(/\/o\/(.+)\?alt=media/);
-      if (storagePathMatch && storagePathMatch[1]) {
-        const storagePath = storagePathMatch[1];
-        const storageRef = ref(storage, storagePath);
-        await deleteObject(storageRef);
-      }
-    } catch (err) {
-      console.warn('Failed to delete attachment from Firebase Storage:', err);
-    }
-
-    setCurrentDoc({
-      ...currentDoc,
-      attachments: (currentDoc.attachments || []).filter((_, idx) => idx !== indexToRemove)
-    });
-  };
 
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
     if (typeof window !== 'undefined') {
@@ -245,22 +159,12 @@ export default function ProposalsView({
       clientPrintedName: '',
       signatureName: '',
       signatureDate: new Date().toISOString().split('T')[0],
-      cardholderName: '',
-      cardNumber: '',
-      cardExpiry: '',
-      cardCvv: '',
-      billingZip: '',
-      attachments: [],
     });
     setActiveView('edit');
   };
 
   const handleSave = async () => {
     if (currentDoc) {
-      if (isUploading) {
-        alert('Please wait for files to finish uploading before saving.');
-        return;
-      }
       setProposals(prev => {
         const index = prev.findIndex(p => p.id === currentDoc.id);
         if (index > -1) {
@@ -607,215 +511,47 @@ export default function ProposalsView({
               </div>
             </div>
 
-            {/* Attachments Section */}
-            <div className="mt-8 border-t border-[#E2E4E9] pt-8 print:hidden">
-              <h4 className="text-sm font-bold text-[#1C1F23] mb-4 uppercase tracking-wider flex items-center gap-2">
-                <Paperclip className="w-4 h-4 text-[#8E9299]" />
-                Attachments
-              </h4>
-              
-              {/* File List */}
-              {currentDoc.attachments && currentDoc.attachments.length > 0 ? (
-                <div className="space-y-2 mb-4">
-                  {currentDoc.attachments.map((attachment, idx) => (
-                    <div 
-                      key={idx} 
-                      className="flex items-center justify-between p-3 bg-[#F9FAFB] border border-[#E2E4E9] rounded-lg group"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <File className="w-4 h-4 text-[#8E9299] shrink-0" />
-                        <a 
-                          href={attachment.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-[#1061E3] hover:underline truncate"
-                        >
-                          {attachment.name}
-                        </a>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <a
-                          href={attachment.url}
-                          download={attachment.name}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1 text-[#8E9299] hover:text-[#1061E3] hover:bg-blue-50 rounded transition-colors flex items-center justify-center shrink-0"
-                          title="Download attachment"
-                        >
-                          <Download className="w-4 h-4" />
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAttachment(idx)}
-                          className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2] rounded transition-colors opacity-0 group-hover:opacity-100 print:hidden"
-                          title="Remove Attachment"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-[#8E9299] italic mb-4 print:hidden">No attachments added yet.</p>
-              )}
-
-              {/* Upload Controls - Hidden when printing */}
-              <div className="print:hidden">
-                <input 
-                  type="file"
-                  multiple
-                  ref={fileInputRef}
-                  onChange={handleAttachFile}
-                  className="hidden"
-                />
-                
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="flex items-center gap-1.5 bg-white border border-[#E2E4E9] text-[#1C1F23] px-3 py-2 rounded-md text-xs font-semibold hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
-                  >
-                    {isUploading ? (
-                      <Loader2 className="w-3.5 h-3.5 text-[#1061E3] animate-spin" />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5 text-[#1061E3]" />
-                    )}
-                    Attach Files
-                  </button>
-                  {isUploading && (
-                    <span className="text-xs text-[#8E9299]">Uploading...</span>
-                  )}
-                </div>
-
-                {/* Individual progress bars if uploading */}
-                {Object.entries(uploadProgress).length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {Object.entries(uploadProgress).map(([name, progress]) => (
-                      <div key={name} className="bg-white border border-[#E2E4E9] rounded-lg p-2.5 flex items-center gap-3 max-w-md">
-                        <Loader2 className="w-4 h-4 text-[#1061E3] animate-spin shrink-0" />
-                        <div className="flex-grow min-w-0">
-                          <div className="text-xs font-medium text-[#1C1F23] truncate mb-1">{name}</div>
-                          <div className="h-1 w-full bg-[#E3F2FD] rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-[#1061E3] transition-all duration-300 ease-out"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
             <div className="mt-10 print:mt-8">
               <div className="border-t border-[#E2E4E9] pt-8 print:pt-6">
-                <h4 className="text-sm font-bold text-[#1C1F23] mb-4 uppercase tracking-wider">Credit Card Information</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="col-span-1 sm:col-span-2 md:col-span-3">
-                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Cardholder Name</label>
+                <h4 className="text-sm font-bold text-[#1C1F23] mb-4 uppercase tracking-wider">Accept Estimate</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:grid-cols-3 print:gap-8">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Today&apos;s Date</label>
+                    <input
+                      type="date"
+                      value={currentDoc.signatureDate || todayString}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, signatureDate: e.target.value })}
+                      className="w-full max-w-[180px] text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-2 py-1 outline-none bg-white print:hidden"
+                    />
+                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
+                      {currentDoc.signatureDate || todayString || ' '}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Print Name</label>
                     <input
                       type="text"
-                      value={currentDoc.cardholderName || ''}
-                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardholderName: e.target.value })}
+                      value={currentDoc.clientPrintedName || ''}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, clientPrintedName: e.target.value })}
+                      placeholder="Printed name"
                       className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                     />
                     <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                      {currentDoc.cardholderName || ' '}
+                      {currentDoc.clientPrintedName || ' '}
                     </div>
                   </div>
-                  <div className="col-span-1 sm:col-span-2 md:col-span-3">
-                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Card Number</label>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Signature</label>
                     <input
                       type="text"
-                      value={currentDoc.cardNumber || ''}
-                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardNumber: e.target.value })}
+                      value={currentDoc.signatureName || ''}
+                      onChange={(e) => setCurrentDoc({ ...currentDoc, signatureName: e.target.value })}
+                      placeholder="Signature"
                       className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
                     />
                     <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                      {currentDoc.cardNumber || ' '}
+                      {currentDoc.signatureName || ' '}
                     </div>
-                  </div>
-                  <div className="col-span-1">
-                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Expiry</label>
-                    <input
-                      type="text"
-                      value={currentDoc.cardExpiry || ''}
-                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardExpiry: e.target.value })}
-                      placeholder="MM/YY"
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
-                    />
-                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                      {currentDoc.cardExpiry || ' '}
-                    </div>
-                  </div>
-                  <div className="col-span-1">
-                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">CVV</label>
-                    <input
-                      type="text"
-                      value={currentDoc.cardCvv || ''}
-                      onChange={(e) => setCurrentDoc({ ...currentDoc, cardCvv: e.target.value })}
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
-                    />
-                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                      {currentDoc.cardCvv || ' '}
-                    </div>
-                  </div>
-                  <div className="col-span-1 sm:col-span-2 md:col-span-1">
-                    <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Billing Zip</label>
-                    <input
-                      type="text"
-                      value={currentDoc.billingZip || ''}
-                      onChange={(e) => setCurrentDoc({ ...currentDoc, billingZip: e.target.value })}
-                      className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
-                    />
-                    <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                      {currentDoc.billingZip || ' '}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 print:grid-cols-3 print:gap-8">
-                <div>
-                  <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Today&apos;s Date</label>
-                  <input
-                    type="date"
-                    value={currentDoc.signatureDate || todayString}
-                    onChange={(e) => setCurrentDoc({ ...currentDoc, signatureDate: e.target.value })}
-                    className="w-full max-w-[180px] text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-2 py-1 outline-none bg-white print:hidden"
-                  />
-                  <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                    {currentDoc.signatureDate || todayString || ' '}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Client Printed Name</label>
-                  <input
-                    type="text"
-                    value={currentDoc.clientPrintedName || ''}
-                    onChange={(e) => setCurrentDoc({ ...currentDoc, clientPrintedName: e.target.value })}
-                    placeholder="Printed name"
-                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
-                  />
-                  <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                    {currentDoc.clientPrintedName || ' '}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#8E9299] mb-1 uppercase tracking-wider">Signature</label>
-                  <input
-                    type="text"
-                    value={currentDoc.signatureName || ''}
-                    onChange={(e) => setCurrentDoc({ ...currentDoc, signatureName: e.target.value })}
-                    placeholder="Signature"
-                    className="w-full text-sm text-[#4A4D53] border border-[#E2E4E9] rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#1061E3] bg-white print:hidden"
-                  />
-                  <div className="hidden print:block text-sm text-[#1C1F23] pt-2 border-b border-gray-400 min-h-[32px]">
-                    {currentDoc.signatureName || ' '}
                   </div>
                 </div>
               </div>

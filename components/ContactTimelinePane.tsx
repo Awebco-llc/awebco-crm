@@ -1,30 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Mail, Send, MessageSquare, Trash2, Calendar, CornerUpLeft, ChevronDown, ChevronUp, Paperclip, Download } from 'lucide-react';
+import { Mail, Send, MessageSquare, Trash2, Calendar, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { ContactActivity, TeamMember } from './Shared';
 import { createActivity, deleteActivity } from '@/lib/crmStore';
 
 interface ContactTimelinePaneProps {
   contactId: string;
   activities: ContactActivity[];
-  contactName: string;
-  contactEmail: string;
   currentTeamMember: TeamMember | undefined;
 }
 
 export default function ContactTimelinePane({
   contactId,
   activities,
-  contactName,
-  contactEmail,
   currentTeamMember,
 }: ContactTimelinePaneProps) {
   const [noteText, setNoteText] = useState('');
-  const [replyText, setReplyText] = useState('');
-  const [showSimulator, setShowSimulator] = useState(false);
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
-  const [isSimulating, setIsSimulating] = useState(false);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
 
   const handleDownloadFileDirectly = async (e: React.MouseEvent, url: string, filename: string) => {
@@ -93,40 +86,6 @@ export default function ContactTimelinePane({
     }
   };
 
-  const handleSimulateReply = async (e?: React.FormEvent | React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    if (!replyText.trim()) return;
-
-    setIsSimulating(true);
-    try {
-      const response = await fetch('/api/email/inbound', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sender: `${contactName} <${contactEmail}>`,
-          recipient: `inbound+${contactId}@awebco-crm.com`,
-          subject: 'Re: Follow up',
-          body: replyText.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Simulation endpoint returned error');
-      }
-
-      setReplyText('');
-      setShowSimulator(false);
-    } catch (err) {
-      console.error('Simulation failed:', err);
-      alert('Failed to simulate reply. Make sure Next.js dev server is running.');
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
   const handleDelete = async (activityId: string) => {
     if (confirm('Are you sure you want to delete this activity log?')) {
       try {
@@ -155,73 +114,14 @@ export default function ContactTimelinePane({
   return (
     <div className="w-full flex flex-col h-full bg-[#F8FAFC] border-l border-[#E2E4E9] overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 bg-white border-b border-[#E2E4E9] flex items-center justify-between shrink-0">
+      <div className="px-6 py-4 bg-white border-b border-[#E2E4E9] shrink-0">
         <div>
           <h4 className="font-bold text-sm text-[#1C1F23] uppercase tracking-wider">
             Activity Timeline
           </h4>
           <p className="text-xs text-[#8E9299]">Log notes, sent emails, and replies</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowSimulator(prev => !prev)}
-            className="text-xs font-semibold text-[#1061E3] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md border border-blue-200 transition-colors flex items-center gap-1"
-          >
-            <CornerUpLeft className="w-3.5 h-3.5" />
-            Simulate Reply
-          </button>
-        </div>
       </div>
-
-      {/* Simulator Modal Form */}
-      {showSimulator && (
-        <div className="bg-[#FFF9E6] border-b border-[#FFE082] p-4 shrink-0">
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#B7791F] uppercase tracking-wide flex items-center gap-1.5">
-                <CornerUpLeft className="w-4 h-4" />
-                Reply Simulator (Simulates Customer Inbound Webhook)
-              </span>
-              <button 
-                type="button" 
-                onClick={() => setShowSimulator(false)}
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
-                Cancel
-              </button>
-            </div>
-            <p className="text-xs text-[#8E9299]">
-              This simulates the customer replying to your email address. It hits `/api/email/inbound` and links the email back to the contact in real-time.
-            </p>
-            <div className="flex gap-2">
-              <input
-                required
-                type="text"
-                placeholder={`Type reply from ${contactName}...`}
-                value={replyText}
-                onChange={e => setReplyText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleSimulateReply(e);
-                  }
-                }}
-                className="flex-grow px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-              <button
-                type="button"
-                onClick={handleSimulateReply}
-                disabled={isSimulating}
-                className="px-4 py-2 bg-[#D97706] hover:bg-amber-700 text-white rounded-md text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                {isSimulating ? 'Sending...' : 'Mock Send'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Note Creator Form */}
       <div className="p-4 bg-white border-b border-[#E2E4E9] shrink-0">

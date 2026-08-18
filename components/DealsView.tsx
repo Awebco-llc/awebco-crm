@@ -1372,12 +1372,6 @@ export default function DealsView({
                                   clientPrintedName: '',
                                   signatureName: '',
                                   signatureDate: today,
-                                  cardholderName: '',
-                                  cardNumber: '',
-                                  cardExpiry: '',
-                                  cardCvv: '',
-                                  billingZip: '',
-                                  attachments: [],
                                 };
                                 
                                 setProposals(prev => [...prev, newProp]);

@@ -2267,8 +2267,6 @@ export default function Page() {
                         <ContactTimelinePane
                           contactId={editingContactId}
                           activities={activities}
-                          contactName={`${newFirstName} ${newLastName}`}
-                          contactEmail={newEmail}
                           currentTeamMember={currentTeamMember}
                         />
                       </div>
