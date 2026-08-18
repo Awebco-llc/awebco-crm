@@ -263,7 +263,7 @@ const PLANS_CONFIG = [
 
 type CompanyProfileTab = 'details' | 'description' | 'plans' | 'updates' | 'proposals';
 
-export default function CompaniesView({ teamMembers, companies, setCompanies, contacts, proposals, allowDeletingColumns = false }: { teamMembers: TeamMember[], companies: Company[], setCompanies: React.Dispatch<React.SetStateAction<Company[]>>, contacts: Contact[], proposals: Proposal[], allowDeletingColumns?: boolean }) {
+export default function CompaniesView({ teamMembers, companies, setCompanies, contacts, proposals, allowDeletingColumns = false, currentUserName }: { teamMembers: TeamMember[], companies: Company[], setCompanies: React.Dispatch<React.SetStateAction<Company[]>>, contacts: Contact[], proposals: Proposal[], allowDeletingColumns?: boolean, currentUserName?: string }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
@@ -467,7 +467,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
 
     let updatedUpdates = formData.updates || [];
     if (newUpdateText.trim()) {
-      const author = teamMembers?.[0]?.name || 'You';
+      const author = currentUserName || 'You';
       updatedUpdates = [
         ...updatedUpdates,
         {

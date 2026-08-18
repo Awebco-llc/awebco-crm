@@ -2049,7 +2049,7 @@ export default function Page() {
         ) : activeContentNav === 'Support Tickets' ? (
           <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingRows={canDeleteRows} allowDeletingGroups={canDeleteGroups} allowDeletingColumns={canDeleteColumns} onCloseRow={handleCloseRow} />
         ) : canAccessCRM && activeContentNav === 'Companies' ? (
-          <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} allowDeletingColumns={canDeleteColumns} />
+          <CompaniesView teamMembers={teamMembers} companies={companies} setCompanies={setCompanies} contacts={contacts} proposals={proposals} allowDeletingColumns={canDeleteColumns} currentUserName={currentUserName} />
         ) : canAccessCRM && activeContentNav === 'Deals / Sales' ? (
           <DealsView 
             teamMembers={teamMembers} 
