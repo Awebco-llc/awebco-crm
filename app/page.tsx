@@ -1096,6 +1096,12 @@ export default function Page() {
 
   const unreadNotificationCount = userNotifications.filter(notification => !notification.read).length;
 
+  const unreadInboxCount = currentTeamMember
+    ? chatMessages.filter(
+        (m) => m.receiverId === currentTeamMember.id && m.read !== true
+      ).length
+    : 0;
+
   const createMentionNotifications = (
     text: string, 
     sourceLabel: string, 
@@ -1647,9 +1653,7 @@ export default function Page() {
         <nav className="py-2.5">
           {NAV_ITEMS_MAIN.map(item => {
             const isInbox = item.name === 'Inbox';
-            const unreadMessagesCount = isInbox && currentTeamMember
-              ? chatMessages.filter(m => m.receiverId === currentTeamMember.id && !m.read).length
-              : 0;
+            const showUnreadBadge = isInbox && unreadInboxCount > 0;
 
             return (
               <div 
@@ -1661,13 +1665,13 @@ export default function Page() {
                     : 'text-[#B3D4FF] hover:bg-[#002244] hover:text-white border-r-[3px] border-transparent'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <item.icon className={`w-4 h-4 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
+                <div className="flex items-center gap-3 min-w-0">
+                  <item.icon className={`w-4 h-4 shrink-0 ${activeContentNav === item.name ? 'text-[#66B2FF]' : 'text-[#88AADD]'}`} />
                   <span>{item.name}</span>
                 </div>
-                {unreadMessagesCount > 0 && (
-                  <span className="bg-[#D32F2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 min-w-[18px] text-center shadow-sm">
-                    {unreadMessagesCount}
+                {showUnreadBadge && (
+                  <span className="bg-[#D32F2F] text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1.5 rounded-full shrink-0 flex items-center justify-center leading-none shadow-sm">
+                    {unreadInboxCount > 9 ? '9+' : unreadInboxCount}
                   </span>
                 )}
               </div>
