@@ -659,6 +659,14 @@ export default function Page() {
     return 'My Tasks';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showGolfBanner, setShowGolfBanner] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('awebco_dismiss_golf_outing_banner') !== '1';
+  });
+  const dismissGolfBanner = () => {
+    setShowGolfBanner(false);
+    localStorage.setItem('awebco_dismiss_golf_outing_banner', '1');
+  };
   const handleNavClick = (nav: string) => {
     setActiveNav(nav);
     setWorkspaceOpenRequest(null);
@@ -1602,7 +1610,36 @@ export default function Page() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-[#F7F8FA] text-[#1C1F23] font-sans overflow-hidden">
+    <div className="flex flex-col h-screen w-full bg-[#F7F8FA] text-[#1C1F23] font-sans overflow-hidden">
+      {showGolfBanner && (
+        <div className="relative z-[60] shrink-0 bg-[#14532d] text-white pl-4 pr-12 py-2.5 flex items-center justify-center gap-3">
+          <svg
+            viewBox="0 0 24 24"
+            className="w-5 h-5 shrink-0"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M7 3v14" stroke="#E8C547" strokeWidth="1.75" strokeLinecap="round" />
+            <path d="M7 3.5l9 3.25L7 10V3.5z" fill="#E8C547" />
+            <circle cx="7" cy="19.5" r="2.25" fill="#E8C547" />
+            <path d="M4 21.5h14" stroke="#E8C547" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
+          </svg>
+          <p className="text-sm font-semibold text-center leading-snug">
+            Congratulations Team Awebco! 1st place in the Greenwood Golf Outing.
+          </p>
+          <button
+            type="button"
+            onClick={dismissGolfBanner}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+            title="Dismiss"
+            aria-label="Dismiss announcement"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-grow min-h-0 overflow-hidden">
       {dataError ? (
         <div className="fixed top-4 right-4 z-[100] max-w-md rounded-md border border-[#FEE2E2] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] shadow-sm">
           {dataError}
@@ -2311,6 +2348,7 @@ export default function Page() {
           )}
         </AnimatePresence>
       </main>
+      </div>
     </div>
   );
 }
