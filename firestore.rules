@@ -23,13 +23,47 @@ service cloud.firestore {
     }
 
     // Secure access: Only authenticated team members with a valid role can read/write.
-    match /{document=**} {
-      allow read, write: if isAuthenticated() && hasValidRole();
+    match /{collection}/{document=**} {
+      allow read, write: if collection != '_mcp' && collection != 'users'
+        && isAuthenticated() && hasValidRole();
+    }
+
+    // _mcp contains server-managed key hashes, activation, budgets and audit events.
+    // No browser client, including the master admin, may access this collection.
+    match /_mcp/{document=**} {
+      allow read, write: if false;
     }
     
     // Exception: Users need to be able to read their own profile to get their role
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      function isMasterAdmin() {
+        return isAuthenticated() && getUserRole() == 'master_admin';
+      }
+      function isValidUser() {
+        return request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 200
+          && request.resource.data.role in ['master_admin', 'admin', 'staff', 'freelancer'];
+      }
+      allow read: if isAuthenticated() && (request.auth.uid == userId || hasValidRole());
+      allow create: if isValidUser() && (
+        isMasterAdmin() || (isAuthenticated() && getUserRole() == 'admin'
+          && request.resource.data.role != 'master_admin')
+      );
+      allow update: if isValidUser()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'uid'])
+        && (
+          isMasterAdmin()
+          || (isAuthenticated() && getUserRole() == 'admin'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['permissions', 'updatedAt'])
+            && resource.data.role != 'master_admin')
+          || (isAuthenticated() && request.auth.uid == userId && hasValidRole()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'name', 'initials', 'color', 'photoUrl', 'emailNotificationsEnabled', 'password', 'updatedAt'
+            ]))
+        );
+      allow delete: if isMasterAdmin() || (isAuthenticated() && getUserRole() == 'admin'
+        && resource.data.role != 'master_admin');
     }
   }
 }

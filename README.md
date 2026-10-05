@@ -6,6 +6,8 @@
 
 This project is a CRM and Workspace management tool.
 
+Private AI agent connection setup: [MCP setup](docs/mcp-setup.md).
+
 ## Run Locally
 
 **Prerequisites:**  Node.js
