@@ -4,6 +4,7 @@ import { TeamMember } from '@/components/Shared';
 import { createTeamMember, updateTeamMember, deleteTeamMember } from '@/lib/crmStore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { getAuthClient } from '@/lib/firebase';
+import McpConnections from '@/components/McpConnections';
 
 const formatRole = (role?: TeamMember['role']) => {
   if (role === 'master_admin') return 'Master Admin';
@@ -193,6 +194,8 @@ export default function SettingsView({
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-[#F9FAFB]">
       <div className="p-8 max-w-4xl mx-auto w-full overflow-y-auto h-full">
         <h1 className="text-2xl font-bold text-[#1C1F23] mb-8">Settings</h1>
+
+        {currentUserRole === 'master_admin' && <McpConnections />}
 
         <div className="bg-white rounded-xl shadow-sm border border-[#E2E4E9] overflow-hidden mb-8">
           <div className="px-6 py-5 border-b border-[#E2E4E9]">
