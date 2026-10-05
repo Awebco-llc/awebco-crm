@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 
 let environment: RulesTestEnvironment;
 before(async () => {
@@ -9,6 +9,8 @@ before(async () => {
   environment = await initializeTestEnvironment({ projectId: 'demo-awebco-mcp', firestore: { rules: readFileSync('firestore.rules', 'utf8') } });
   await environment.withSecurityRulesDisabled(async context => {
     for (const [uid, role] of [['master', 'master_admin'], ['admin', 'admin'], ['staff', 'staff'], ['freelancer', 'freelancer']]) await setDoc(doc(context.firestore(), 'users', uid), { name: uid, role, authUid: uid });
+    // The existing master profile has uid instead of authUid. Preserve that shape.
+    await setDoc(doc(context.firestore(), 'users/master'), { name: 'master', role: 'master_admin', uid: 'master' });
     await setDoc(doc(context.firestore(), '_mcp/config'), { enabled: true });
     await setDoc(doc(context.firestore(), 'tickets/task'), { workspace: 'SEO', projectName: 'Test' });
   });
@@ -43,4 +45,53 @@ test('public callers cannot read tasks or create an admin profile', async () => 
   const db = environment.unauthenticatedContext().firestore();
   await assertFails(getDoc(doc(db, 'tickets/task')));
   await assertFails(setDoc(doc(db, 'users/new'), { name: 'Intruder', role: 'master_admin' }));
+});
+
+test('every existing employee role can sign in, load the team and save its own profile', async () => {
+  for (const uid of ['master', 'admin', 'staff', 'freelancer']) {
+    const db = environment.authenticatedContext(uid).firestore();
+    await assertSucceeds(getDoc(doc(db, 'users', uid)));
+    await assertSucceeds(getDocs(query(collection(db, 'users'), orderBy('name'))));
+    // Match ProfileView's exact save fields, including its password-change save.
+    await assertSucceeds(setDoc(doc(db, 'users', uid), {
+      name: `Profile ${uid}`, initials: 'PR', color: '#1061E3', photoUrl: '',
+      emailNotificationsEnabled: true, password: 'test-only-password', updatedAt: serverTimestamp(),
+    }, { merge: true }));
+  }
+});
+
+test('task and client read/create/update/delete behavior stays unchanged for all team roles', async () => {
+  for (const uid of ['master', 'admin', 'staff', 'freelancer']) {
+    const db = environment.authenticatedContext(uid).firestore();
+    for (const path of ['tickets', 'companies', 'contacts', 'groups', 'products']) {
+      const ref = doc(db, path, `regression-${uid}`);
+      await assertSucceeds(setDoc(ref, { name: 'Test', workspace: 'SEO', status: 'Not Started' }));
+      await assertSucceeds(getDoc(ref));
+      await assertSucceeds(getDocs(collection(db, path)));
+      await assertSucceeds(updateDoc(ref, { status: 'In Progress' }));
+      await assertSucceeds(deleteDoc(ref));
+    }
+  }
+});
+
+test('master can save the full Settings member form, create accounts and change roles', async () => {
+  const db = environment.authenticatedContext('master').firestore();
+  const ref = doc(db, 'users/new-employee');
+  await assertSucceeds(setDoc(ref, { name: 'New employee', role: 'staff', authUid: 'new-employee', color: '#1061E3', initials: 'NE' }));
+  const existing = (await getDoc(ref)).data()!;
+  // SettingsView saves a full object, rather than a small patch.
+  await assertSucceeds(setDoc(ref, {
+    ...existing, id: 'new-employee', role: 'admin', email: 'test@example.invalid',
+    permissions: { canViewCRM: true, allowedWorkspaces: ['SEO'], canDeleteRows: true, canDeleteColumns: false, canDeleteGroups: false },
+    emailNotificationsEnabled: false, updatedAt: serverTimestamp(),
+  }, { merge: true }));
+  await assertSucceeds(deleteDoc(ref));
+});
+
+test('admin workspace management and the existing public ticket intake remain available', async () => {
+  const db = environment.authenticatedContext('admin').firestore();
+  await assertSucceeds(updateDoc(doc(db, 'users/staff'), { permissions: { allowedWorkspaces: ['SEO', 'Local Listings'] }, updatedAt: serverTimestamp() }));
+  const publicDb = environment.unauthenticatedContext().firestore();
+  await assertSucceeds(setDoc(doc(publicDb, 'tickets/public-form-test'), { projectName: 'Test intake', workspace: 'Support Tickets' }));
+  await assertFails(getDoc(doc(publicDb, 'tickets/public-form-test')));
 });
