@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { mcpDb, type McpAccess } from './access';
-import { escapeNote, fields, groupForStatus, idSchema, MAX_REQUESTS, MAX_WRITES, PAGE_SIZE, patchSchema, PRIVATE_COLLECTION, projectRecord, statusesForWorkspace, workspaces, workspaceSchema } from './policy';
+import { canManageConnections, escapeNote, fields, groupForStatus, idSchema, MAX_REQUESTS, MAX_WRITES, PAGE_SIZE, patchSchema, PRIVATE_COLLECTION, projectRecord, statusesForWorkspace, workspaces, workspaceSchema } from './policy';
 
 const collections = z.enum(['tickets', 'companies', 'contacts', 'products']);
 const filters: Record<keyof typeof fields, string[]> = {
@@ -67,7 +67,7 @@ export function createCrmServer(access: McpAccess, database = mcpDb) {
       const config = await transaction.get(db.collection(PRIVATE_COLLECTION).doc('config'));
       const key = await transaction.get(db.collection(PRIVATE_COLLECTION).doc(`key_${access.keyId}`));
       const user = await transaction.get(db.collection('users').doc(access.uid));
-      if (config.data()?.enabled !== true || key.data()?.canWrite !== true || key.data()?.uid !== access.uid || key.data()?.expiresAt <= Date.now() || user.data()?.role !== 'master_admin') throw new Error('Write access revoked.');
+      if (config.data()?.enabled !== true || key.data()?.canWrite !== true || key.data()?.uid !== access.uid || key.data()?.expiresAt <= Date.now() || !canManageConnections(user.data()?.role)) throw new Error('Write access revoked.');
       const budgetRef = db.collection(PRIVATE_COLLECTION).doc('budget');
       const budget = await transaction.get(budgetRef);
       const budgetData = budget.data()!;

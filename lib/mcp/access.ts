@@ -3,7 +3,7 @@ import { getApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getFirestoreAdmin } from '../firebaseAdmin';
-import { nextBudget, PRIVATE_COLLECTION, tokenId } from './policy';
+import { canManageConnections, nextBudget, PRIVATE_COLLECTION, tokenId } from './policy';
 
 export class AccessError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -29,7 +29,7 @@ export function checkOrigin(request: Request) {
   if (origin && origin !== new URL(request.url).origin) throw new AccessError('Origin is not allowed.', 403);
 }
 
-export async function masterUser(request: Request) {
+export async function adminUser(request: Request) {
   checkOrigin(request);
   const bearer = /^Bearer (\S+)$/.exec(request.headers.get('authorization') || '')?.[1];
   if (!bearer || bearer.length > 8000) throw new AccessError('Sign in to the CRM.', 401);
@@ -38,7 +38,7 @@ export async function masterUser(request: Request) {
   try { uid = (await getAuth(getApp()).verifyIdToken(bearer, true)).uid; }
   catch { throw new AccessError('Sign in to the CRM again.', 401); }
   const profile = (await db.collection('users').doc(uid).get()).data();
-  if (profile?.role !== 'master_admin') throw new AccessError('Only the master admin can manage AI connections.', 403);
+  if (!canManageConnections(profile?.role)) throw new AccessError('Only admins can manage AI connections.', 403);
   return { uid, name: String(profile.name || 'AI agent') };
 }
 
@@ -62,7 +62,7 @@ export async function authenticateAgent(request: Request): Promise<McpAccess> {
     const key = (await transaction.get(db.collection(PRIVATE_COLLECTION).doc(`key_${id}`))).data();
     if (!key || key.tokenHash !== hashToken(bearer) || key.expiresAt <= Date.now()) throw new AccessError('MCP key expired or revoked.', 401);
     const user = (await transaction.get(db.collection('users').doc(key.uid))).data();
-    if (user?.role !== 'master_admin') throw new AccessError('Connection owner no longer has access.', 403);
+    if (!canManageConnections(user?.role)) throw new AccessError('Connection owner no longer has access.', 403);
     transaction.set(budgetRef, reserved);
     return { uid: key.uid, name: String(user.name || 'AI agent'), keyId: id, canWrite: key.canWrite === true };
   }, { maxAttempts: 3 });

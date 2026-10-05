@@ -195,7 +195,7 @@ export default function SettingsView({
       <div className="p-8 max-w-4xl mx-auto w-full overflow-y-auto h-full">
         <h1 className="text-2xl font-bold text-[#1C1F23] mb-8">Settings</h1>
 
-        {currentUserRole === 'master_admin' && <McpConnections />}
+        {(currentUserRole === 'master_admin' || currentUserRole === 'admin') && <McpConnections />}
 
         <div className="bg-white rounded-xl shadow-sm border border-[#E2E4E9] overflow-hidden mb-8">
           <div className="px-6 py-5 border-b border-[#E2E4E9]">

@@ -43,7 +43,7 @@ export default function McpConnections() {
   return (
     <section className="bg-white rounded-xl shadow-sm border border-[#E2E4E9] p-6 mb-8">
       <h2 className="text-lg font-semibold text-[#1C1F23]">AI agent connections</h2>
-      <p className="text-sm text-[#8E9299] mt-1">Connect an agent to tasks, clients, contacts and services. Keys expire after 90 days. Only the master admin can create connections.</p>
+      <p className="text-sm text-[#8E9299] mt-1">Connect an agent to tasks, clients, contacts and services. Keys expire after 90 days. Only admins can create connections.</p>
       <p className="text-sm mt-3">All agents share a daily limit of 100 requests and 25 task edits. Client records and service subscriptions are read only.</p>
       <div className="flex flex-wrap items-end gap-3 mt-4">
         <label className="text-sm">Connection name<input maxLength={60} value={name} onChange={event => setName(event.target.value)} className="block border rounded-lg px-3 py-2 mt-1" /></label>

@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import { AccessError, errorResponse, hashToken, masterUser, mcpDb, readJson, signingKey } from '@/lib/mcp/access';
+import { AccessError, errorResponse, hashToken, adminUser, mcpDb, readJson, signingKey } from '@/lib/mcp/access';
 import { idSchema, issueToken, PRIVATE_COLLECTION } from '@/lib/mcp/policy';
 
 export const runtime = 'nodejs';
@@ -10,7 +10,7 @@ const reply = (data: unknown) => Response.json(data, { headers: { 'Cache-Control
 
 export async function GET(request: Request) {
   try {
-    await masterUser(request);
+    await adminUser(request);
     const snapshot = await mcpDb().collection(PRIVATE_COLLECTION).where('type', '==', 'key').limit(10).get();
     return reply({ connections: snapshot.docs.map(doc => { const data = doc.data(); return { id: doc.id.replace('key_', ''), name: data.name, canWrite: data.canWrite, expiresAt: data.expiresAt }; }) });
   } catch (error) { return errorResponse(error); }
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await masterUser(request);
+    const user = await adminUser(request);
     const input = schema.safeParse(await readJson(request));
     if (!input.success) throw new AccessError('Enter a connection name and access mode.', 400);
     const db = mcpDb();
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    await masterUser(request);
+    await adminUser(request);
     const parsed = idSchema.safeParse(new URL(request.url).searchParams.get('id'));
     if (!parsed.success) throw new AccessError('Invalid connection ID.', 400);
     await mcpDb().collection(PRIVATE_COLLECTION).doc(`key_${parsed.data}`).delete();

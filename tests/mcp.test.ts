@@ -5,7 +5,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { createCrmServer } from '../lib/mcp/server';
 import { authenticateAgent, checkOrigin, readJson } from '../lib/mcp/access';
-import { escapeNote, groupForStatus, issueToken, MAX_REQUESTS, nextBudget, patchSchema, projectRecord, tokenId } from '../lib/mcp/policy';
+import { canManageConnections, escapeNote, groupForStatus, issueToken, MAX_REQUESTS, nextBudget, patchSchema, projectRecord, tokenId } from '../lib/mcp/policy';
+
+test('both admin roles can manage connections; employee roles cannot', () => {
+  for (const role of ['master_admin', 'admin']) assert.equal(canManageConnections(role), true);
+  for (const role of ['staff', 'freelancer', undefined, 'unknown']) assert.equal(canManageConnections(role), false);
+});
 
 test('forged or changed keys fail before any database access', async () => {
   const key = issueToken('test-signing-key');
@@ -77,7 +82,7 @@ test('stateless JSON transport returns an intact response after closing the serv
 test('task writes reject stale versions and revoked keys; retries do not duplicate edits', async () => {
   const stored = new Map<string, Record<string, unknown>>([
     ['_mcp/config', { enabled: true }], ['_mcp/key_key', { canWrite: true, uid: 'admin', expiresAt: Date.now() + 100000 }],
-    ['users/admin', { role: 'master_admin' }], ['_mcp/budget', { day: new Date().toISOString().slice(0, 10), requests: 10, writes: 0 }],
+    ['users/admin', { role: 'admin' }], ['_mcp/budget', { day: new Date().toISOString().slice(0, 10), requests: 10, writes: 0 }],
     ['tickets/task', { workspace: 'SEO', groupId: 'custom', description: 'Existing' }],
   ]);
   let edits = 0;

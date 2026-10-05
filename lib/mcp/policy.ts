@@ -5,6 +5,7 @@ export const MAX_REQUESTS = 100;
 export const MAX_WRITES = 25;
 export const PAGE_SIZE = 25;
 export const PRIVATE_COLLECTION = '_mcp';
+export const canManageConnections = (role: unknown) => role === 'master_admin' || role === 'admin';
 export const workspaces = ['Awebco', 'Websites', 'Design & Print', 'Google Ads', 'Local Listings', 'SEO', 'Social Media', 'Support Tickets'] as const;
 export const idSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 export const workspaceSchema = z.enum(workspaces);
