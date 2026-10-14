@@ -167,9 +167,8 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
       {visibleColumns.includes('status') && (
         <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
           <EditableStatus
-            value={company.status || ''}
+            value={companyStatus(company)}
             options={COMPANY_STATUS_OPTIONS}
-            emptyLabel="Set status"
             onSave={v => onUpdate(company.id, 'status', v)}
           />
         </td>
@@ -277,6 +276,10 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
 }
 
 const COMPANY_STATUS_OPTIONS = ['Client', 'Lead', 'Partner', 'Cancelled'];
+
+function companyStatus(company: { status?: string }) {
+  return company.status || 'Lead';
+}
 const DEFAULT_COMPANY_COLUMNS = ['name', 'status', 'domain', 'industry', 'primaryContactId', 'phone', 'startDate', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em'];
 
 const PLANS_CONFIG = [
@@ -313,7 +316,8 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     const counts: Record<string, number> = {};
     for (const status of COMPANY_STATUS_OPTIONS) counts[status] = 0;
     companies.forEach(c => {
-      if (c.status && counts[c.status] !== undefined) counts[c.status] += 1;
+      const status = companyStatus(c);
+      if (counts[status] !== undefined) counts[status] += 1;
     });
     return counts;
   }, [companies]);
@@ -410,7 +414,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         if (!selectedIndustries.includes(ind)) return false;
       }
 
-      if (selectedStatuses.length > 0 && !selectedStatuses.includes(c.status || '')) return false;
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(companyStatus(c))) return false;
 
       return true;
     });
@@ -431,30 +435,62 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         if (isNaN(timeB)) return -1;
         return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
       }
-      const aVal = String(a[col] ?? '').toLowerCase();
-      const bVal = String(b[col] ?? '').toLowerCase();
+      const aVal = (col === 'status' ? companyStatus(a) : String(a[col] ?? '')).toLowerCase();
+      const bVal = (col === 'status' ? companyStatus(b) : String(b[col] ?? '')).toLowerCase();
       const cmp = aVal.localeCompare(bVal);
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
   }, [companies, searchQuery, selectedServices, serviceFilterMode, selectedIndustries, selectedStatuses, sortConfig]);
 
   const leadCompanies = useMemo(
-    () => filteredCompanies.filter(company => company.status === 'Lead'),
+    () => filteredCompanies.filter(company => companyStatus(company) === 'Lead'),
     [filteredCompanies],
   );
-  const activeCompanies = useMemo(
-    () => filteredCompanies.filter(company => company.status !== 'Lead' && company.status !== 'Partner' && company.status !== 'Cancelled'),
+  const clientCompanies = useMemo(
+    () => filteredCompanies.filter(company => {
+      const status = companyStatus(company);
+      return status !== 'Lead' && status !== 'Partner' && status !== 'Cancelled';
+    }),
     [filteredCompanies],
   );
   const partnerCompanies = useMemo(
-    () => filteredCompanies.filter(company => company.status === 'Partner'),
+    () => filteredCompanies.filter(company => companyStatus(company) === 'Partner'),
     [filteredCompanies],
   );
   const cancelledCompanies = useMemo(
-    () => filteredCompanies.filter(company => company.status === 'Cancelled'),
+    () => filteredCompanies.filter(company => companyStatus(company) === 'Cancelled'),
     [filteredCompanies],
   );
-  const activeCompanyTotal = companies.filter(company => company.status !== 'Lead' && company.status !== 'Partner' && company.status !== 'Cancelled').length;
+  const companySections = [
+    {
+      id: 'leads',
+      label: 'Leads',
+      companies: leadCompanies,
+      headerClassName: 'bg-[#FFEBEB] border-[#FECACA]',
+      textClassName: 'text-[#D32F2F]',
+    },
+    {
+      id: 'clients',
+      label: 'Clients',
+      companies: clientCompanies,
+      headerClassName: 'bg-[#ECFDF3] border-[#A7F3D0]',
+      textClassName: 'text-[#059669]',
+    },
+    {
+      id: 'partners',
+      label: 'Partners',
+      companies: partnerCompanies,
+      headerClassName: 'bg-[#EEF2FF] border-[#E0E7FF]',
+      textClassName: 'text-[#4338CA]',
+    },
+    {
+      id: 'cancelled',
+      label: 'Cancelled',
+      companies: cancelledCompanies,
+      headerClassName: 'bg-[#F3F4F6] border-[#E2E4E9]',
+      textClassName: 'text-[#6B7280]',
+    },
+  ].filter(section => section.companies.length > 0);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -558,7 +594,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     
     if (editingCompanyId) {
       try {
-        await updateCompany(editingCompanyId, { ...(formData as Partial<Omit<Company, 'id'>>), updates: updatedUpdates });
+        await updateCompany(editingCompanyId, { ...(formData as Partial<Omit<Company, 'id'>>), status: formData.status || 'Lead', updates: updatedUpdates });
       } catch (err) {
         console.error('Failed to update company', err);
         alert('Failed to save company to Firestore. Check console for details (often Security Rules).');
@@ -570,7 +606,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         domain: formData.domain || '',
         phone: formData.phone || '',
         startDate: formData.startDate || '',
-        status: formData.status || '',
+        status: formData.status || 'Lead',
         email: formData.email || '',
         street: formData.street || '',
         city: formData.city || '',
@@ -962,9 +998,9 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           <h1 className="m-0 text-2xl font-bold text-[#1C1F23] flex items-center gap-2">
             <span>Companies</span>
             <span className="text-sm font-semibold text-[#8E9299] bg-[#F0F2F5] px-2.5 py-0.5 rounded-full select-none">
-              {activeCompanies.length < activeCompanyTotal
-                ? `${activeCompanies.length} of ${activeCompanyTotal}`
-                : activeCompanies.length}
+              {filteredCompanies.length < companies.length
+                ? `${filteredCompanies.length} of ${companies.length}`
+                : companies.length}
             </span>
           </h1>
         </div>
@@ -1518,23 +1554,34 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
-              {leadCompanies.length > 0 && (
-                <>
+              {companySections.length === 0 ? (
+                <tr>
+                  <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
+                </tr>
+              ) : companySections.map((section, index) => (
+                <React.Fragment key={section.id}>
+                  {index > 0 && (
+                    <tr aria-hidden="true">
+                      <td colSpan={visibleColumns.length + 2} className="p-0 border-0 bg-[#F7F8FA]">
+                        <div className="h-8" />
+                      </td>
+                    </tr>
+                  )}
                   <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-4 py-3 bg-[#FFEBEB] border-y border-[#FECACA]">
+                    <td colSpan={visibleColumns.length + 2} className={`px-4 py-3 border-y ${section.headerClassName}`}>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-[#D32F2F]">Leads</span>
-                        <span className="text-[11px] font-semibold text-[#D32F2F] bg-white border border-[#FECACA] px-2 py-0.5 rounded-full">
-                          {leadCompanies.length}
+                        <span className={`text-xs font-bold uppercase tracking-wider ${section.textClassName}`}>{section.label}</span>
+                        <span className={`text-[11px] font-semibold bg-white border px-2 py-0.5 rounded-full ${section.textClassName}`}>
+                          {section.companies.length}
                         </span>
                       </div>
                     </td>
                   </tr>
                   <SortableContext
-                    items={leadCompanies.map(c => c.id)}
+                    items={section.companies.map(c => c.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {leadCompanies.map(company => (
+                    {section.companies.map(company => (
                       <SortableRow
                         key={company.id}
                         company={company}
@@ -1548,94 +1595,8 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                       />
                     ))}
                   </SortableContext>
-                </>
-              )}
-              <SortableContext 
-                items={activeCompanies.map(c => c.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {activeCompanies.length === 0 && leadCompanies.length === 0 && partnerCompanies.length === 0 && cancelledCompanies.length === 0 ? (
-                  <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
-                  </tr>
-                ) : activeCompanies.map(company => (
-                  <SortableRow 
-                    key={company.id} 
-                    company={company} 
-                    onClick={() => openEditModal(company)} 
-                    onUpdate={handleUpdateCompany} 
-                    toggleService={toggleService}
-                    teamMembers={teamMembers}
-                    contacts={contacts}
-                    onDelete={handleDeleteCompany}
-                    visibleColumns={visibleColumns}
-                  />
-                ))}
-              </SortableContext>
-              {partnerCompanies.length > 0 && (
-                <>
-                  <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-4 py-3 bg-[#EEF2FF] border-y border-[#E0E7FF]">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-[#4338CA]">Partners</span>
-                        <span className="text-[11px] font-semibold text-[#4338CA] bg-white border border-[#E0E7FF] px-2 py-0.5 rounded-full">
-                          {partnerCompanies.length}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  <SortableContext
-                    items={partnerCompanies.map(c => c.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {partnerCompanies.map(company => (
-                      <SortableRow
-                        key={company.id}
-                        company={company}
-                        onClick={() => openEditModal(company)}
-                        onUpdate={handleUpdateCompany}
-                        toggleService={toggleService}
-                        teamMembers={teamMembers}
-                        contacts={contacts}
-                        onDelete={handleDeleteCompany}
-                        visibleColumns={visibleColumns}
-                      />
-                    ))}
-                  </SortableContext>
-                </>
-              )}
-              {cancelledCompanies.length > 0 && (
-                <>
-                  <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-4 py-3 bg-[#F3F4F6] border-y border-[#E2E4E9]">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-[#6B7280]">Cancelled</span>
-                        <span className="text-[11px] font-semibold text-[#6B7280] bg-white border border-[#E2E4E9] px-2 py-0.5 rounded-full">
-                          {cancelledCompanies.length}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  <SortableContext
-                    items={cancelledCompanies.map(c => c.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {cancelledCompanies.map(company => (
-                      <SortableRow
-                        key={company.id}
-                        company={company}
-                        onClick={() => openEditModal(company)}
-                        onUpdate={handleUpdateCompany}
-                        toggleService={toggleService}
-                        teamMembers={teamMembers}
-                        contacts={contacts}
-                        onDelete={handleDeleteCompany}
-                        visibleColumns={visibleColumns}
-                      />
-                    ))}
-                  </SortableContext>
-                </>
-              )}
+                </React.Fragment>
+              ))}
             </tbody>
           </table>
         </DndContext>
@@ -1725,8 +1686,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Status</label>
-                            <select value={formData.status || ''} onChange={e => updateForm('status', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
-                              <option value="">Select Status</option>
+                            <select value={formData.status || 'Lead'} onChange={e => updateForm('status', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
                               {COMPANY_STATUS_OPTIONS.map(status => (
                                 <option key={status} value={status}>{status}</option>
                               ))}
