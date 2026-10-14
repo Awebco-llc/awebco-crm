@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Search, Plus, X, Check, GripVertical, FileText, Trash2, ExternalLink, Filter, ChevronDown, RefreshCw, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal } from '@/components/Shared';
+import { TeamMember, AssigneeDropdown, Company, Contact, ContactDropdown, Proposal, EditableStatus } from '@/components/Shared';
 import RichTextEditor from './RichTextEditor';
 import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket, deleteGroup, deleteTicket } from '@/lib/crmStore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -36,7 +36,14 @@ const safeFormatDate = (value: any, opts: Intl.DateTimeFormatOptions = { dateSty
   try { return new Intl.DateTimeFormat('en-US', opts).format(date); } catch { return fallback; }
 };
 
-function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode }) {
+function formatCompanyDate(value?: string) {
+  if (!value) return '';
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return `${Number(iso[2])}/${Number(iso[3])}/${iso[1]}`;
+  return value;
+}
+
+function EditableCell({ value, onSave, renderValue, inputType = 'text' }: { value: string, onSave: (val: string) => void, renderValue?: (val: string) => React.ReactNode, inputType?: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -81,7 +88,7 @@ function EditableCell({ value, onSave, renderValue }: { value: string, onSave: (
       >
         <input
           ref={inputRef}
-          type="text"
+          type={inputType}
           value={tempValue || ''}
           onChange={(e) => setTempValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -157,6 +164,16 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
           <EditableCell value={company.name} onSave={v => onUpdate(company.id, 'name', v)} renderValue={v => <strong>{v}</strong>} />
         </td>
       )}
+      {visibleColumns.includes('status') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
+          <EditableStatus
+            value={company.status || ''}
+            options={COMPANY_STATUS_OPTIONS}
+            emptyLabel="Set status"
+            onSave={v => onUpdate(company.id, 'status', v)}
+          />
+        </td>
+      )}
       {visibleColumns.includes('domain') && (
         <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
           <EditableCell 
@@ -194,6 +211,16 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
       {visibleColumns.includes('phone') && (
         <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
           <EditableCell value={company.phone} onSave={v => onUpdate(company.id, 'phone', v)} />
+        </td>
+      )}
+      {visibleColumns.includes('startDate') && (
+        <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5] whitespace-nowrap">
+          <EditableCell
+            value={company.startDate || ''}
+            inputType="date"
+            onSave={v => onUpdate(company.id, 'startDate', v)}
+            renderValue={v => formatCompanyDate(v) || '-'}
+          />
         </td>
       )}
       {visibleColumns.includes('web') && (
@@ -249,6 +276,9 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
   );
 }
 
+const COMPANY_STATUS_OPTIONS = ['Client', 'Lead'];
+const DEFAULT_COMPANY_COLUMNS = ['name', 'status', 'domain', 'industry', 'primaryContactId', 'phone', 'startDate', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em'];
+
 const PLANS_CONFIG = [
   { field: 'web', notesField: 'webNotes', name: 'Websites', desc: 'Professional web design, development, and hosting.' },
   { field: 'seo', notesField: 'seoNotes', name: 'SEO', desc: 'Search engine optimization to improve search rankings.' },
@@ -273,9 +303,19 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [serviceFilterMode, setServiceFilterMode] = useState<'all' | 'any'>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isIndustryFilterOpen, setIsIndustryFilterOpen] = useState(false);
   const [tempSelectedIndustries, setTempSelectedIndustries] = useState<string[]>([]);
   const [industrySearchQuery, setIndustrySearchQuery] = useState('');
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { Client: 0, Lead: 0 };
+    companies.forEach(c => {
+      if (c.status === 'Client' || c.status === 'Lead') counts[c.status] += 1;
+    });
+    return counts;
+  }, [companies]);
 
   const industryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -294,7 +334,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     return counts;
   }, [companies]);
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em']);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COMPANY_COLUMNS);
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('awebco_companies_sort_config');
@@ -369,13 +409,15 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         if (!selectedIndustries.includes(ind)) return false;
       }
 
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(c.status || '')) return false;
+
       return true;
     });
 
     if (!sortConfig) return filtered;
     return [...filtered].sort((a, b) => {
       const col = sortConfig.column as keyof Company;
-      if (col === 'deadline') {
+      if (col === 'deadline' || col === 'startDate') {
         const valA = a[col];
         const valB = b[col];
         if (!valA && !valB) return 0;
@@ -393,7 +435,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       const cmp = aVal.localeCompare(bVal);
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
-  }, [companies, searchQuery, selectedServices, serviceFilterMode, selectedIndustries, sortConfig]);
+  }, [companies, searchQuery, selectedServices, serviceFilterMode, selectedIndustries, selectedStatuses, sortConfig]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -508,6 +550,8 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         name: formData.name || '',
         domain: formData.domain || '',
         phone: formData.phone || '',
+        startDate: formData.startDate || '',
+        status: formData.status || '',
         email: formData.email || '',
         street: formData.street || '',
         city: formData.city || '',
@@ -873,10 +917,10 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         </div>
 
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          {visibleColumns.length < 12 && (
+          {(visibleColumns.length !== DEFAULT_COMPANY_COLUMNS.length || visibleColumns.some((column, index) => column !== DEFAULT_COMPANY_COLUMNS[index])) && (
             <button
               type="button"
-              onClick={() => setVisibleColumns(['name', 'domain', 'industry', 'primaryContactId', 'phone', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em'])}
+              onClick={() => setVisibleColumns(DEFAULT_COMPANY_COLUMNS)}
               className="px-3 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1061E3] hover:bg-blue-50 transition-all flex items-center gap-1.5 active:scale-95 select-none"
             >
               <RefreshCw className="w-4 h-4" />
@@ -905,7 +949,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
         </div>
 
         {/* Active Filters */}
-        {(selectedServices.length > 0 || selectedIndustries.length > 0) && (
+        {(selectedServices.length > 0 || selectedIndustries.length > 0 || selectedStatuses.length > 0) && (
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <span className="text-xs font-semibold text-[#8E9299]">Active Filters:</span>
             {selectedServices.map(serviceKey => {
@@ -926,6 +970,21 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 </div>
               );
             })}
+            {selectedStatuses.map(status => (
+              <div
+                key={status}
+                className="bg-blue-50 border border-blue-100 rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-semibold text-[#1061E3]"
+              >
+                <span>{status}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatuses(prev => prev.filter(item => item !== status))}
+                  className="hover:bg-blue-100 p-0.5 rounded-full text-blue-400 hover:text-[#1061E3] transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
             {selectedIndustries.map(industry => (
               <div 
                 key={industry}
@@ -946,6 +1005,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               onClick={() => {
                 setSelectedServices([]);
                 setSelectedIndustries([]);
+                setSelectedStatuses([]);
               }}
               className="text-xs font-semibold text-[#D32F2F] hover:text-red-700 hover:underline ml-1"
             >
@@ -987,6 +1047,88 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                         </button>
                       )}
                     </div>
+                  </th>
+                )}
+                {visibleColumns.includes('status') && (
+                  <th
+                    className="w-[140px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors relative"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span>STATUS</span>
+                        {renderSortIcon('status')}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsStatusFilterOpen(prev => !prev);
+                          }}
+                          className={`p-1 rounded hover:bg-gray-200/80 transition-colors shrink-0 ${
+                            selectedStatuses.length > 0 ? 'text-[#1061E3] bg-blue-50' : 'text-[#8E9299]'
+                          }`}
+                          title="Filter Status"
+                        >
+                          <Filter className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'status')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    {isStatusFilterOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40 cursor-default"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsStatusFilterOpen(false);
+                          }}
+                        />
+                        <div
+                          className="absolute left-0 mt-2 z-50 w-48 bg-white border border-[#E2E4E9] rounded-lg shadow-lg p-2 text-left font-normal normal-case text-sm text-[#1C1F23] cursor-default flex flex-col gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {COMPANY_STATUS_OPTIONS.map(status => {
+                            const isChecked = selectedStatuses.includes(status);
+                            return (
+                              <button
+                                key={status}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedStatuses(prev => isChecked ? prev.filter(item => item !== status) : [...prev, status]);
+                                }}
+                                className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
+                                  isChecked ? 'bg-blue-50 text-[#1061E3]' : 'hover:bg-[#F0F2F5] text-[#4A4D53]'
+                                }`}
+                              >
+                                <span>{status}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full select-none font-bold ${
+                                  isChecked ? 'bg-blue-100 text-[#1061E3]' : 'bg-[#F0F2F5]'
+                                }`}>
+                                  {statusCounts[status] || 0}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {selectedStatuses.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStatuses([])}
+                              className="mt-1 px-2.5 py-1.5 text-xs font-semibold text-[#D32F2F] hover:underline text-left"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </th>
                 )}
                 {visibleColumns.includes('domain') && (
@@ -1192,6 +1334,28 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'phone')); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.includes('startDate') && (
+                  <th
+                    className="w-[140px] sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] group select-none cursor-pointer hover:bg-[#F0F2F5] transition-colors"
+                    onClick={() => handleSort('startDate')}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1">
+                        <span>START DATE</span>
+                        {renderSortIcon('startDate')}
+                      </div>
+                      {allowDeletingColumns && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setVisibleColumns(prev => prev.filter(c => c !== 'startDate')); }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#C8CDD5] hover:text-[#D32F2F] rounded"
                         >
                           <X className="w-3 h-3" />
@@ -1437,6 +1601,19 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                           <div>
                             <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Phone</label>
                             <input type="tel" value={formData.phone || ''} onChange={e => updateForm('phone', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Start Date</label>
+                            <input type="date" value={(formData.startDate || '').slice(0, 10)} onChange={e => updateForm('startDate', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Status</label>
+                            <select value={formData.status || ''} onChange={e => updateForm('status', e.target.value)} className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white">
+                              <option value="">Select Status</option>
+                              {COMPANY_STATUS_OPTIONS.map(status => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Email</label>

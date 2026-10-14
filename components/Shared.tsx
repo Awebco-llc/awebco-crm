@@ -191,6 +191,8 @@ export interface Company {
   name: string;
   domain: string;
   phone: string;
+  startDate?: string;
+  status?: string;
   email: string;
   street: string;
   city: string;
@@ -255,7 +257,8 @@ export function EditablePriority({ value }: { value: string }) {
 }
 
 export function getStatusBadgeClasses(value: string) {
-  return value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+  return value === 'Client' ? 'bg-[#ECFDF3] text-[#10B981]' :
+    value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
     value === 'Active' ? 'bg-[#ECFDF3] text-[#10B981]' :
       value === 'In Progress' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
         value === 'Not Started' ? 'bg-gray-100 text-gray-700' :
@@ -314,7 +317,7 @@ const DEFAULT_STATUS_OPTIONS = [
   'LOST',
 ];
 
-export function EditableStatus({ value, onSave, options = DEFAULT_STATUS_OPTIONS }: { value: string, onSave: (val: string) => void, options?: string[] }) {
+export function EditableStatus({ value, onSave, options = DEFAULT_STATUS_OPTIONS, emptyLabel }: { value: string, onSave: (val: string) => void, options?: string[], emptyLabel?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -381,10 +384,10 @@ export function EditableStatus({ value, onSave, options = DEFAULT_STATUS_OPTIONS
       <button
         ref={buttonRef}
         type="button"
-        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase inline-block text-center cursor-pointer ${getStatusBadgeClasses(value)}`}
-        title={value || 'Lead'}
+        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase inline-block text-center cursor-pointer ${value ? getStatusBadgeClasses(value) : emptyLabel ? 'bg-gray-100 text-gray-500' : getStatusBadgeClasses('Lead')}`}
+        title={value || emptyLabel || 'Lead'}
       >
-        {value || 'Lead'}
+        {value || emptyLabel || 'Lead'}
       </button>
 
       {dropdownMenu}
