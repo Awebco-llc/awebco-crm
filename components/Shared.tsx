@@ -259,6 +259,8 @@ export function EditablePriority({ value }: { value: string }) {
 export function getStatusBadgeClasses(value: string) {
   return value === 'Client' ? 'bg-[#ECFDF3] text-[#10B981]' :
     value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+    value === 'Partner' ? 'bg-[#EEF2FF] text-[#4338CA]' :
+    value === 'Cancelled' ? 'bg-[#F3F4F6] text-[#6B7280]' :
     value === 'Active' ? 'bg-[#ECFDF3] text-[#10B981]' :
       value === 'In Progress' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
         value === 'Not Started' ? 'bg-gray-100 text-gray-700' :

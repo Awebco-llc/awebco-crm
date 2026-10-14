@@ -276,7 +276,7 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
   );
 }
 
-const COMPANY_STATUS_OPTIONS = ['Client', 'Lead'];
+const COMPANY_STATUS_OPTIONS = ['Client', 'Lead', 'Partner', 'Cancelled'];
 const DEFAULT_COMPANY_COLUMNS = ['name', 'status', 'domain', 'industry', 'primaryContactId', 'phone', 'startDate', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em'];
 
 const PLANS_CONFIG = [
@@ -310,9 +310,10 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   const [industrySearchQuery, setIndustrySearchQuery] = useState('');
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { Client: 0, Lead: 0 };
+    const counts: Record<string, number> = {};
+    for (const status of COMPANY_STATUS_OPTIONS) counts[status] = 0;
     companies.forEach(c => {
-      if (c.status === 'Client' || c.status === 'Lead') counts[c.status] += 1;
+      if (c.status && counts[c.status] !== undefined) counts[c.status] += 1;
     });
     return counts;
   }, [companies]);
@@ -436,6 +437,16 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
   }, [companies, searchQuery, selectedServices, serviceFilterMode, selectedIndustries, selectedStatuses, sortConfig]);
+
+  const activeCompanies = useMemo(
+    () => filteredCompanies.filter(company => company.status !== 'Cancelled'),
+    [filteredCompanies],
+  );
+  const cancelledCompanies = useMemo(
+    () => filteredCompanies.filter(company => company.status === 'Cancelled'),
+    [filteredCompanies],
+  );
+  const activeCompanyTotal = companies.filter(company => company.status !== 'Cancelled').length;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -943,7 +954,9 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           <h1 className="m-0 text-2xl font-bold text-[#1C1F23] flex items-center gap-2">
             <span>Companies</span>
             <span className="text-sm font-semibold text-[#8E9299] bg-[#F0F2F5] px-2.5 py-0.5 rounded-full select-none">
-              {filteredCompanies.length < companies.length ? `${filteredCompanies.length} of ${companies.length}` : companies.length}
+              {activeCompanies.length < activeCompanyTotal
+                ? `${activeCompanies.length} of ${activeCompanyTotal}`
+                : activeCompanies.length}
             </span>
           </h1>
         </div>
@@ -1498,14 +1511,14 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
             </thead>
             <tbody className="min-h-[50px]">
               <SortableContext 
-                items={filteredCompanies.map(c => c.id)}
+                items={activeCompanies.map(c => c.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {filteredCompanies.length === 0 ? (
+                {activeCompanies.length === 0 && cancelledCompanies.length === 0 ? (
                   <tr>
                     <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
                   </tr>
-                ) : filteredCompanies.map(company => (
+                ) : activeCompanies.map(company => (
                   <SortableRow 
                     key={company.id} 
                     company={company} 
@@ -1519,6 +1532,38 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   />
                 ))}
               </SortableContext>
+              {cancelledCompanies.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={visibleColumns.length + 2} className="px-4 py-3 bg-[#F3F4F6] border-y border-[#E2E4E9]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#6B7280]">Cancelled</span>
+                        <span className="text-[11px] font-semibold text-[#6B7280] bg-white border border-[#E2E4E9] px-2 py-0.5 rounded-full">
+                          {cancelledCompanies.length}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  <SortableContext
+                    items={cancelledCompanies.map(c => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {cancelledCompanies.map(company => (
+                      <SortableRow
+                        key={company.id}
+                        company={company}
+                        onClick={() => openEditModal(company)}
+                        onUpdate={handleUpdateCompany}
+                        toggleService={toggleService}
+                        teamMembers={teamMembers}
+                        contacts={contacts}
+                        onDelete={handleDeleteCompany}
+                        visibleColumns={visibleColumns}
+                      />
+                    ))}
+                  </SortableContext>
+                </>
+              )}
             </tbody>
           </table>
         </DndContext>
