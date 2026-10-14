@@ -438,15 +438,23 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     });
   }, [companies, searchQuery, selectedServices, serviceFilterMode, selectedIndustries, selectedStatuses, sortConfig]);
 
+  const leadCompanies = useMemo(
+    () => filteredCompanies.filter(company => company.status === 'Lead'),
+    [filteredCompanies],
+  );
   const activeCompanies = useMemo(
-    () => filteredCompanies.filter(company => company.status !== 'Cancelled'),
+    () => filteredCompanies.filter(company => company.status !== 'Lead' && company.status !== 'Partner' && company.status !== 'Cancelled'),
+    [filteredCompanies],
+  );
+  const partnerCompanies = useMemo(
+    () => filteredCompanies.filter(company => company.status === 'Partner'),
     [filteredCompanies],
   );
   const cancelledCompanies = useMemo(
     () => filteredCompanies.filter(company => company.status === 'Cancelled'),
     [filteredCompanies],
   );
-  const activeCompanyTotal = companies.filter(company => company.status !== 'Cancelled').length;
+  const activeCompanyTotal = companies.filter(company => company.status !== 'Lead' && company.status !== 'Partner' && company.status !== 'Cancelled').length;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1510,11 +1518,43 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               </tr>
             </thead>
             <tbody className="min-h-[50px]">
+              {leadCompanies.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={visibleColumns.length + 2} className="px-4 py-3 bg-[#FFEBEB] border-y border-[#FECACA]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#D32F2F]">Leads</span>
+                        <span className="text-[11px] font-semibold text-[#D32F2F] bg-white border border-[#FECACA] px-2 py-0.5 rounded-full">
+                          {leadCompanies.length}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  <SortableContext
+                    items={leadCompanies.map(c => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {leadCompanies.map(company => (
+                      <SortableRow
+                        key={company.id}
+                        company={company}
+                        onClick={() => openEditModal(company)}
+                        onUpdate={handleUpdateCompany}
+                        toggleService={toggleService}
+                        teamMembers={teamMembers}
+                        contacts={contacts}
+                        onDelete={handleDeleteCompany}
+                        visibleColumns={visibleColumns}
+                      />
+                    ))}
+                  </SortableContext>
+                </>
+              )}
               <SortableContext 
                 items={activeCompanies.map(c => c.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {activeCompanies.length === 0 && cancelledCompanies.length === 0 ? (
+                {activeCompanies.length === 0 && leadCompanies.length === 0 && partnerCompanies.length === 0 && cancelledCompanies.length === 0 ? (
                   <tr>
                     <td colSpan={visibleColumns.length + 2} className="px-4 py-8 text-center text-[#8E9299] text-sm">No companies found.</td>
                   </tr>
@@ -1532,6 +1572,38 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                   />
                 ))}
               </SortableContext>
+              {partnerCompanies.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={visibleColumns.length + 2} className="px-4 py-3 bg-[#EEF2FF] border-y border-[#E0E7FF]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#4338CA]">Partners</span>
+                        <span className="text-[11px] font-semibold text-[#4338CA] bg-white border border-[#E0E7FF] px-2 py-0.5 rounded-full">
+                          {partnerCompanies.length}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  <SortableContext
+                    items={partnerCompanies.map(c => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {partnerCompanies.map(company => (
+                      <SortableRow
+                        key={company.id}
+                        company={company}
+                        onClick={() => openEditModal(company)}
+                        onUpdate={handleUpdateCompany}
+                        toggleService={toggleService}
+                        teamMembers={teamMembers}
+                        contacts={contacts}
+                        onDelete={handleDeleteCompany}
+                        visibleColumns={visibleColumns}
+                      />
+                    ))}
+                  </SortableContext>
+                </>
+              )}
               {cancelledCompanies.length > 0 && (
                 <>
                   <tr>
