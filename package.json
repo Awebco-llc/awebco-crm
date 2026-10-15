@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "clean": "next clean",
+    "test:portal-listings": "node --import tsx --test tests/portal-listings.test.ts",
     "test:mcp": "tsx --test tests/mcp.test.ts",
     "test:mcp:rules": "firebase emulators:exec --only firestore --config firebase.mcp-test.json --project demo-awebco-mcp \"tsx --test tests/mcp-rules.test.ts\""
   },
