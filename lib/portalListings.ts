@@ -4,6 +4,10 @@ export const LISTINGS_WORKSPACE = 'Local Listings';
 export const LISTINGS_PAGE_SIZE = 200;
 const MAX_SCAN_SIZE = 200;
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const CREDENTIAL_URL_PARAMETERS = new Set([
+  'password', 'passwd', 'pass', 'token', 'access_token', 'refresh_token', 'id_token',
+  'api_key', 'apikey', 'secret', 'authorization', 'auth', 'username', 'user', 'login', 'email', 'key',
+]);
 
 export type PublicResource = { id: string; name: string; companyId?: string };
 export type PublicListing = {
@@ -60,6 +64,14 @@ export function safeListingUrl(value: unknown): string | null {
   try {
     const parsed = new URL(value);
     if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || parsed.username || parsed.password) return null;
+    const hasCredentialParameter = (parameters: URLSearchParams) =>
+      [...parameters.keys()].some(key => CREDENTIAL_URL_PARAMETERS.has(key.toLowerCase().replace(/-/g, '_')));
+    if (hasCredentialParameter(parsed.searchParams)) return null;
+
+    const fragment = parsed.hash.slice(1);
+    const fragmentQuery = fragment.slice(fragment.lastIndexOf('?') + 1);
+    if ((fragment.includes('=') || fragment.includes('&')) && hasCredentialParameter(new URLSearchParams(fragmentQuery))) return null;
+
     const url = parsed.toString();
     return url.length <= 2048 ? url : null;
   } catch {

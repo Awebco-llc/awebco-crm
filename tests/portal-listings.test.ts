@@ -79,10 +79,17 @@ test('maps Local Listings status values and defaults unknown values safely', () 
 
 test('accepts only credential-free HTTP(S) listing URLs', () => {
   assert.equal(safeListingUrl('https://example.com/listing?place=1#details'), 'https://example.com/listing?place=1#details');
+  assert.equal(safeListingUrl('https://example.com/listing?cid=abc&placeid=123&q=main+street#details'), 'https://example.com/listing?cid=abc&placeid=123&q=main+street#details');
   assert.equal(safeListingUrl('http://example.com'), 'http://example.com/');
   assert.equal(safeListingUrl('javascript:alert(1)'), null);
   assert.equal(safeListingUrl('ftp://example.com'), null);
   assert.equal(safeListingUrl('https://user:pass@example.com'), null);
+  for (const key of ['password', 'passwd', 'pass', 'token', 'access_token', 'refresh_token', 'id_token', 'api_key', 'apikey', 'secret', 'authorization', 'auth', 'username', 'user', 'login', 'email', 'key']) {
+    assert.equal(safeListingUrl(`https://example.com/listing?${key}=secret`), null, `query parameter ${key}`);
+  }
+  assert.equal(safeListingUrl('https://example.com/listing?Access-Token=secret'), null);
+  assert.equal(safeListingUrl('https://example.com/#access_token=secret'), null);
+  assert.equal(safeListingUrl('https://example.com/#/callback?refresh-token=secret'), null);
   assert.equal(safeListingUrl('not a url'), null);
 });
 
