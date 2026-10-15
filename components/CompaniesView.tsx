@@ -275,7 +275,7 @@ function SortableRow({ company, onClick, onUpdate, toggleService, teamMembers, c
   );
 }
 
-const COMPANY_STATUS_OPTIONS = ['Client', 'Lead', 'Partner', 'Cancelled'];
+const COMPANY_STATUS_OPTIONS = ['Client', 'Lead', 'Partner', 'Unresponsive', 'Declined', 'Cancelled'];
 
 function companyStatus(company: { status?: string }) {
   return company.status || 'Lead';
@@ -447,14 +447,19 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
     [filteredCompanies],
   );
   const clientCompanies = useMemo(
-    () => filteredCompanies.filter(company => {
-      const status = companyStatus(company);
-      return status !== 'Lead' && status !== 'Partner' && status !== 'Cancelled';
-    }),
+    () => filteredCompanies.filter(company => companyStatus(company) === 'Client'),
     [filteredCompanies],
   );
   const partnerCompanies = useMemo(
     () => filteredCompanies.filter(company => companyStatus(company) === 'Partner'),
+    [filteredCompanies],
+  );
+  const unresponsiveCompanies = useMemo(
+    () => filteredCompanies.filter(company => companyStatus(company) === 'Unresponsive'),
+    [filteredCompanies],
+  );
+  const declinedCompanies = useMemo(
+    () => filteredCompanies.filter(company => companyStatus(company) === 'Declined'),
     [filteredCompanies],
   );
   const cancelledCompanies = useMemo(
@@ -482,6 +487,20 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
       companies: partnerCompanies,
       headerClassName: 'bg-[#EEF2FF] border-[#E0E7FF]',
       textClassName: 'text-[#4338CA]',
+    },
+    {
+      id: 'unresponsive',
+      label: 'Unresponsive',
+      companies: unresponsiveCompanies,
+      headerClassName: 'bg-[#FFF7ED] border-[#FED7AA]',
+      textClassName: 'text-[#C2410C]',
+    },
+    {
+      id: 'declined',
+      label: 'Declined',
+      companies: declinedCompanies,
+      headerClassName: 'bg-[#FDF2F8] border-[#FBCFE8]',
+      textClassName: 'text-[#9D174D]',
     },
     {
       id: 'cancelled',
