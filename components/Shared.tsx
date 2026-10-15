@@ -260,6 +260,8 @@ export function getStatusBadgeClasses(value: string) {
   return value === 'Client' ? 'bg-[#ECFDF3] text-[#10B981]' :
     value === 'Lead' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
     value === 'Partner' ? 'bg-[#EEF2FF] text-[#4338CA]' :
+    value === 'Unresponsive' ? 'bg-[#FFF7ED] text-[#C2410C]' :
+    value === 'Declined' ? 'bg-[#FDF2F8] text-[#9D174D]' :
     value === 'Cancelled' ? 'bg-[#F3F4F6] text-[#6B7280]' :
     value === 'Active' ? 'bg-[#ECFDF3] text-[#10B981]' :
       value === 'In Progress' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
