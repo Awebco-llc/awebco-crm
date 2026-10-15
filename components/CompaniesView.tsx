@@ -280,24 +280,7 @@ const COMPANY_STATUS_OPTIONS = ['Client', 'Lead', 'Partner', 'Cancelled'];
 function companyStatus(company: { status?: string }) {
   return company.status || 'Lead';
 }
-const COMPANY_COLUMNS = [
-  { id: 'name', label: 'Name' },
-  { id: 'status', label: 'Status' },
-  { id: 'domain', label: 'Domain' },
-  { id: 'industry', label: 'Industry' },
-  { id: 'primaryContactId', label: 'Contact' },
-  { id: 'phone', label: 'Phone' },
-  { id: 'startDate', label: 'Start Date' },
-  { id: 'web', label: 'Web' },
-  { id: 'seo', label: 'SEO' },
-  { id: 'll', label: 'LL' },
-  { id: 'ppc', label: 'PPC' },
-  { id: 'smm', label: 'SMM' },
-  { id: 'sma', label: 'SMA' },
-  { id: 'em', label: 'EM' },
-  { id: 'dp', label: 'DP' },
-];
-const DEFAULT_COMPANY_COLUMNS = COMPANY_COLUMNS.filter(column => column.id !== 'industry' && column.id !== 'dp').map(column => column.id);
+const DEFAULT_COMPANY_COLUMNS = ['name', 'status', 'domain', 'primaryContactId', 'phone', 'startDate', 'web', 'seo', 'll', 'ppc', 'smm', 'sma', 'em'];
 
 const PLANS_CONFIG = [
   { field: 'web', notesField: 'webNotes', name: 'Websites', desc: 'Professional web design, development, and hosting.' },
@@ -357,15 +340,6 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
   }, [companies]);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COMPANY_COLUMNS);
-
-  const toggleCompanyColumn = (columnId: string) => {
-    setVisibleColumns(prev => {
-      const next = new Set(prev);
-      if (next.has(columnId)) next.delete(columnId);
-      else next.add(columnId);
-      return COMPANY_COLUMNS.map(column => column.id).filter(id => next.has(id));
-    });
-  };
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('awebco_companies_sort_config');
@@ -1029,27 +1003,6 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 : companies.length}
             </span>
           </h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 mt-4">
-          {COMPANY_COLUMNS.map(column => {
-            const isOn = visibleColumns.includes(column.id);
-            return (
-              <button
-                key={column.id}
-                type="button"
-                aria-pressed={isOn}
-                onClick={() => toggleCompanyColumn(column.id)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                  isOn
-                    ? 'bg-[#1061E3] border-[#1061E3] text-white'
-                    : 'bg-white border-[#E2E4E9] text-[#8E9299] hover:border-[#C5CAD1] hover:text-[#4A4D53]'
-                }`}
-              >
-                {column.label}
-              </button>
-            );
-          })}
         </div>
 
         {/* Active Filters */}
