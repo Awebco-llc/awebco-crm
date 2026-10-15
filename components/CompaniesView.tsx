@@ -297,7 +297,7 @@ const COMPANY_COLUMNS = [
   { id: 'em', label: 'EM' },
   { id: 'dp', label: 'DP' },
 ];
-const DEFAULT_COMPANY_COLUMNS = COMPANY_COLUMNS.filter(column => column.id !== 'dp').map(column => column.id);
+const DEFAULT_COMPANY_COLUMNS = COMPANY_COLUMNS.filter(column => column.id !== 'industry' && column.id !== 'dp').map(column => column.id);
 
 const PLANS_CONFIG = [
   { field: 'web', notesField: 'webNotes', name: 'Websites', desc: 'Professional web design, development, and hosting.' },
