@@ -1524,7 +1524,6 @@ function GroupHeader({
   dragHandleProps,
   isCollapsed,
   onToggleCollapse,
-  allowDeletingGroups = false,
   planNotes,
   itemCount,
   totalHours,
@@ -1822,19 +1821,21 @@ function GroupHeader({
           </div>
         )}
       </div>
-      {allowDeletingGroups && (
-        <button
-          onClick={() => onRemove(group.id)}
-          className={`opacity-0 group-hover/header:opacity-100 p-1.5 rounded transition-colors ${
-            group.companyId
-              ? 'text-gray-300 hover:text-gray-400 cursor-not-allowed'
-              : 'text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2]'
-          }`}
-          title={group.companyId ? "Groups created from company checkmarks cannot be deleted directly. Uncheck on Company profile." : "Remove group"}
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(group.id);
+        }}
+        className={`p-1.5 rounded transition-colors ${
+          group.companyId
+            ? 'text-gray-300 hover:text-gray-400 cursor-not-allowed'
+            : 'text-[#8E9299] hover:text-[#D32F2F] hover:bg-[#FEE2E2]'
+        }`}
+        title={group.companyId ? "Groups created from company checkmarks cannot be deleted directly. Uncheck on Company profile." : "Delete group"}
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
     </div>
   );
 }
