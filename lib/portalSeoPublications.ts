@@ -33,6 +33,7 @@ const words = (value: string) =>
     .normalize("NFKD")
     .replace(/&#\d+;|&[a-z]+;/g, " ")
     .replace(/\bac\b/g, "air conditioner")
+    .replace(/\bwater remediation\b/g, "water damage restoration")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .split(/\s+/)

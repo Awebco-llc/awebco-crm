@@ -184,6 +184,7 @@ test("public WordPress JSON may be noindex, while the actual page HTML must rema
 test("published titles normalize plurals and AC and permit only one changed word in long editorial titles", async () => {
   for (const [task, title] of [
     ["Solar Farms", "Solar Farm Construction in Vermilion County, IL"],
+    ["Water Remediation Services", "Water Damage Restoration"],
     [
       "Heat Pump vs. Traditional AC: What’s Best for Illinois Summers?",
       "Heat Pump vs Air Conditioner: What&#8217;s Best for Illinois Summers?",
