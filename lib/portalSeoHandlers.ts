@@ -150,6 +150,8 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
                   item.title,
                   projection.publicOrigin,
                   item.url,
+                  undefined,
+                  item.allocatedPeriod ?? undefined,
                 );
                 if (publication) Object.assign(item, publication);
               } else if (item.url) {

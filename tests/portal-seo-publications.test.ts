@@ -180,3 +180,123 @@ test("public WordPress JSON may be noindex, while the actual page HTML must rema
   assert.equal(await publicPagePreview(site + "private/", deps), null);
   assert.equal(await publicSiteJson(site, "/wp-admin/", {}, deps), null);
 });
+
+test("published titles normalize plurals and AC and permit only one changed word in long editorial titles", async () => {
+  for (const [task, title] of [
+    ["Solar Farms", "Solar Farm Construction in Vermilion County, IL"],
+    [
+      "Heat Pump vs. Traditional AC: What’s Best for Illinois Summers?",
+      "Heat Pump vs Air Conditioner: What&#8217;s Best for Illinois Summers?",
+    ],
+  ]) {
+    const match = { ...page, title };
+    assert.equal(
+      (
+        await publicSeoPublication(
+          task,
+          site,
+          null,
+          fixtures([match], { ...detail, title: { rendered: title } }),
+        )
+      )?.url,
+      page.url,
+    );
+    assert.equal(
+      await publicSeoPublication(
+        task,
+        site,
+        null,
+        fixtures([match, { ...match, id: 4 }]),
+      ),
+      null,
+    );
+  }
+  assert.equal(
+    await publicSeoPublication(
+      "Commercial Mold Remediation",
+      site,
+      null,
+      fixtures([{ ...page, title: "Residential Mold Remediation" }]),
+    ),
+    null,
+  );
+  assert.equal(
+    await publicSeoPublication(
+      "Heat Pump vs Traditional AC: Best Illinois Summer Savings",
+      site,
+      null,
+      fixtures([{ ...page, title: "Heat Pump Maintenance Guide" }]),
+    ),
+    null,
+  );
+});
+
+test("the source publication month resolves competing service titles only when exactly one public document matches", async () => {
+  const results = [
+    {
+      ...page,
+      id: 234,
+      title: "Heating & Air Conditioning",
+      url: site + "hvac/",
+    },
+    {
+      ...page,
+      id: 3152,
+      title: "Air Conditioning Repair & Replacement",
+      url: site + "ac-repair/",
+    },
+  ];
+  let secondDate = "2026-06-05T10:41:44";
+  let firstDate = "2025-07-22T09:50:02";
+  const calls: string[] = [];
+  const deps = {
+    json: async (_site: string, path: string) => {
+      calls.push(path);
+      if (path.endsWith("search")) return results;
+      const match = results.find((item) => path.endsWith(String(item.id)))!;
+      return {
+        ...detail,
+        id: match.id,
+        link: match.url,
+        date: match.id === 234 ? firstDate : secondDate,
+      };
+    },
+    preview: async () => ({ title: null, image: site + "ac.webp" }),
+  };
+  assert.equal(
+    await publicSeoPublication("Air Conditioning Services", site, null, deps),
+    null,
+  );
+  const resolved = await publicSeoPublication(
+    "Air Conditioning Services",
+    site,
+    null,
+    deps,
+    "2026-06",
+  );
+  assert.equal(resolved?.url, site + "ac-repair/");
+  assert.equal(calls.filter((path) => path.endsWith("3152")).length, 1); // Reuse the checked document.
+  firstDate = secondDate;
+  assert.equal(
+    await publicSeoPublication(
+      "Air Conditioning Services",
+      site,
+      null,
+      deps,
+      "2026-06",
+    ),
+    null,
+  );
+  secondDate = "invalid";
+  firstDate = "2026-05-01T00:00:00";
+  assert.equal(
+    await publicSeoPublication(
+      "Air Conditioning Services",
+      site,
+      null,
+      deps,
+      "2026-06",
+    ),
+    null,
+  );
+});

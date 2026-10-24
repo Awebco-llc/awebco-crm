@@ -15,6 +15,7 @@ const resultSchema = z
 const pageSchema = z.object({
   id: z.number().int().positive(),
   status: z.literal("publish"),
+  date: z.string().optional(),
   type: z.enum(["page", "post"]),
   link: z.string(),
   title: z.object({ rendered: z.string() }),
@@ -31,9 +32,15 @@ const words = (value: string) =>
     .toLowerCase()
     .normalize("NFKD")
     .replace(/&#\d+;|&[a-z]+;/g, " ")
+    .replace(/\bac\b/g, "air conditioner")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
-    .split(/\s+/);
+    .split(/\s+/)
+    .map((word) =>
+      word.length > 3 && word.endsWith("s") && !word.endsWith("ss")
+        ? word.slice(0, -1)
+        : word,
+    );
 const generic = new Set([
   "a",
   "an",
@@ -64,6 +71,7 @@ export async function publicSeoPublication(
   origin: string,
   existingUrl: string | null,
   dependencies = { json: publicSiteJson, preview: publicPagePreview },
+  allocatedPeriod?: string,
 ): Promise<{
   url: string;
   preview: {
@@ -97,28 +105,64 @@ export async function publicSeoPublication(
     }),
   );
   // A full result page could conceal another match. Leave ambiguous work as text.
-  const matches =
+  let matches =
     parsed.success && parsed.data.length < 20
       ? parsed.data.filter((item) => {
           if (!sameSite(item.url)) return false;
           if (existingUrl) return sameSite(item.url) === sameSite(existingUrl);
           const candidate = new Set(words(item.title));
-          return terms.every((term) => candidate.has(term));
+          const count = terms.filter((term) => candidate.has(term)).length;
+          // Long editorial task titles may differ by one descriptive word. Short
+          // service names still require every meaningful term, and all matches
+          // must remain unique (or have one verified publication-month match).
+          return (
+            count === terms.length ||
+            (terms.length >= 6 && count === terms.length - 1)
+          );
         })
       : [];
-  if (matches.length === 1) {
-    const match = matches[0];
-    const page = pageSchema.safeParse(
+  const readPage = async (match: z.infer<typeof resultSchema>[number]) =>
+    pageSchema.safeParse(
       await dependencies.json(
         site,
         `/wp-json/wp/v2/${match.subtype === "page" ? "pages" : "posts"}/${match.id}`,
         {
           context: "view",
           _embed: "wp:featuredmedia",
-          _fields: "id,status,type,link,title,_links,_embedded",
+          _fields: "id,date,status,type,link,title,_links,_embedded",
         },
       ),
     );
+  const documents = new Map<number, Awaited<ReturnType<typeof readPage>>>();
+  // A parent service page and its newly created child can share a title topic.
+  // Use WordPress's publication month to resolve only a single verified match.
+  // Never fetch an unbounded set of candidate documents.
+  if (
+    matches.length > 1 &&
+    matches.length <= 3 &&
+    allocatedPeriod &&
+    /^20\d{2}-(0[1-9]|1[0-2])$/.test(allocatedPeriod)
+  ) {
+    await Promise.all(
+      matches.map(async (match) =>
+        documents.set(match.id, await readPage(match)),
+      ),
+    );
+    matches = matches.filter((match) => {
+      const page = documents.get(match.id);
+      return (
+        page?.success &&
+        page.data.id === match.id &&
+        page.data.type === match.subtype &&
+        sameSite(page.data.link) === sameSite(match.url) &&
+        /^20\d{2}-(0[1-9]|1[0-2])-\d{2}T/.test(page.data.date ?? "") &&
+        page.data.date?.slice(0, 7) === allocatedPeriod
+      );
+    });
+  }
+  if (matches.length === 1) {
+    const match = matches[0];
+    const page = documents.get(match.id) ?? (await readPage(match));
     if (
       page.success &&
       page.data.id === match.id &&
