@@ -15,7 +15,7 @@ export function PortalSeoVisibility({
       <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-slate-800">
         <input
           type="checkbox"
-          checked={value === "Approved"}
+          checked={value === undefined || value === "Approved"}
           disabled={busy}
           className="h-5 w-5"
           onChange={async (e) => {
@@ -34,9 +34,9 @@ export function PortalSeoVisibility({
         Show in client reports
       </label>
       <p className="mt-1 text-xs leading-relaxed text-slate-600">
-        Approves this task’s public title and published page link. Completed
-        work uses the month and year of its assigned Deadline. Parent tasks need
-        their own approval.
+        Completed work is included automatically for its assigned Deadline month
+        when this group is connected. Only the task title and safe page link are
+        shared. Uncheck to hide this task and its subtasks.
       </p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-red-700">

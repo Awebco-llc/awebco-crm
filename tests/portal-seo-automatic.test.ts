@@ -1,10 +1,70 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { automaticSeo, plannedSeoPeriod } from "../lib/portalSeoAutomatic";
+import { eligibleSeo, type SeoRecord } from "../lib/portalSeo";
 const groupId = "real-shape-group";
-const row = (id: string, data: Record<string, unknown>) => ({
+const row = (id: string, data: Record<string, unknown>): SeoRecord => ({
   id,
-  data: { workspace: "SEO", groupId, portalVisibility: "Approved", ...data },
+  data: { workspace: "SEO", groupId, ...data },
+});
+test("mapped SEO groups include completed assigned-month work without approval and preserve explicit privacy", () => {
+  const records = [
+    row("calendar", { projectName: "Content calendar", status: "In Progress" }),
+    row("page", {
+      parentId: "calendar",
+      projectName: "September service page",
+      status: " done ",
+      deadline: "2026-09-30",
+      updatedAt: "2026-10-24",
+      url: "client-site.com/september/",
+      comments: "PRIVATE",
+      password: "SECRET",
+    }),
+    row("work", {
+      projectName: "Updated navigation",
+      status: "Done",
+      deadline: "2026-09-01",
+    }),
+    row("pending", { status: "In Progress", deadline: "2026-09-02" }),
+    row("october", { status: "Done", deadline: "2026-10-01" }),
+    row("hidden", {
+      portalVisibility: "Hidden",
+      status: "Done",
+      deadline: "2026-09-01",
+    }),
+    row("child", {
+      parentId: "hidden",
+      status: "Done",
+      deadline: "2026-09-01",
+    }),
+    row("invalid", {
+      portalVisibility: "unexpected",
+      status: "Done",
+      deadline: "2026-09-01",
+    }),
+    row("listings", {
+      workspace: "Local Listings",
+      status: "Done",
+      deadline: "2026-09-01",
+    }),
+  ];
+  const before = JSON.stringify(records);
+  const result = automaticSeo(records, groupId, "client-site.com");
+  const september = eligibleSeo(result.items, result.options).filter(
+    (i) => i.allocatedPeriod === "2026-09",
+  );
+  assert.deepEqual(
+    september.map((i) => i.id),
+    ["page", "work"],
+  );
+  assert.equal(september[0].status, "Done");
+  assert.equal(september[0].url, "https://client-site.com/september/");
+  assert.doesNotMatch(
+    JSON.stringify(result),
+    /PRIVATE|SECRET|comments|password|updatedAt/,
+  );
+  assert.equal(JSON.stringify(records), before);
+  assert.ok(!result.setup.notices.some((n) => /approv/.test(n)));
 });
 test("assigned CRM date preserves calendar month/year across timezones and rejects invalid or ambiguous values", () => {
   const before = process.env.TZ;

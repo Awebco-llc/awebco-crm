@@ -69,6 +69,13 @@ export function automaticSeo(
       id: record.id,
       data: {
         ...record.data,
+        // Mapping the group includes safe task fields automatically. Preserve an
+        // explicit privacy choice, including on ancestors; never write back to CRM.
+        portalVisibility:
+          record.data.portalVisibility === undefined ||
+          record.data.portalVisibility === "Approved"
+            ? "Approved"
+            : "Hidden",
         status:
           typeof record.data.status === "string" &&
           record.data.status.trim().toLowerCase() === "done"
@@ -143,10 +150,6 @@ export function automaticSeo(
       "The CRM company has no public website. Task titles can still appear; page links will stay hidden.",
     );
   const approved = items.filter((i) => i.visible).length;
-  if (!approved && scoped.length)
-    notices.push(
-      "No tasks are currently approved for reports. Review “Show in client reports” in CRM; connecting does not change task visibility.",
-    );
   return {
     options,
     sourceVersion: 2 as const,

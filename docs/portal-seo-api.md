@@ -15,3 +15,9 @@ Public metadata retrieval uses public-IPv4 DNS checks, a pinned HTTPS lookup wit
 Automatic Git preview deployment was initially disabled while rollout was prohibited. The branch-specific guard was removed only after explicit rollout authorization. Deployed revisions and verification are recorded in the Portal rollout evidence.
 
 Local checks: TypeScript, existing Listings/MCP tests plus `tests/portal-seo.test.ts`, focused ESLint and Next build. All fixtures are synthetic. Live Month/year and public approval field IDs remain unverified and must be configured explicitly in Portal before activation. No live CRM data was changed.
+
+## Automatic mapped-group reporting (October 24 correction)
+
+The no-options endpoint uses the native Deadline as the assigned month and status Done as completion. A mapped SEO group needs no per-task approval: an absent `portalVisibility` defaults to inclusion of the safe title/status/assigned-month/page-link projection. Explicit `Hidden` (including any ancestor) and unknown visibility values remain excluded. No task is rewritten. Legacy explicit-options consumers retain their existing approval contract. Local Listings is unchanged and independent. Private comments, descriptions, credentials and attachments are never selected or returned. Public page URLs remain restricted to the company's website and its www alias.
+
+The CRM checkbox reflects the automatic default and allows an explicit privacy opt-out. Connecting a group and generating a new Portal revision does not alter any historical report. The earlier approval-required description above applies only to legacy explicit-options consumers.
