@@ -5071,7 +5071,7 @@ export default function WorkspaceProjectView({
                                 </select>
                               </div>
 
-                              {projectType === 'SEO' && <PortalSeoVisibility columns={columns} id={editingRowId} value={editingRow.portalVisibility} />}
+                              {projectType === 'SEO' && <PortalSeoVisibility id={editingRowId} value={editingRow.portalVisibility} />}
                               {/* Priority */}
                               <div className="flex-grow flex-shrink-0 min-w-[140px] md:min-w-[150px]">
                                 <label className="block text-xs font-bold text-[#8E9299] uppercase tracking-wider mb-2">Priority</label>
@@ -5599,7 +5599,7 @@ export default function WorkspaceProjectView({
                   </div>
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
-                  {activeEditTab === 'details' && projectType === 'SEO' && <PortalSeoVisibility columns={columns} id={editingRowId} value={data.find(r => r.id === editingRowId)?.portalVisibility} />}
+                  {activeEditTab === 'details' && projectType === 'SEO' && <PortalSeoVisibility id={editingRowId} value={data.find(r => r.id === editingRowId)?.portalVisibility} />}
                   {activeEditTab === 'details' && (() => {
                     const editingRow = data.find(r => r.id === editingRowId);
                     const displayCols = [...columns.filter(c => c.id !== 'updatesCount')];

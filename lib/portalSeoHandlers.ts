@@ -1,3 +1,4 @@
+import { automaticSeo } from "./portalSeoAutomatic";
 import { FieldPath } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalListingsFirestore } from "./portalListingsDb";
@@ -61,20 +62,29 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
       const { groupId } = await context.params;
       if (!validDocumentId(groupId))
         return json({ error: "Invalid group." }, 400);
+      const automatic = !request.nextUrl.searchParams.has("options");
       const parsed = seoOptions.safeParse(
         JSON.parse(request.nextUrl.searchParams.get("options") ?? "{}"),
       );
-      if (!parsed.success)
+      if (!automatic && !parsed.success)
         return json({ error: "Explicit field mapping required." }, 400);
-      const options = parsed.data;
+      const options = parsed.success ? parsed.data : null;
       const fields = [
         ...new Set([
           "workspace",
           "groupId",
           "parentId",
-          ...Object.values(options.fields).filter(
-            (v): v is string => typeof v === "string",
-          ),
+          ...(automatic
+            ? [
+                "projectName",
+                "status",
+                "deadline",
+                "url",
+                "portalVisibility",
+                "order",
+              ]
+            : Object.values(options!.fields)
+          ).filter((v): v is string => typeof v === "string"),
         ]),
       ];
       // Transaction gives one coherent view of moves/deletions and parent validation.
@@ -90,7 +100,7 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
             ? (
                 await tx.getAll(
                   db.collection("companies").doc(group.companyId),
-                  { fieldMask: ["seo"] },
+                  { fieldMask: automatic ? ["seo", "domain"] : ["seo"] },
                 )
               )[0]
             : undefined;
@@ -107,9 +117,11 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
             id: d.id,
             data: d.data(),
           }));
+          if (automatic)
+            return automaticSeo(records, groupId, company?.data()?.domain);
           return {
-            items: projectSeo(records, groupId, options),
-            diagnostics: diagnoseSeo(records, groupId, options),
+            items: projectSeo(records, groupId, options!),
+            diagnostics: diagnoseSeo(records, groupId, options!),
           };
         },
         { readOnly: true },
@@ -119,12 +131,14 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
           { error: "SEO section is not available on the SEO board." },
           404,
         );
-      const { items, diagnostics } = projection;
+      const { items } = projection;
+      const effectiveOptions =
+        "options" in projection ? projection.options : options!;
       if (request.nextUrl.searchParams.get("previews") === "1") {
         // Explicit admin refresh only; normal report generation never fetches public pages.
 
         await Promise.all(
-          eligibleSeo(items, options)
+          eligibleSeo(items, effectiveOptions)
             .filter((i) => i.url)
             .slice(0, 12)
             .map(async (item) => {
@@ -136,7 +150,13 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
       return json({
         group: { id: groupId, workspace: "SEO" },
         items,
-        diagnostics,
+        ...("setup" in projection
+          ? {
+              sourceVersion: 2,
+              publicOrigin: projection.publicOrigin,
+              setup: projection.setup,
+            }
+          : { diagnostics: projection.diagnostics }),
       });
     } catch {
       return json({ error: "SEO work could not be loaded." }, 503);

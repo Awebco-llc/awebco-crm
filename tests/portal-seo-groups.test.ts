@@ -165,6 +165,26 @@ test("live API discovery filters retained groups and detail rejects before any t
     assert.equal((await detail("a")).status, 404);
     assert.equal(ticketReads, 1);
     assert.ok(masks.every((mask) => JSON.stringify(mask) === '["seo"]'));
+    enabled = true;
+    const automatic = await handler(req("/api/portal/listings/seo/groups/a"), {
+      params: Promise.resolve({ groupId: "a" }),
+    });
+    assert.equal(automatic.status, 200);
+    const automaticBody = await automatic.json();
+    assert.equal(automaticBody.sourceVersion, 2);
+    assert.equal(automaticBody.setup.taskCount, 0);
+    assert.deepEqual(masks.at(-1), ["seo", "domain"]);
+    const before = ticketReads;
+    enabled = false;
+    assert.equal(
+      (
+        await handler(req("/api/portal/listings/seo/groups/a"), {
+          params: Promise.resolve({ groupId: "a" }),
+        })
+      ).status,
+      404,
+    );
+    assert.equal(ticketReads, before);
   } finally {
     if (previous === undefined) delete process.env.PORTAL_LISTINGS_API_TOKEN;
     else process.env.PORTAL_LISTINGS_API_TOKEN = previous;
