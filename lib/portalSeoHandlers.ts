@@ -2,7 +2,7 @@ import { FieldPath } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalListingsFirestore } from "./portalListingsDb";
 import { checkListingsAuth, validDocumentId } from "./portalListings";
-import { seoOptions, projectSeo } from "./portalSeo";
+import { seoOptions, projectSeo, diagnoseSeo, eligibleSeo } from "./portalSeo";
 import { publicPagePreview } from "./portalSeoPreview";
 const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -66,7 +66,7 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
         ]),
       ];
       // Transaction gives one coherent view of moves/deletions and parent validation.
-      const items = await db.runTransaction(
+      const projection = await db.runTransaction(
         async (tx) => {
           const currentGroup = await tx.get(
             db.collection("groups").doc(groupId),
@@ -81,26 +81,24 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
               .limit(1001),
           );
           if (tickets.size > 1000) throw new Error("Too many tasks");
-          return projectSeo(
-            tickets.docs.map((d) => ({ id: d.id, data: d.data() })),
-            groupId,
-            options,
-          );
+          const records = tickets.docs.map((d) => ({
+            id: d.id,
+            data: d.data(),
+          }));
+          return {
+            items: projectSeo(records, groupId, options),
+            diagnostics: diagnoseSeo(records, groupId, options),
+          };
         },
         { readOnly: true },
       );
+      const { items, diagnostics } = projection;
       if (request.nextUrl.searchParams.get("previews") === "1") {
         // Explicit admin refresh only; normal report generation never fetches public pages.
-        const parents = new Set(items.map((i) => i.parentId));
+
         await Promise.all(
-          items
-            .filter(
-              (i) =>
-                i.visible &&
-                i.status === options.doneValue &&
-                i.url &&
-                !parents.has(i.id),
-            )
+          eligibleSeo(items, options)
+            .filter((i) => i.url)
             .slice(0, 12)
             .map(async (item) => {
               const preview = await publicPagePreview(item.url!);
@@ -108,7 +106,11 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
             }),
         );
       }
-      return json({ group: { id: groupId, workspace: "SEO" }, items });
+      return json({
+        group: { id: groupId, workspace: "SEO" },
+        items,
+        diagnostics,
+      });
     } catch {
       return json({ error: "SEO work could not be loaded." }, 503);
     }

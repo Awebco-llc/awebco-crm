@@ -249,3 +249,42 @@ test("same month in another year and missing years remain unallocated", () => {
     false,
   );
 });
+
+import { diagnoseSeo, eligibleSeo } from "../lib/portalSeo";
+test("mapping diagnostics reject nonexistent fields and allow a verified future plan without completed tasks", () => {
+  const future = record("future", { status: "Not Started" });
+  assert.deepEqual(diagnoseSeo([future], "client-a", options).errors, []);
+  assert.equal(diagnoseSeo([future], "client-a", options).eligible, 0);
+  const invalid = {
+    ...options,
+    fields: { ...options.fields, allocation: "missing_field" },
+  };
+  assert.match(
+    diagnoseSeo([future], "client-a", invalid).errors.join(" "),
+    /not found/,
+  );
+  const hidden = record("hidden", {
+    custom_public: "Hidden",
+    projectName: "PRIVATE TITLE",
+  });
+  assert.doesNotMatch(
+    JSON.stringify(diagnoseSeo([hidden], "client-a", options)),
+    /PRIVATE TITLE/,
+  );
+  const native = {
+    ...options,
+    fields: { ...options.fields, visibility: "portalVisibility" },
+  };
+  assert.equal(diagnoseSeo([future], "client-a", native).errors.length, 0);
+  assert.match(
+    diagnoseSeo([future], "client-a", native).warnings.join(" "),
+    /No tasks/,
+  );
+  const parent = record("parent"),
+    child = record("child", { parentId: "parent", url: "" });
+  assert.equal(
+    eligibleSeo(projectSeo([parent, child], "client-a", options), options)
+      .length,
+    1,
+  );
+});
