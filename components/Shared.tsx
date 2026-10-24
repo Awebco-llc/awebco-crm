@@ -155,6 +155,7 @@ export interface TicketFile {
 }
 
 export interface Ticket {
+  portalVisibility?: 'Approved' | 'Hidden';
   id: string;
   parentId?: string;
   projectName: string;
