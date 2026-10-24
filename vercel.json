@@ -4,5 +4,10 @@
       "path": "/api/notifications/cron",
       "schedule": "0 0 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "feature/crm-seo-deliverables": false
+    }
+  }
 }
