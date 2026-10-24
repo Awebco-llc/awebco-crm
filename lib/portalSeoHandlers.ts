@@ -4,6 +4,7 @@ import { getPortalListingsFirestore } from "./portalListingsDb";
 import { checkListingsAuth, validDocumentId } from "./portalListings";
 import { seoOptions, projectSeo, diagnoseSeo, eligibleSeo } from "./portalSeo";
 import { publicPagePreview } from "./portalSeoPreview";
+import { seoBoardGroups, seoGroupVisible } from "./portalSeoGroups";
 const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
@@ -29,16 +30,30 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
         const groups = await db
           .collection("groups")
           .where("workspace", "==", "SEO")
-          .select("workspace", "name")
+          .select("workspace", "name", "companyId", "order")
+          .orderBy(FieldPath.documentId())
           .limit(501)
           .get();
         if (groups.size > 500) throw new Error("Too many groups");
+        const records = groups.docs.map((d) => ({ id: d.id, data: d.data() }));
+        const companyIds = [
+          ...new Set(
+            records.map((g) => g.data.companyId).filter(validDocumentId),
+          ),
+        ];
+        const companies = companyIds.length
+          ? await db.getAll(
+              ...companyIds.map((id) => db.collection("companies").doc(id)),
+              { fieldMask: ["seo"] },
+            )
+          : [];
+        const flags = new Map(companies.map((c) => [c.id, c.data()?.seo]));
         return json({
-          groups: groups.docs.map((d) => ({
-            id: d.id,
+          groups: seoBoardGroups(records, flags).map((g) => ({
+            id: g.id,
             name:
-              typeof d.data().name === "string"
-                ? d.data().name.slice(0, 200)
+              typeof g.data.name === "string"
+                ? g.data.name.slice(0, 200)
                 : "SEO group",
           })),
         });
@@ -52,9 +67,6 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
       if (!parsed.success)
         return json({ error: "Explicit field mapping required." }, 400);
       const options = parsed.data;
-      const group = await db.collection("groups").doc(groupId).get();
-      if (!group.exists || group.data()?.workspace !== "SEO")
-        return json({ error: "Group unavailable." }, 404);
       const fields = [
         ...new Set([
           "workspace",
@@ -72,7 +84,17 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
             db.collection("groups").doc(groupId),
           );
           if (!currentGroup.exists || currentGroup.data()?.workspace !== "SEO")
-            throw new Error("Group changed");
+            return null;
+          const group = currentGroup.data()!;
+          const company = validDocumentId(group.companyId)
+            ? (
+                await tx.getAll(
+                  db.collection("companies").doc(group.companyId),
+                  { fieldMask: ["seo"] },
+                )
+              )[0]
+            : undefined;
+          if (!seoGroupVisible(group, company?.data()?.seo)) return null;
           const tickets = await tx.get(
             db
               .collection("tickets")
@@ -92,6 +114,11 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
         },
         { readOnly: true },
       );
+      if (!projection)
+        return json(
+          { error: "SEO section is not available on the SEO board." },
+          404,
+        );
       const { items, diagnostics } = projection;
       if (request.nextUrl.searchParams.get("previews") === "1") {
         // Explicit admin refresh only; normal report generation never fetches public pages.
