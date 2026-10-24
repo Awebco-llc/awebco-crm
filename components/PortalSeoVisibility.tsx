@@ -4,9 +4,11 @@ import { updateTicket } from "@/lib/crmStore";
 export function PortalSeoVisibility({
   id,
   value,
+  columns = [],
 }: {
   id: string;
   value: unknown;
+  columns?: { id: string; header: string }[];
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -38,6 +40,21 @@ export function PortalSeoVisibility({
         work also needs a planned month and year. Parent tasks need their own
         approval.
       </p>
+      <details className="mt-3 text-xs text-slate-600">
+        <summary className="cursor-pointer py-2">Portal mapping fields</summary>
+        <p>Visibility: portalVisibility · approval value: Approved</p>
+        {columns
+          .filter((c) => /month|year|planned/i.test(c.header))
+          .map((c) => (
+            <p key={c.id}>
+              {c.header}: <code>{c.id}</code>
+            </p>
+          ))}
+        <p>
+          Use the exact month/year field IDs configured by your team. No year is
+          inferred.
+        </p>
+      </details>
       {error && (
         <p role="alert" className="mt-2 text-sm text-red-700">
           {error}
