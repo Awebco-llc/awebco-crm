@@ -5,6 +5,7 @@ import { getPortalListingsFirestore } from "./portalListingsDb";
 import { checkListingsAuth, validDocumentId } from "./portalListings";
 import { seoOptions, projectSeo, diagnoseSeo, eligibleSeo } from "./portalSeo";
 import { publicPagePreview } from "./portalSeoPreview";
+import { publicSeoPublication } from "./portalSeoPublications";
 import { seoBoardGroups, seoGroupVisible } from "./portalSeoGroups";
 const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -135,17 +136,28 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
       const effectiveOptions =
         "options" in projection ? projection.options : options!;
       if (request.nextUrl.searchParams.get("previews") === "1") {
-        // Explicit admin refresh only; normal report generation never fetches public pages.
-
-        await Promise.all(
-          eligibleSeo(items, effectiveOptions)
-            .filter((i) => i.url)
-            .slice(0, 12)
-            .map(async (item) => {
-              const preview = await publicPagePreview(item.url!);
-              if (preview) Object.assign(item, { preview });
+        const period = request.nextUrl.searchParams.get("period");
+        if (period && !/^20\d{2}-(0[1-9]|1[0-2])$/.test(period))
+          return json({ error: "Invalid report month." }, 400);
+        const candidates = eligibleSeo(items, effectiveOptions)
+          .filter((i) => !period || i.allocatedPeriod === period)
+          .slice(0, 12);
+        for (let offset = 0; offset < candidates.length; offset += 3)
+          await Promise.all(
+            candidates.slice(offset, offset + 3).map(async (item) => {
+              if ("publicOrigin" in projection && projection.publicOrigin) {
+                const publication = await publicSeoPublication(
+                  item.title,
+                  projection.publicOrigin,
+                  item.url,
+                );
+                if (publication) Object.assign(item, publication);
+              } else if (item.url) {
+                const preview = await publicPagePreview(item.url);
+                if (preview) Object.assign(item, { preview });
+              }
             }),
-        );
+          );
       }
       return json({
         group: { id: groupId, workspace: "SEO" },

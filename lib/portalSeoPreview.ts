@@ -25,15 +25,14 @@ export function publicIpv4(ip: string) {
     (a === 203 && b === 0)
   );
 }
-export async function publicPagePreview(
-  value: string,
+async function publicDocument(
+  safe: string,
+  accept: "text/html" | "application/json",
   dependencies: {
     resolve4: (hostname: string) => Promise<string[]>;
     request: typeof request;
   } = { resolve4, request },
 ) {
-  const safe = seoPublicUrl(value);
-  if (!safe || new URL(safe).protocol !== "https:") return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 3500);
   try {
@@ -49,7 +48,7 @@ export async function publicPagePreview(
     ]);
     if (!addresses.length || addresses.some((ip) => !publicIpv4(ip)))
       return null;
-    const html = await new Promise<string>((resolve, reject) => {
+    return await new Promise<string>((resolve, reject) => {
       const req = dependencies.request(
         safe,
         {
@@ -59,7 +58,7 @@ export async function publicPagePreview(
           lookup: (_host, _options, callback) =>
             callback(null, addresses[0], 4),
           headers: {
-            Accept: "text/html",
+            Accept: accept,
             "Accept-Encoding": "identity",
             "User-Agent": "Awebco-Portal-Preview/1.0",
           },
@@ -67,9 +66,10 @@ export async function publicPagePreview(
         (res) => {
           // No redirects, authentication, cookies, compression, or error documents.
           if (
-            /noindex/i.test(String(res.headers["x-robots-tag"] ?? "")) ||
+            (accept === "text/html" &&
+              /noindex/i.test(String(res.headers["x-robots-tag"] ?? ""))) ||
             res.statusCode !== 200 ||
-            !res.headers["content-type"]?.includes("text/html") ||
+            !res.headers["content-type"]?.includes(accept) ||
             (res.headers["content-encoding"] &&
               res.headers["content-encoding"] !== "identity")
           ) {
@@ -82,7 +82,19 @@ export async function publicPagePreview(
           res.on("data", (chunk: Buffer) => {
             bytes += chunk.length;
             if (bytes > 256_000) res.destroy(new Error("Too large"));
-            else chunks.push(chunk);
+            else {
+              chunks.push(chunk);
+              // Elementor pages can have large bodies. Metadata is in the head;
+              // stop once it is complete rather than downloading the full page.
+              if (accept === "text/html") {
+                const head = Buffer.concat(chunks).toString("utf8");
+                const end = head.toLowerCase().indexOf("</head>");
+                if (end !== -1) {
+                  resolve(head.slice(0, end + 7));
+                  res.destroy();
+                }
+              }
+            }
           });
           res.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
           res.on("error", reject);
@@ -91,6 +103,46 @@ export async function publicPagePreview(
       req.on("error", reject);
       req.end();
     });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function publicSiteJson(
+  origin: string,
+  path: string,
+  params: Record<string, string>,
+  dependencies?: Parameters<typeof publicDocument>[2],
+): Promise<unknown> {
+  const safe = seoPublicUrl(origin);
+  if (
+    !safe ||
+    new URL(safe).protocol !== "https:" ||
+    !/^\/wp-json\/wp\/v2\/(search|(?:pages|posts)\/[1-9]\d*)$/.test(path)
+  )
+    return null;
+  const url = new URL(path, new URL(safe).origin);
+  for (const [key, value] of Object.entries(params))
+    url.searchParams.set(key, value);
+  const body = await publicDocument(url.href, "application/json", dependencies);
+  try {
+    return body ? JSON.parse(body) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function publicPagePreview(
+  value: string,
+  dependencies?: Parameters<typeof publicDocument>[2],
+) {
+  const safe = seoPublicUrl(value);
+  if (!safe || new URL(safe).protocol !== "https:") return null;
+  const html = await publicDocument(safe, "text/html", dependencies);
+  if (!html) return null;
+  try {
     const metas = [...html.matchAll(/<meta\s+[^>]*>/gi)];
     function meta(name: string) {
       for (const [tag] of metas) {
@@ -131,7 +183,5 @@ export async function publicPagePreview(
     return { title, image };
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
