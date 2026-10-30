@@ -242,9 +242,11 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                   ? "Email notification accepted"
                   : message.email_status === "failed"
                     ? "Message saved. Email notification could not be sent."
-                    : message.email_status === "uncertain"
-                      ? "Message saved. Email delivery is not confirmed."
-                      : "Message saved. Email notification pending."}
+                    : message.email_status === "not_required"
+                      ? "Message saved. No email notification required."
+                      : message.email_status === "uncertain"
+                        ? "Message saved. Email delivery is not confirmed."
+                        : "Message saved. Email notification pending."}
               </p>
               {message.email_status === "failed" && (
                 <button

@@ -484,10 +484,13 @@ export class SupportService {
         ]).entries(),
       ].filter(
         ([email]) =>
-          message.kind === "request" || email !== message.sender_email,
+          supportEmailAllowed(email) &&
+          (message.kind === "request" ||
+            message.direction === "team" ||
+            email !== message.sender_email),
       );
       if (!recipients.length) {
-        await messageRef.update({ email_status: "failed" });
+        await messageRef.update({ email_status: "not_required" });
         return;
       }
       for (const [email, audience] of recipients) {
@@ -568,7 +571,10 @@ export class SupportService {
         ? "Reply to this email to send a reply to the client. Use Internal notes in the CRM for private comments."
         : "Reply to this email to continue the conversation, or open the ticket in your portal.";
     const form = new FormData();
-    form.set("from", `Awebco <${replyTo}>`);
+    form.set(
+      "from",
+      process.env.MAILGUN_FROM_EMAIL || `Awebco Support <support@${domain}>`,
+    );
     form.set("to", email);
     form.set(
       "subject",

@@ -168,7 +168,7 @@ const savedEnv = { ...process.env },
   originalFetch = globalThis.fetch;
 let db: FakeDb,
   service: SupportService,
-  sent: Array<{ to: string; replyTo: string; body: string }>;
+  sent: Array<{ to: string; replyTo: string; body: string; from: string }>;
 const company = "company-a",
   ticketId = "existing-ticket";
 function ticket(patch: Data = {}) {
@@ -251,6 +251,7 @@ test.beforeEach(() => {
       to: String(form.get("to")),
       replyTo: String(form.get("h:Reply-To")),
       body: String(form.get("text")),
+      from: String(form.get("from")),
     });
     return Response.json({ id: "accepted" });
   };
@@ -823,4 +824,68 @@ test("preview support email fails closed and only permits the agreed test inbox"
     supportEmailAllowed("client@example.com", "production", "troy@awebco.com"),
     true,
   );
+});
+
+test("CRM replies notify the requester even when the staff member is also the requester", async () => {
+  await service.reply(
+    ticketId,
+    requestId,
+    "Explicit client reply",
+    { name: "Owner", email: "owner@example.com", direction: "team" },
+    [],
+  );
+  assert.deepEqual(
+    sent.map((mail) => mail.to),
+    ["owner@example.com"],
+  );
+  assert.equal(
+    db.records.get(`tickets/${ticketId}/messages/${requestId}`)!.email_status,
+    "accepted",
+  );
+  assert.ok(!sent[0].from.includes("inbound+"));
+  assert.ok(sent[0].replyTo.includes("inbound+st."));
+});
+test("preview notifications create delivery records only for the agreed recipient", async () => {
+  const oldEnvironment = process.env.VERCEL_ENV,
+    oldRecipient = process.env.PORTAL_SUPPORT_PREVIEW_RECIPIENT;
+  process.env.VERCEL_ENV = "preview";
+  process.env.PORTAL_SUPPORT_PREVIEW_RECIPIENT = "owner@example.com";
+  try {
+    await service.reply(
+      ticketId,
+      requestId,
+      "Preview client reply",
+      { name: "Team", email: "staff@awebco.com", direction: "team" },
+      [],
+    );
+    assert.deepEqual(
+      sent.map((mail) => mail.to),
+      ["owner@example.com"],
+    );
+    assert.equal(
+      db.records.get(`tickets/${ticketId}/messages/${requestId}`)!.email_status,
+      "accepted",
+    );
+    const count = sent.length;
+    await service.reply(
+      ticketId,
+      "preview-client-reply",
+      "Additional client detail",
+      { name: "Owner", email: "owner@example.com", direction: "client" },
+      [],
+      company,
+    );
+    assert.equal(sent.length, count);
+    assert.equal(
+      db.records.get(`tickets/${ticketId}/messages/preview-client-reply`)!
+        .email_status,
+      "not_required",
+    );
+  } finally {
+    if (oldEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = oldEnvironment;
+    if (oldRecipient === undefined)
+      delete process.env.PORTAL_SUPPORT_PREVIEW_RECIPIENT;
+    else process.env.PORTAL_SUPPORT_PREVIEW_RECIPIENT = oldRecipient;
+  }
 });
