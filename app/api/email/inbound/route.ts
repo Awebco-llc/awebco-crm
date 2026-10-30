@@ -1,3 +1,4 @@
+import { supportInbound } from '@/lib/supportInbound';
 import { NextResponse } from 'next/server';
 import { getFirestoreAdmin, getStorageAdmin } from '@/lib/firebaseAdmin';
 import fs from 'fs';
@@ -116,7 +117,7 @@ export async function POST(req: Request) {
     let isMultipart = false;
     let formData: FormData | null = null;
 
-    if (contentType.includes('multipart/form-data')) {
+    if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
       isMultipart = true;
       formData = await req.formData();
       writeLog(`Incoming Inbound Webhook: Received multipart/form-data`);
@@ -141,6 +142,10 @@ export async function POST(req: Request) {
       timestamp = payload.timestamp || '';
       token = payload.token || '';
       signature = payload.signature || '';
+    }
+
+    if (/inbound\+st\./i.test(recipient)) {
+      return supportInbound({ sender, recipient, body, timestamp, token, signature, formData });
     }
 
     // Verify Mailgun signature if it's a multipart request (real webhook)

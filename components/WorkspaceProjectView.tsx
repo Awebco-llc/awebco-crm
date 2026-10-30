@@ -1,4 +1,5 @@
 'use client';
+import { SupportConversation, SupportConversationPanel } from './SupportConversation';
 import { PortalSeoVisibility } from './PortalSeoVisibility';
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -2029,7 +2030,7 @@ export default function WorkspaceProjectView({
     };
   }, [resizing, projectType]);
 
-  type EditTab = 'details' | 'description' | 'updates' | 'files';
+  type EditTab = 'details' | 'description' | 'updates' | 'files' | 'client';
   const [columns, setColumns] = useState<Column[]>(() => {
     if (typeof window !== 'undefined') {
       const storageKey = `awebco_workspace_columns_${projectType.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
@@ -2412,6 +2413,15 @@ export default function WorkspaceProjectView({
   const [isAddColOpen, setIsAddColOpen] = useState(false);
   const [newColName, setNewColName] = useState('');
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const openedEmailTicket = useRef<string | null>(null);
+  useEffect(() => {
+    if (projectType !== 'Support Tickets') return;
+    const ticket = new URLSearchParams(window.location.search).get('ticket');
+    if (ticket && openedEmailTicket.current !== ticket && data.some(row => row.id === ticket)) {
+      openedEmailTicket.current = ticket;
+      setEditingRowId(ticket);
+    }
+  }, [projectType, data]);
   const prevEditingRowId = useRef<string | null>(null);
   useEffect(() => {
     if (editingRowId === null && prevEditingRowId.current !== null) {
@@ -2855,9 +2865,10 @@ export default function WorkspaceProjectView({
 
   React.useEffect(() => {
     if (editingRowId) {
-      setActiveEditTab('details');
+      const query = new URLSearchParams(window.location.search);
+      setActiveEditTab(projectType === 'Support Tickets' && query.get('ticket') === editingRowId && query.get('conversation') === 'client' ? 'client' : 'details');
     }
-  }, [editingRowId]);
+  }, [editingRowId, projectType]);
 
   React.useEffect(() => {
     if (openRowId && data.some(row => row.id === openRowId)) {
@@ -5333,9 +5344,12 @@ export default function WorkspaceProjectView({
                           </div>
                         </div>
 
+                        {projectType === 'Support Tickets' && <SupportConversationPanel key={editingRowId} ticketId={editingRowId} />}
+
                         {/* Card 4: Updates & Discussion */}
                         <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm overflow-hidden p-6 md:p-8">
-                          <h3 className="text-base font-bold text-[#1C1F23] mb-6">Updates & Activity</h3>
+                          <h3 className="text-base font-bold text-[#1C1F23] mb-6">{projectType === 'Support Tickets' ? 'Internal notes' : 'Updates & Activity'}</h3>
+                          {projectType === 'Support Tickets' && <p className="text-sm text-[#4A4D53] mb-4">Only your team can see these notes. They are never emailed to the client.</p>}
 
                           {/* Add Update Input Area */}
                           <div className="flex flex-col gap-3 relative border border-[#E2E4E9] rounded-xl p-3 bg-white focus-within:ring-2 focus-within:ring-[#1061E3] focus-within:border-transparent transition-all mb-6">
@@ -5581,7 +5595,8 @@ export default function WorkspaceProjectView({
                     {[
                       { id: 'details', label: 'Details' },
                       { id: 'description', label: 'Description' },
-                      { id: 'updates', label: 'Updates' },
+                      { id: 'updates', label: projectType === 'Support Tickets' ? 'Internal notes' : 'Updates' },
+                      ...(projectType === 'Support Tickets' ? [{ id: 'client', label: 'Client conversation' }] : []),
                       { id: 'files', label: 'Files' },
                     ].map(tab => (
                       <button
@@ -5781,9 +5796,11 @@ export default function WorkspaceProjectView({
                     );
                   })()}
 
+                  {activeEditTab === 'client' && projectType === 'Support Tickets' && <SupportConversation key={editingRowId} ticketId={editingRowId} />}
                   {activeEditTab === 'updates' && (
                     <div>
-                      <h4 className="font-bold text-sm text-[#1C1F23] mb-4">Updates</h4>
+                      <h4 className="font-bold text-sm text-[#1C1F23] mb-4">{projectType === 'Support Tickets' ? 'Internal notes' : 'Updates'}</h4>
+                      {projectType === 'Support Tickets' && <p className="text-sm text-[#4A4D53] mb-4">Only your team can see these notes. They are never emailed to the client.</p>}
 
                       <div className="flex flex-col gap-2 relative mb-6">
                         {attachedFile && (
@@ -6527,7 +6544,7 @@ export default function WorkspaceProjectView({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center pb-2 border-b border-[#F0F2F5]">
-              <span className="font-bold text-xs text-[#1C1F23] uppercase tracking-wider">Leave Update</span>
+              <span className="font-bold text-xs text-[#1C1F23] uppercase tracking-wider">{projectType === 'Support Tickets' ? 'Internal notes' : 'Leave Update'}</span>
               <button
                 type="button"
                 onClick={() => setActiveCommentsRowId(null)}

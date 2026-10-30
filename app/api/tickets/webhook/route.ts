@@ -1,3 +1,5 @@
+import { upsertPublicSupport, publicSupportReplyRoute } from '@/lib/supportPublic';
+import { SupportError } from '@/lib/supportService';
 import { NextResponse } from 'next/server';
 
 interface ExtractedFile {
@@ -125,7 +127,7 @@ export async function POST(req: Request) {
     }
 
     const payload = await req.json();
-    console.log('Incoming Ticket Webhook Payload:', JSON.stringify(payload, null, 2));
+    // Request content is private; do not log the submission payload.
 
     // Map common email/form webhook fields
     const subject = payload.subject || 'No Subject';
@@ -202,6 +204,13 @@ export async function POST(req: Request) {
     if (!category && textParsed.category) category = textParsed.category;
     if (priority === 'Medium' && textParsed.priority) priority = textParsed.priority;
 
+    const entryId = /^Ticket #([0-9]{1,12}) - /i.exec(subject)?.[1];
+    if (entryId) {
+      const ticketId = await upsertPublicSupport({entryId,subject,description:textBody,email,contactName,companyName,category,priority,files:extractedFiles});
+      const routing = payload.support_route === true ? await publicSupportReplyRoute(ticketId,payload.notification_to) : null;
+      return NextResponse.json({success:true,ticketId,...(routing?{routing}:{})});
+    }
+
     const nowISO = new Date().toISOString();
     const fields: any = {
       projectName: { stringValue: subject },
@@ -264,6 +273,7 @@ export async function POST(req: Request) {
       message: 'Ticket created successfully'
     });
   } catch (err: any) {
+    if (err instanceof SupportError) return NextResponse.json({success:false,error:err.message},{status:err.status});
     console.error('Error in ticket webhook:', err);
     return NextResponse.json({
       success: false,
