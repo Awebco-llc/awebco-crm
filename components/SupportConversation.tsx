@@ -17,6 +17,9 @@ type Message = {
   attachments: Attachment[];
   email_status?: string;
   email_signature?: string;
+  email_quoted?: string;
+  email_original_text?: string;
+  email_original_note?: string;
   inline_attachments?: Attachment[];
 };
 type Detail = {
@@ -111,6 +114,9 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                   id: doc.id,
                   text: content.text,
                   email_signature: content.signature,
+                  email_quoted: content.quoted,
+                  email_original_text: content.original,
+                  email_original_note: content.originalNote,
                   attachments: content.attachments,
                   inline_attachments: content.inline,
                 } as Message;
@@ -236,7 +242,7 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                   {new Date(message.created_at).toLocaleString()}
                 </time>
               </div>
-              <p className="whitespace-pre-wrap break-words mt-2">
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere] mt-2">
                 {message.text}
               </p>
               {message.attachments?.map((file) => (
@@ -252,17 +258,20 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                 </button>
               ))}
               {(message.email_signature ||
+                message.email_quoted ||
                 !!message.inline_attachments?.length) && (
                 <details className="mt-3 text-sm text-[#4A4D53]">
                   <summary className="cursor-pointer">
-                    Email signature
-                    {message.inline_attachments?.length
-                      ? ` and inline images (${message.inline_attachments.length})`
-                      : ""}
+                    Signature and quoted history
                   </summary>
                   {message.email_signature && (
-                    <p className="whitespace-pre-wrap break-words mt-2">
+                    <p className="whitespace-pre-wrap [overflow-wrap:anywhere] mt-2">
                       {message.email_signature}
+                    </p>
+                  )}
+                  {message.email_quoted && (
+                    <p className="whitespace-pre-wrap [overflow-wrap:anywhere] mt-2">
+                      {message.email_quoted}
                     </p>
                   )}
                   {message.inline_attachments?.map((file) => (
@@ -277,6 +286,30 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                       {file.name}
                     </button>
                   ))}
+                </details>
+              )}
+              {message.email_original_text !== undefined && (
+                <details className="mt-3 text-sm text-[#4A4D53]">
+                  <summary className="cursor-pointer">Original email</summary>
+                  {message.email_original_note && (
+                    <p className="mt-2">{message.email_original_note}</p>
+                  )}
+                  <p className="whitespace-pre-wrap [overflow-wrap:anywhere] mt-2">
+                    {message.email_original_text}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void download(message.id, {
+                        id: "original-email",
+                        name: "original-email.json",
+                      })
+                    }
+                    className="text-blue-700 underline mt-2"
+                  >
+                    Download stored email content
+                  </button>
                 </details>
               )}
               <p className="text-xs text-[#4A4D53] mt-2">

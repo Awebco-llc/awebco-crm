@@ -52,6 +52,9 @@ export type SupportMessage = {
   direction: "client" | "team";
   kind?: "request";
   email_signature?: string;
+  email_quoted?: string;
+  email_original_text?: string;
+  email_original_note?: string;
   inline_attachments?: SupportAttachment[];
   attachments: SupportAttachment[];
 };

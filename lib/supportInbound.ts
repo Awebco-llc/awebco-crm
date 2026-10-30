@@ -1,3 +1,4 @@
+import { supportEmailOriginal, supportEmailText } from "./supportEmail";
 import { getAuth } from "firebase-admin/auth";
 import { getApp } from "firebase-admin/app";
 import { getPortalListingsFirestore } from "./portalListingsDb";
@@ -124,27 +125,20 @@ export async function supportInbound(input: {
       /bulk|junk|list/.test(header("precedence"))
     )
       return supportJson({ ignored: true });
-    const body = form.has("stripped-text")
-      ? String(form.get("stripped-text") || "")
-      : input.body;
-    if (body.length > 10000)
+    const original = supportEmailOriginal(form, input.body);
+    const body = supportEmailText(original);
+    // Bound the retained record below Firestore's document limit; reject rather
+    // than silently truncate original content. Typed replies keep their 10k limit.
+    if (
+      body.length > 100000 ||
+      Buffer.byteLength(JSON.stringify(original)) > 500000
+    )
       return supportJson({ error: "Reply is too long." }, 400);
     const fileEntries = [...form.entries()].filter(
       ([key, value]) =>
         /^attachment-\d+$/.test(key) && typeof value !== "string",
     );
     const files = fileEntries.map(([, value]) => value as File);
-    let contentIds: unknown = {};
-    try {
-      contentIds = JSON.parse(String(form.get("content-id-map") || "{}"));
-    } catch {
-      /* Keep files visible if metadata is malformed. */
-    }
-    const inlineFields = new Set(
-      contentIds && typeof contentIds === "object" && !Array.isArray(contentIds)
-        ? Object.values(contentIds)
-        : [],
-    );
     // Mail signatures include inline images; preserve them without applying the five-file UI limit.
     validateSupportFiles(files, 20);
     if (!body.trim() && !files.length) return supportJson({ ignored: true });
@@ -174,8 +168,15 @@ export async function supportInbound(input: {
                 .trim()
                 .slice(0, 200)
             : undefined,
-        inlineFiles: fileEntries.flatMap(([key], index) =>
-          inlineFields.has(key) ? [index] : [],
+        original,
+        attachmentCids: fileEntries.map(([key], index) =>
+          Object.entries(original.contentIds).flatMap(([cid, field]) =>
+            field === key ||
+            (field === files[index].name &&
+              files.filter((file) => file.name === field).length === 1)
+              ? [cid.replace(/^<|>$/g, "")]
+              : [],
+          ),
         ),
       },
     );

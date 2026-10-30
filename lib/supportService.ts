@@ -1,6 +1,7 @@
 import {
   supportMessagePresentation,
   supportNotification,
+  type SupportEmailOriginal,
 } from "./supportEmail";
 import { getAuth } from "firebase-admin/auth";
 import { getApp } from "firebase-admin/app";
@@ -94,7 +95,16 @@ function publicMessage(id: string, data: RecordData): SupportMessage | null {
   return {
     id,
     author: String(data.author || "Awebco").slice(0, 200),
-    text: presentation.text.slice(0, 10000),
+    text: presentation.text,
+    ...(presentation.original !== undefined
+      ? {
+          email_original_text: presentation.original,
+          ...(presentation.originalNote
+            ? { email_original_note: presentation.originalNote }
+            : {}),
+        }
+      : {}),
+    ...(presentation.quoted ? { email_quoted: presentation.quoted } : {}),
     created_at: String(data.created_at),
     direction: data.direction as "client" | "team",
     ...(data.kind === "request" ? { kind: "request" as const } : {}),
@@ -378,7 +388,12 @@ export class SupportService {
     actor: Actor,
     files: File[],
     companyId?: string,
-    email?: { messageId: string; inlineFiles: number[]; senderName?: string },
+    email?: {
+      messageId: string;
+      senderName?: string;
+      original?: SupportEmailOriginal;
+      attachmentCids?: string[][];
+    },
   ) {
     if (!supportId(requestId)) throw new SupportError(400, "Invalid reply.");
     if (companyId) await this.company(companyId);
@@ -395,6 +410,15 @@ export class SupportService {
     const ticketRef = this.db.collection("tickets").doc(ticketId),
       messageRef = ticketRef.collection("messages").doc(requestId);
     const existing = await messageRef.get();
+    // Message-ID is the provider retry identity, including messages saved before
+    // full-body retention. A replay must not rewrite content or retry old mail.
+    if (
+      email &&
+      existing.exists &&
+      existing.data()?.email_message_id === email.messageId &&
+      existing.data()?.sender_email === actor.email
+    )
+      return this.detail(ticketId, companyId, actor.direction === "team");
     if (existing.exists && existing.data()?.request_hash !== hash)
       throw new SupportError(
         409,
@@ -425,9 +449,13 @@ export class SupportService {
           ? {
               email_message_id: email.messageId,
               email_sender_name: email.senderName || actor.name,
-              inline_attachment_ids: email.inlineFiles
-                .map((index) => attachments[index]?.id)
-                .filter(Boolean),
+              ...(email.original ? { email_original: email.original } : {}),
+              email_attachment_cids: Object.fromEntries(
+                attachments.map((file, index) => [
+                  file.id,
+                  email.attachmentCids?.[index] || [],
+                ]),
+              ),
             }
           : {}),
         created_at: at,
@@ -686,6 +714,20 @@ export class SupportService {
     ).data();
     if (message?.visibility !== "client")
       throw new SupportError(404, "File not found.");
+    if (fileId === "original-email" && messageId.startsWith("email-")) {
+      const original = message.email_original || {
+        plain: String(message.text || ""),
+        note: "Only the previously stored text is available for this older email.",
+      };
+      return new Response(JSON.stringify(original, null, 2), {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="original-email.json"',
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
     const file = (message.attachments as SupportAttachment[] | undefined)?.find(
       (f) => f.id === fileId,
     );

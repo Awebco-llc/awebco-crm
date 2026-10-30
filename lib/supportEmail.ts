@@ -1,77 +1,286 @@
-export function supportEmailContent(raw: string, author = "", senderName = "") {
-  const lines = raw.replace(/\r\n?/g, "\n").split("\n");
-  const names = [
-    ...new Set(
-      [author, senderName]
-        .map((name) => name.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
-  let start = lines.findIndex((line) => /^--\s*$/.test(line));
-  if (start < 1 && names.length) {
-    for (let i = lines.length - 1; i > 0; i--) {
-      const value = lines[i].trim().toLowerCase();
-      const tail = lines.slice(i).join("\n");
-      if (
-        names.some(
-          (name) =>
-            value === name ||
-            (name.split(" ").length === 1 &&
-              value.startsWith(name + " ") &&
-              value.split(" ").length <= 5),
-        ) &&
-        /https?:\/\/|www\./i.test(tail) &&
-        /\+?[\d ().-]{7,}|[\w.+-]+@[\w.-]+\.[a-z]{2,}/i.test(tail)
-      ) {
-        start = i;
-        while (
-          start > 0 &&
-          (!lines[start - 1].trim() ||
-            /^\s*\[cid:[^\]]+\]\s*$/i.test(lines[start - 1]) ||
-            /^\s*Write a Review(?:<[^>]+>)?\s*$/i.test(lines[start - 1]))
-        )
-          start--;
-        break;
+import { parse, type DefaultTreeAdapterMap } from "parse5";
+
+// Retain the provider's bodies verbatim. These are clues, never a replacement for
+// the original: stripped-text can omit inline replies or be present but empty.
+export type SupportEmailOriginal = {
+  plain: string;
+  html: string[];
+  strippedText?: string;
+  strippedHtml: string[];
+  strippedSignature?: string;
+  contentIds: Record<string, string>;
+};
+export function supportEmailOriginal(
+  form: FormData,
+  fallback = "",
+): SupportEmailOriginal {
+  const field = (key: string) => {
+    const value = form.get(key);
+    return typeof value === "string" ? value : undefined;
+  };
+  const fields = (key: string) =>
+    form.getAll(key).filter((v): v is string => typeof v === "string");
+  let contentIds: Record<string, string> = {};
+  try {
+    const value: unknown = JSON.parse(field("content-id-map") || "{}");
+    if (value && typeof value === "object" && !Array.isArray(value))
+      contentIds = Object.fromEntries(
+        Object.entries(value).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
+        ),
+      );
+  } catch {
+    /* Unknown metadata must not hide files. */
+  }
+  const html = fields("body-html");
+  return {
+    plain:
+      field("body-plain") ?? field("body") ?? (html.length ? "" : fallback),
+    html,
+    ...(field("stripped-text") !== undefined
+      ? { strippedText: field("stripped-text") }
+      : {}),
+    strippedHtml: fields("stripped-html"),
+    ...(field("stripped-signature") !== undefined
+      ? { strippedSignature: field("stripped-signature") }
+      : {}),
+    contentIds,
+  };
+}
+const normalize = (value: string) => value.replace(/\r\n?/g, "\n");
+const compact = (value: string) =>
+  value
+    .replace(/\[cid:[^\]]+\]/gi, "")
+    .replace(/[\s>]+/g, "")
+    .toLowerCase();
+const readable = (value: string) =>
+  normalize(value)
+    .replace(/\[cid:[^\]]+\]/gi, "")
+    .replace(
+      /([^\n<>]*?)<(https?:\/\/[^<>\s]+)>/g,
+      (_match, label: string, url: string) => {
+        const text = label.trim();
+        return !text ||
+          text.replace(/^https?:\/\//, "").replace(/\/$/, "") ===
+            url.replace(/^https?:\/\//, "").replace(/\/$/, "")
+          ? url
+          : `${text} (${url})`;
+      },
+    )
+    .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n")
+    .trim();
+
+type Part = { text: string; kind: "reply" | "quote" | "signature" };
+function htmlParts(html: string) {
+  const parts: Part[] = [];
+  const append = (text: string, kind: Part["kind"]) => {
+    if (parts.at(-1)?.kind === kind) parts[parts.length - 1].text += text;
+    else parts.push({ text, kind });
+  };
+  const stack: Array<{
+    node: DefaultTreeAdapterMap["node"];
+    kind: Part["kind"];
+    close?: boolean;
+  }> = [{ node: parse(html), kind: "reply" }];
+  while (stack.length) {
+    const { node, kind, close } = stack.pop()!;
+    if (node.nodeName === "#text") {
+      append(
+        (node as DefaultTreeAdapterMap["textNode"]).value.replace(/\s+/g, " "),
+        kind,
+      );
+      continue;
+    }
+    if (!("childNodes" in node)) continue;
+    const element = node as DefaultTreeAdapterMap["element"];
+    const tag = element.tagName || "";
+    if (/^(head|script|style|template|noscript)$/.test(tag)) continue;
+    const attrs = Object.fromEntries(
+      (element.attrs || []).map(({ name, value }) => [name, value]),
+    );
+    const marker = `${attrs.class || ""} ${attrs.id || ""} ${attrs["data-smartmail"] || ""}`;
+    const next =
+      /(?:^|\s)(?:gmail_signature|moz-signature|Signature)(?:\s|$)/i.test(
+        marker,
+      )
+        ? "signature"
+        : tag === "blockquote" || /(?:^|\s)gmail_attr(?:\s|$)/.test(marker)
+          ? "quote"
+          : kind;
+    const block = /^(div|p|blockquote|tr|li|section|table|hr)$/.test(tag);
+    if (close) {
+      if (tag === "a" && /^https?:\/\//i.test(attrs.href || ""))
+        append(` <${attrs.href}>`, kind);
+      if (block) append("\n", kind);
+      continue;
+    }
+    if (block || tag === "br") append("\n", next);
+    if (tag === "img") {
+      // Only files actually referenced in a collapsed block can be collapsed.
+      if (/^cid:/i.test(attrs.src || "")) append(`[${attrs.src}]`, next);
+      else if (attrs.alt) append(`[Image: ${attrs.alt}]`, next);
+    }
+    stack.push({ node, kind: next, close: true });
+    for (let i = node.childNodes.length - 1; i >= 0; i--)
+      stack.push({ node: node.childNodes[i], kind: next });
+  }
+  return parts;
+}
+
+export function supportEmailText(original: SupportEmailOriginal) {
+  return (
+    original.plain ||
+    original.html
+      .flatMap(htmlParts)
+      .map((part) => part.text)
+      .join("\n")
+  );
+}
+const mobileFooter =
+  /^(?:Sent from my (?:iPhone|iPad|Android(?: device)?)|Get Outlook for (?:iOS|Android)(?:\s*(?:<https:\/\/aka\.ms\/[^>]+>|\(https:\/\/aka\.ms\/[^)]+\)|https:\/\/aka\.ms\/\S+))?)$/i;
+function safeSignature(value: string) {
+  const lines = normalize(value)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  // Do not treat a separator, a name, a URL or a courtesy word alone as proof.
+  // Ambiguous prose/instructions stay in the reply, even inside a marked signature.
+  return (
+    lines.length > 0 &&
+    lines.length <= 15 &&
+    value.length < 2000 &&
+    !lines.some((line) =>
+      /\b(?:please|can you|could you|need|change|update|replace|remove|keep|add|use|include|don't|do not|must|should)\b/i.test(
+        line,
+      ),
+    ) &&
+    ((lines.length === 1 && mobileFooter.test(lines[0])) ||
+      (lines.some((line) =>
+        /[\w.+-]+@[\w.-]+\.[a-z]{2,}|\+?[\d ().-]{7,}/i.test(line),
+      ) &&
+        lines.every(
+          (line) =>
+            /^(?:--|\[cid:[^\]]+\])$/i.test(line) ||
+            mobileFooter.test(line) ||
+            /https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\+?[\d ().-]{7,}/i.test(
+              line,
+            ) ||
+            /^[\p{L}][\p{L} '&,|–-]{0,75}$/u.test(line),
+        )))
+  );
+}
+export function supportEmailContent(
+  raw: string,
+  original?: SupportEmailOriginal,
+) {
+  let body = normalize(raw),
+    signature = "",
+    quoted = "",
+    hidden = "";
+  const html = original?.html.length === 1 ? htmlParts(original.html[0]) : [];
+  // HTML is used only when its visible text agrees with the authoritative plain
+  // body. Divergent alternatives and multi-part HTML remain conservative.
+  const equivalent =
+    html.length &&
+    compact(html.map((part) => part.text).join("")) === compact(body);
+  if (equivalent) {
+    const reply = html.filter(
+      (part) =>
+        part.kind === "reply" ||
+        (part.kind === "signature" && !safeSignature(part.text)),
+    );
+    const candidate = reply.map((part) => part.text).join("\n");
+    const providerReplies = [
+      original?.strippedText || "",
+      ...(original?.strippedHtml || []).map((value) =>
+        htmlParts(value)
+          .map((part) => part.text)
+          .join(""),
+      ),
+    ].filter((value) => value.trim());
+    // A provider reply missing from the HTML projection signals an inline edit.
+    if (
+      providerReplies.every((value) =>
+        compact(candidate).includes(compact(value)),
+      )
+    ) {
+      for (const part of html) {
+        if (part.kind === "quote") {
+          quoted += part.text;
+          hidden += part.text;
+        }
+        if (part.kind === "signature" && safeSignature(part.text)) {
+          signature += part.text;
+          hidden += part.text;
+        }
       }
+      body = candidate;
     }
   }
-  if (start < 1) {
-    const last = lines.findLastIndex((line) => line.trim());
+  const lines = body.split("\n"),
+    visible: string[] = [],
+    quotes: string[] = [];
+  const quotedContext =
+    /^On .+wrote:\s*$/im.test(body) || !!original?.strippedText?.trim();
+  for (let i = 0; i < lines.length; i++) {
+    // Collapse quoted lines, never the entire tail: an unquoted answer between
+    // two quoted paragraphs is still a new reply.
     if (
-      last > 0 &&
-      lines.slice(0, last).some((line) => line.trim()) &&
-      /^Get Outlook for (?:iOS|Android)(?:\s*(?:<https:\/\/aka\.ms\/[^>]+>|\(https:\/\/aka\.ms\/[^)]+\)|https:\/\/aka\.ms\/\S+))?$/i.test(
-        lines[last].trim(),
-      )
+      quotedContext &&
+      (/^\s*>/.test(lines[i]) ||
+        (/^On .+wrote:\s*$/i.test(lines[i]) &&
+          /^\s*>/.test(lines[i + 1] || "")))
     )
-      start = last;
+      quotes.push(lines[i]);
+    else visible.push(lines[i]);
   }
-  const readable = (value: string) =>
-    value
-      .replace(/\[cid:[^\]]+\]/gi, "")
-      .replace(
-        /\[https?:\/\/[^\]\n]+\.(?:png|jpe?g|gif|webp)(?:\?[^\]\n]*)?\]/gi,
-        "",
-      )
-      .replace(
-        /([^\n<>]*?)<(https?:\/\/[^<>\s]+)>/g,
-        (_match, label: string, url: string) => {
-          const text = label.trim();
-          const normalized = (v: string) =>
-            v.replace(/^https?:\/\//, "").replace(/\/$/, "");
-          return !text || normalized(text) === normalized(url)
-            ? url
-            : `${text} (${url})`;
-        },
-      )
-      .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n")
-      .trim();
-  return start > 0
-    ? {
-        text: readable(lines.slice(0, start).join("\n")),
-        signature: readable(lines.slice(start).join("\n")),
-      }
-    : { text: readable(raw), signature: "" };
+  quoted += `\n${quotes.join("\n")}`;
+  hidden += `\n${quotes.join("\n")}`;
+  body = visible.join("\n").trim();
+  const providerSignature = original?.strippedSignature?.trim();
+  const separator = body.search(/\n--[ \t]*\n/);
+  const last = body.split("\n").findLastIndex((line) => line.trim());
+  const mobile = body.split("\n")[last]?.trim();
+  const beforeProvider =
+    providerSignature && body.endsWith(providerSignature)
+      ? body.slice(0, -providerSignature.length)
+      : "";
+  const providerBoundary =
+    /\n[ \t]*\n[ \t]*$/.test(beforeProvider) &&
+    !beforeProvider.trimEnd().endsWith(":");
+  const candidate =
+    providerSignature && providerBoundary
+      ? providerSignature
+      : separator > 0
+        ? body.slice(separator + 1)
+        : mobile && mobileFooter.test(mobile)
+          ? mobile
+          : "";
+  if (
+    candidate &&
+    safeSignature(candidate) &&
+    body.slice(0, -candidate.length).trim()
+  ) {
+    signature += `\n${candidate}`;
+    hidden += `\n${candidate}`;
+    body = body.slice(0, -candidate.length);
+  }
+  // Never leave an incoming message with only collapsed text.
+  if (!readable(body) && !/\[cid:/i.test(body))
+    return {
+      text: readable(raw),
+      signature: "",
+      quoted: "",
+      hidden: "",
+      visible: raw,
+    };
+  return {
+    text: readable(body),
+    signature: readable(signature),
+    quoted: readable(quoted),
+    hidden,
+    visible: body,
+  };
 }
 
 export function supportMessagePresentation(
@@ -79,16 +288,19 @@ export function supportMessagePresentation(
   data: Record<string, unknown>,
 ) {
   const email = id.startsWith("email-");
+  const original = email
+    ? (data.email_original as SupportEmailOriginal | undefined)
+    : undefined;
+  const raw = original ? supportEmailText(original) : String(data.text || "");
   const content = email
-    ? supportEmailContent(
-        String(data.text || ""),
-        String(data.author || ""),
-        String(data.email_sender_name || ""),
-      )
-    : { text: String(data.text || ""), signature: "" };
-  const inline = new Set(
-    Array.isArray(data.inline_attachment_ids) ? data.inline_attachment_ids : [],
-  );
+    ? supportEmailContent(raw, original)
+    : {
+        text: String(data.text || ""),
+        signature: "",
+        quoted: "",
+        hidden: "",
+        visible: String(data.text || ""),
+      };
   const files = (
     Array.isArray(data.attachments) ? data.attachments : []
   ) as Array<{
@@ -98,13 +310,33 @@ export function supportMessagePresentation(
     size?: number;
     path?: string;
   }>;
+  const hiddenCids = new Set(
+    [...content.hidden.matchAll(/\[cid:([^\]]+)\]/gi)].map((match) =>
+      match[1].replace(/^<|>$/g, "").toLowerCase(),
+    ),
+  );
+  const visibleCids = new Set(
+    [...content.visible.matchAll(/\[cid:([^\]]+)\]/gi)].map((match) =>
+      match[1].toLowerCase(),
+    ),
+  );
+  const references = data.email_attachment_cids as
+    Record<string, string[]> | undefined;
   const isInline = (file: (typeof files)[number]) =>
-    inline.has(file.id) ||
-    (email &&
-      !!content.signature &&
-      /^img-[a-f\d-]{36}\.(?:png|jpe?g|gif|webp)$/i.test(file.name));
+    email &&
+    !!references?.[file.id]?.length &&
+    references[file.id].every(
+      (cid) =>
+        hiddenCids.has(cid.toLowerCase()) &&
+        !visibleCids.has(cid.toLowerCase()),
+    );
   return {
     ...content,
+    original: email ? raw : undefined,
+    originalNote:
+      email && !original
+        ? "Only the text saved when this older email arrived is available."
+        : undefined,
     attachments: files.filter((file) => !isInline(file)),
     inline: files.filter(isInline),
   };

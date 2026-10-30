@@ -4,6 +4,7 @@ import { createHmac } from "node:crypto";
 import { NextRequest } from "next/server";
 import { createSupportHandlers } from "../lib/supportHandlers";
 import { SupportService } from "../lib/supportService";
+import { supportEmailOriginal } from "../lib/supportEmail";
 import {
   upsertPublicSupport,
   verifiedSupportCompany,
@@ -947,7 +948,7 @@ test("email replies retain signature images without widening the Portal upload l
     actor,
     files,
     undefined,
-    { messageId: "<email-fixture@example.com>", inlineFiles: [] },
+    { messageId: "<email-fixture@example.com>" },
   );
   assert.equal(result.messages[0].attachments.length, 7);
   assert.equal(objects.size, 7);
@@ -961,7 +962,7 @@ test("email replies retain signature images without widening the Portal upload l
         actor,
         [...files, ...files, ...files],
         undefined,
-        { messageId: "<email-fixture@example.com>", inlineFiles: [] },
+        { messageId: "<email-fixture@example.com>" },
       ),
     { status: 400 },
   );
@@ -978,7 +979,7 @@ test("email replies retain signature images without widening the Portal upload l
           }),
         ],
         undefined,
-        { messageId: "<email-fixture@example.com>", inlineFiles: [] },
+        { messageId: "<email-fixture@example.com>" },
       ),
     { status: 400 },
   );
@@ -1004,7 +1005,7 @@ test("incoming email replies never echo back to their own sender", async () => {
     { name: "Owner", email: "owner@example.com", direction: "team" },
     [],
     undefined,
-    { messageId: "<owner-reply@example.com>", inlineFiles: [] },
+    { messageId: "<owner-reply@example.com>" },
   );
   assert.equal(sent.length, 0);
   assert.equal(
@@ -1044,7 +1045,17 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
     { name: "Jamie", email: "staff@awebco.com", direction: "team" },
     files,
     undefined,
-    { messageId: "<staff-reply@example.com>", inlineFiles: [0] },
+    {
+      messageId: "<staff-reply@example.com>",
+      original: {
+        plain: raw,
+        html: [],
+        strippedHtml: [],
+        contentIds: { logo: "attachment-1" },
+        strippedSignature: raw.split("\n\n")[1],
+      },
+      attachmentCids: [["logo"], []],
+    },
   );
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, "owner@example.com");
@@ -1119,4 +1130,97 @@ test("a requester who also has CRM access receives one client confirmation with 
   assert.match(confirmation[0].body, /We received your request/);
   assert.match(confirmation[0].html, /View your support ticket/);
   assert.ok(!confirmation[0].body.includes("awebco-crm.vercel.app"));
+});
+
+test("retained email originals and downloads remain tenant scoped and leave billing untouched", async () => {
+  const form = new FormData();
+  const raw =
+    "Top reply.\nOn Friday, Awebco wrote:\n> Old question\nKeep the red photo.\n> Older question";
+  const html =
+    "<div>Top reply.</div><blockquote>Old question</blockquote><div>Keep the red photo.</div><blockquote>Older question</blockquote>";
+  form.set("body-plain", raw);
+  form.set("body-html", html);
+  form.set("stripped-text", "Top reply.");
+  const original = supportEmailOriginal(form);
+  const before = structuredClone(db.records.get(`tickets/${ticketId}`));
+  await service.reply(
+    ticketId,
+    "email-original-test",
+    raw,
+    { name: "Owner", email: "owner@example.com", direction: "client" },
+    [],
+    company,
+    { messageId: "<original@example.com>", original },
+  );
+  assert.deepEqual(
+    db.records.get(`tickets/${ticketId}/messages/email-original-test`)!
+      .email_original,
+    original,
+  );
+  const detail = await service.detail(ticketId, company);
+  const message = detail.messages[0];
+  assert.equal(message.email_original_text, raw);
+  assert.match(message.text, /Keep the red photo/);
+  assert.match(message.email_quoted!, /Old question/);
+  const download = await service.download(
+    ticketId,
+    message.id,
+    "original-email",
+    company,
+  );
+  assert.deepEqual(await download.json(), original);
+  assert.equal(
+    download.headers.get("Content-Type"),
+    "application/json; charset=utf-8",
+  );
+  assert.match(download.headers.get("Content-Disposition")!, /attachment/);
+  await assert.rejects(() =>
+    service.download(ticketId, message.id, "original-email", "another-company"),
+  );
+  const after = db.records.get(`tickets/${ticketId}`)!;
+  for (const key of [
+    "status",
+    "hours",
+    "deadline",
+    "updatedAt",
+    "invoiced",
+    "completedAt",
+  ])
+    assert.deepEqual(after[key], before![key]);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].body, /Keep the red photo/);
+  assert.ok(!sent[0].body.includes("> Old question"));
+});
+
+test("a Mailgun replay of a legacy message never rewrites originals or retries old failed notifications", async () => {
+  const actor = {
+    name: "Owner",
+    email: "owner@example.com",
+    direction: "client" as const,
+  };
+  await service.reply(
+    ticketId,
+    "email-legacy-replay",
+    "Original stripped reply.",
+    actor,
+    [],
+    company,
+    { messageId: "<replay@example.com>" },
+  );
+  const ref = `tickets/${ticketId}/messages/email-legacy-replay`;
+  const before = structuredClone(db.records.get(ref)!);
+  before.email_status = "failed";
+  db.records.set(ref, before);
+  const count = sent.length;
+  await service.reply(
+    ticketId,
+    "email-legacy-replay",
+    "Original stripped reply.\nRepeated email history now retained by the new receiver.",
+    actor,
+    [],
+    company,
+    { messageId: "<replay@example.com>" },
+  );
+  assert.deepEqual(db.records.get(ref), before);
+  assert.equal(sent.length, count);
 });
