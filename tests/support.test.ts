@@ -1094,3 +1094,32 @@ test("support can send through the established mail domain while keeping existin
   );
   assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
 });
+
+test("formatting preserves the proven configured sender and relay without adding logo attachments or automatic-message headers", async () => {
+  process.env.MAILGUN_DOMAIN = "mg.crm.awebco.com";
+  process.env.MAILGUN_FROM_EMAIL = "CRM Notifications <noreply@mg.awebco.com>";
+  let calls = 0;
+  globalThis.fetch = async (url, init) => {
+    calls++;
+    assert.equal(
+      String(url),
+      "https://api.mailgun.net/v3/mg.crm.awebco.com/messages",
+    );
+    const form = init!.body as FormData;
+    assert.equal(form.get("from"), "Awebco Support <noreply@mg.awebco.com>");
+    assert.equal(form.getAll("inline").length, 0);
+    assert.equal(form.get("h:Auto-Submitted"), null);
+    assert.equal(form.get("h:X-Auto-Response-Suppress"), null);
+    assert.match(String(form.get("html")), /View your support ticket/);
+    assert.match(String(form.get("h:Reply-To")), /@mg\.crm\.awebco\.com>/);
+    return Response.json({ id: "accepted" });
+  };
+  await service.reply(
+    ticketId,
+    crypto.randomUUID(),
+    "Transport verification",
+    { name: "Agency staff", email: "staff@awebco.com", direction: "team" },
+    [],
+  );
+  assert.equal(calls, 1);
+});

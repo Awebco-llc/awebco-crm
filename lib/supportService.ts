@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import {
   supportMessagePresentation,
   supportNotification,
@@ -602,9 +600,7 @@ export class SupportService {
       return "failed";
     const replyTo = replyAddress(ticketId, email, domain, routingKey);
     const configuredSender = supportEmail(process.env.MAILGUN_FROM_EMAIL);
-    const sender = configuredSender?.endsWith(`@${sendingDomain}`)
-      ? configuredSender
-      : `support@${sendingDomain}`;
+    const sender = configuredSender || `support@${sendingDomain}`;
     const link =
       audience === "team"
         ? `https://awebco-crm.vercel.app/?nav=Support%20Tickets&ticket=${encodeURIComponent(ticketId)}&conversation=client`
@@ -632,25 +628,11 @@ export class SupportService {
     );
     form.set("text", content.text);
     form.set("html", content.html);
-    form.append(
-      "inline",
-      new Blob(
-        [
-          new Uint8Array(
-            await readFile(join(process.cwd(), "public", "logo.png")),
-          ),
-        ],
-        { type: "image/png" },
-      ),
-      "awebco-logo.png",
-    );
     form.set("h:Reply-To", `Awebco Support <${replyTo}>`);
     form.set(
       "h:Message-ID",
       `<support-${ticketId}-${messageId}-${fingerprint(email).slice(0, 12)}@${sendingDomain}>`,
     );
-    form.set("h:Auto-Submitted", "auto-generated");
-    form.set("h:X-Auto-Response-Suppress", "All");
     const parent = ticket.supportLastEmailMessageId;
     if (
       typeof parent === "string" &&

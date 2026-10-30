@@ -92,7 +92,8 @@ test("support email HTML escapes message content and provides a single branded t
     received: false,
     attachments: ["report.pdf"],
   });
-  assert.ok(result.html.includes("cid:awebco-logo.png"));
+  assert.ok(result.html.includes("Awebco Support"));
+  assert.ok(!result.html.includes("cid:"));
   assert.ok(result.html.includes("View your support ticket"));
   assert.ok(result.html.includes("&lt;script&gt;unsafe&lt;/script&gt;"));
   assert.ok(!result.html.includes("<script>"));
