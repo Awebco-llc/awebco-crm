@@ -507,11 +507,11 @@ export class SupportService {
         message.direction === "client" ? await this.teamRecipients(ticket) : [];
       const recipients = [
         ...new Map([
+          ...team.map((email) => [email, "team"] as const),
           ...(message.direction === "team" || message.kind === "request"
             ? clients
             : []
           ).map((email) => [email, "client"] as const),
-          ...team.map((email) => [email, "team"] as const),
         ]).entries(),
       ].filter(
         ([email]) =>

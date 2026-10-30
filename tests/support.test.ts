@@ -1123,3 +1123,31 @@ test("formatting preserves the proven configured sender and relay without adding
   );
   assert.equal(calls, 1);
 });
+
+test("a requester who also has CRM access receives one client confirmation with the portal link", async () => {
+  db.records.set("users/requester-staff", {
+    name: "Owner",
+    email: "owner@example.com",
+    role: "admin",
+  });
+  await service.create(
+    company,
+    {
+      request_id: requestId,
+      title: "Requester confirmation",
+      description: "Please verify the requester confirmation.",
+      category: "General Questions",
+      priority: "Low",
+      email: "owner@example.com",
+      name: "Owner",
+      portal_client_id: "portal-client",
+      portal_origin: "https://portal.awebco.com",
+    },
+    [],
+  );
+  const confirmation = sent.filter((mail) => mail.to === "owner@example.com");
+  assert.equal(confirmation.length, 1);
+  assert.match(confirmation[0].body, /We received your request/);
+  assert.match(confirmation[0].html, /View your support ticket/);
+  assert.ok(!confirmation[0].body.includes("awebco-crm.vercel.app"));
+});
