@@ -8,7 +8,7 @@ Client responses allow only title, description, category, priority, public statu
 
 ## Server endpoints
 
-Set a dedicated server-only `PORTAL_SUPPORT_API_TOKEN` (32+ random characters) separately in Vercel Preview and Production. This credential is independent of the existing read-only Listings/SEO token. Portal uses the matching `CRM_API_TOKEN` secret and `CRM_API_URL=https://<crm-host>/api`.
+Set a dedicated server-only `PORTAL_SUPPORT_API_TOKEN` (32+ random characters) separately in Vercel Preview and Production. This credential is independent of the existing read-only Listings/SEO token. Portal uses the matching `CRM_SUPPORT_API_TOKEN` secret and `CRM_API_URL=https://<crm-host>/api`.
 
 - `GET /api/portal/health` verifies the named CRM database and reports messaging readiness.
 - `GET /api/portal/clients` returns company IDs, names and domains for administrator setup.
@@ -25,9 +25,11 @@ CRM staff endpoints under `/api/support/tickets/:id` require a current Firebase 
 
 Existing Mailgun `inbound+...` routes also match `inbound+st.<ticket>.<signature>@<domain>`. The routing signature is bound to ticket and recipient, domain-separated using the existing Mailgun signing key. Staff group replies additionally require an active support team profile. New inbound support posts require Mailgun's signing-key HMAC, a recent timestamp and a Message-ID. Message IDs and request UUIDs deduplicate retries. Automatic responses are ignored. Contact email behavior outside this new prefix is preserved.
 
+Preview deployments fail closed for support email unless `PORTAL_SUPPORT_PREVIEW_RECIPIENT` names the agreed internal test inbox; all other recipients are refused. Production ignores this preview-only restriction.
+
 Messages are persisted before email. Each recipient has a durable notification record. An accepted provider response is recorded as accepted, never delivered. A definitive rejection can be retried; a timeout/5xx remains uncertain and is not automatically sent again. Internal operational diagnostics contain no submission body or credentials.
 
-The canonical WordPress connector's narrowly scoped `support-tickets.php` hooks only awebco.com's verified Gravity Form 80. It reuses that form's existing active CRM webhook secret in memory, ensures one ticket for its entry ID, and rewrites only recognized team/requester Reply-To headers. Notifications, recipients, category/priority, uploads and public form access remain intact. Unknown recipients or a routing failure retain the original notification. Other websites/forms are inert. No Mailgun route or DNS change is needed.
+The canonical WordPress connector's narrowly scoped `support-tickets.php` hooks only awebco.com's verified Gravity Form 80. It reuses that form's existing active CRM webhook secret in memory, ensures one ticket for its entry ID, and rewrites only recognized team/requester Reply-To headers. Notifications, recipients, category/priority, uploads and public form access remain intact. Unknown recipients or a routing failure retain the original notification. Other websites/forms are inert. Receiving requires the Mailgun domain’s verified MX records and a direct, non-redirecting inbound route. The existing sending-only DNS setup must be completed before email replies are enabled.
 
 Public intake automatically links a company only when a unique existing company and requester contact agree on the stable CRM company ID. Unregistered or ambiguous requesters still create tickets and exchange email; staff link their company before Portal visibility. Replays/adoption preserve existing ticket IDs, status, notes, hours and completion dates. Historical email that went directly between inboxes is not imported retroactively.
 

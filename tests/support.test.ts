@@ -14,6 +14,7 @@ import {
   replyAddress,
   shareSupportTicket,
   supportStatus,
+  supportEmailAllowed,
   supportTeamAccess,
   verifyReplyAddress,
   verifySupportMailgun,
@@ -802,5 +803,24 @@ test("attachments remain private, survive idempotent retries, and download only 
     !JSON.stringify(await service.detail(ticketId, company)).includes(
       `support/${ticketId}/`,
     ),
+  );
+});
+
+test("preview support email fails closed and only permits the agreed test inbox", () => {
+  assert.equal(
+    supportEmailAllowed("client@example.com", "preview", undefined),
+    false,
+  );
+  assert.equal(
+    supportEmailAllowed("client@example.com", "preview", "troy@awebco.com"),
+    false,
+  );
+  assert.equal(
+    supportEmailAllowed("troy@awebco.com", "preview", "troy@awebco.com"),
+    true,
+  );
+  assert.equal(
+    supportEmailAllowed("client@example.com", "production", "troy@awebco.com"),
+    true,
   );
 });

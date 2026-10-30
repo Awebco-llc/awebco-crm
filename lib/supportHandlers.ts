@@ -158,6 +158,7 @@ export function createSupportHandlers(
       await service.db.collection("companies").select("name").limit(1).get();
       return {
         ready: true,
+        mailgunDomain: process.env.MAILGUN_DOMAIN || null,
         messagingReady:
           !!process.env.MAILGUN_DOMAIN &&
           !!process.env.MAILGUN_API_KEY &&

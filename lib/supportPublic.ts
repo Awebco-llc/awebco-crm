@@ -4,6 +4,7 @@ import {
   fingerprint,
   replyAddress,
   supportEmail,
+  shareSupportTicket,
   supportId,
   supportTeamAccess,
 } from "./supportPolicy";
@@ -152,7 +153,7 @@ export async function publicSupportReplyRoute(
 ) {
   const db = resolveDb(),
     ticket = (await db.collection("tickets").doc(ticketId).get()).data();
-  if (!ticket || ticket.workspace !== "Support Tickets")
+  if (!ticket || !shareSupportTicket(ticket))
     throw new SupportError(404, "Ticket not found.");
   const targets = (
     Array.isArray(to) ? to : typeof to === "string" ? to.split(",") : []

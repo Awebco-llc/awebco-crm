@@ -208,3 +208,16 @@ export function legacySupportFiles(value: unknown): SupportAttachment[] {
     }
   });
 }
+
+// Preview deployments share CRM data, so support email is limited to an agreed test inbox.
+export function supportEmailAllowed(
+  email: string,
+  environment = process.env.VERCEL_ENV,
+  recipient = process.env.PORTAL_SUPPORT_PREVIEW_RECIPIENT,
+) {
+  return (
+    environment !== "preview" ||
+    (!!supportEmail(recipient) &&
+      supportEmail(email) === supportEmail(recipient))
+  );
+}

@@ -13,6 +13,7 @@ import {
   replyAddress,
   shareSupportTicket,
   supportEmail,
+  supportEmailAllowed,
   supportId,
   supportStatus,
   SUPPORT_FILE_BYTES,
@@ -542,6 +543,7 @@ export class SupportService {
     email: string,
     audience: "client" | "team",
   ) {
+    if (!supportEmailAllowed(email)) return "failed";
     const domain = process.env.MAILGUN_DOMAIN,
       key = process.env.MAILGUN_API_KEY,
       routingKey = process.env.MAILGUN_SIGNING_KEY;
