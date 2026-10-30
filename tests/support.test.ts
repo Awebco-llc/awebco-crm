@@ -249,6 +249,7 @@ test.beforeEach(() => {
   process.env.MAILGUN_DOMAIN = "mg.awebco.com";
   process.env.MAILGUN_API_KEY = "test-key";
   delete process.env.SUPPORT_SENDING_DOMAIN;
+  delete process.env.MAILGUN_FROM_EMAIL;
   globalThis.fetch = async (input, init) => {
     assert.equal(
       String(input),
@@ -1067,6 +1068,7 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
 test("support can send through the established mail domain while keeping existing signed reply addresses", async () => {
   process.env.MAILGUN_DOMAIN = "mg.crm.awebco.com";
   process.env.SUPPORT_SENDING_DOMAIN = "mg.awebco.com";
+  process.env.MAILGUN_FROM_EMAIL = "CRM Notifications <noreply@mg.awebco.com>";
   await service.reply(
     ticketId,
     crypto.randomUUID(),
@@ -1079,7 +1081,7 @@ test("support can send through the established mail domain while keeping existin
     [],
   );
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].from, "Awebco Support <support@mg.awebco.com>");
+  assert.equal(sent[0].from, "Awebco Support <noreply@mg.awebco.com>");
   const recipient = /<([^>]+)>/.exec(sent[0].replyTo)![1];
   assert.equal(
     verifyReplyAddress(
