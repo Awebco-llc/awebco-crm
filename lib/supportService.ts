@@ -611,7 +611,7 @@ export class SupportService {
     const form = new FormData();
     form.set(
       "from",
-      process.env.MAILGUN_FROM_EMAIL || `Awebco Support <support@${domain}>`,
+      `Awebco Support <${supportEmail(process.env.MAILGUN_FROM_EMAIL) || `support@${domain}`}>`,
     );
     form.set("to", email);
     form.set(

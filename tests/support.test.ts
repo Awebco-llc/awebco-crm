@@ -1064,7 +1064,7 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
   assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
 });
 
-test("formatting preserves the proven configured sender and relay without adding logo attachments or automatic-message headers", async () => {
+test("Awebco Support branding keeps the proven sender address and relay without extra attachments or automatic-message headers", async () => {
   process.env.MAILGUN_DOMAIN = "mg.crm.awebco.com";
   process.env.MAILGUN_FROM_EMAIL = "CRM Notifications <noreply@mg.awebco.com>";
   let calls = 0;
@@ -1075,7 +1075,7 @@ test("formatting preserves the proven configured sender and relay without adding
       "https://api.mailgun.net/v3/mg.crm.awebco.com/messages",
     );
     const form = init!.body as FormData;
-    assert.equal(form.get("from"), "CRM Notifications <noreply@mg.awebco.com>");
+    assert.equal(form.get("from"), "Awebco Support <noreply@mg.awebco.com>");
     assert.equal(form.getAll("inline").length, 0);
     assert.equal(form.get("h:Auto-Submitted"), null);
     assert.equal(form.get("h:X-Auto-Response-Suppress"), null);
