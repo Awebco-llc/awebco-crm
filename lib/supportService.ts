@@ -599,8 +599,6 @@ export class SupportService {
     if (!["api.mailgun.net", "api.eu.mailgun.net"].includes(host))
       return "failed";
     const replyTo = replyAddress(ticketId, email, domain, routingKey);
-    const configuredSender = supportEmail(process.env.MAILGUN_FROM_EMAIL);
-    const sender = configuredSender || `support@${sendingDomain}`;
     const link =
       audience === "team"
         ? `https://awebco-crm.vercel.app/?nav=Support%20Tickets&ticket=${encodeURIComponent(ticketId)}&conversation=client`
@@ -616,7 +614,11 @@ export class SupportService {
       attachments: presentation.attachments.map((file) => file.name),
     });
     const form = new FormData();
-    form.set("from", `Awebco Support <${sender}>`);
+    form.set(
+      "from",
+      process.env.MAILGUN_FROM_EMAIL ||
+        `Awebco Support <support@${sendingDomain}>`,
+    );
     form.set("to", email);
     form.set(
       "subject",
@@ -628,7 +630,7 @@ export class SupportService {
     );
     form.set("text", content.text);
     form.set("html", content.html);
-    form.set("h:Reply-To", `Awebco Support <${replyTo}>`);
+    form.set("h:Reply-To", replyTo);
     form.set(
       "h:Message-ID",
       `<support-${ticketId}-${messageId}-${fingerprint(email).slice(0, 12)}@${sendingDomain}>`,

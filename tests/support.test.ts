@@ -1081,8 +1081,8 @@ test("support can send through the established mail domain while keeping existin
     [],
   );
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].from, "Awebco Support <noreply@mg.awebco.com>");
-  const recipient = /<([^>]+)>/.exec(sent[0].replyTo)![1];
+  assert.equal(sent[0].from, "CRM Notifications <noreply@mg.awebco.com>");
+  const recipient = sent[0].replyTo;
   assert.equal(
     verifyReplyAddress(
       recipient,
@@ -1106,12 +1106,12 @@ test("formatting preserves the proven configured sender and relay without adding
       "https://api.mailgun.net/v3/mg.crm.awebco.com/messages",
     );
     const form = init!.body as FormData;
-    assert.equal(form.get("from"), "Awebco Support <noreply@mg.awebco.com>");
+    assert.equal(form.get("from"), "CRM Notifications <noreply@mg.awebco.com>");
     assert.equal(form.getAll("inline").length, 0);
     assert.equal(form.get("h:Auto-Submitted"), null);
     assert.equal(form.get("h:X-Auto-Response-Suppress"), null);
     assert.match(String(form.get("html")), /View your support ticket/);
-    assert.match(String(form.get("h:Reply-To")), /@mg\.crm\.awebco\.com>/);
+    assert.match(String(form.get("h:Reply-To")), /@mg\.crm\.awebco\.com$/);
     return Response.json({ id: "accepted" });
   };
   await service.reply(
