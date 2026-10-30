@@ -609,10 +609,7 @@ export class SupportService {
       attachments: presentation.attachments.map((file) => file.name),
     });
     const form = new FormData();
-    form.set(
-      "from",
-      `Awebco Support <${supportEmail(process.env.MAILGUN_FROM_EMAIL) || `support@${domain}`}>`,
-    );
+    form.set("from", "Awebco Support <tickets@awebco.com>");
     form.set("to", email);
     form.set(
       "subject",

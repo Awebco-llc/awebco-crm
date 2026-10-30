@@ -1048,7 +1048,7 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
   );
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, "owner@example.com");
-  assert.equal(sent[0].from, "Awebco Support <support@mg.awebco.com>");
+  assert.equal(sent[0].from, "Awebco Support <tickets@awebco.com>");
   assert.equal(sent[0].attachmentCount, 1);
   assert.equal(sent[0].parent, "<staff-reply@example.com>");
   assert.ok(!sent[0].body.includes("[cid:"));
@@ -1064,7 +1064,7 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
   assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
 });
 
-test("Awebco Support branding keeps the proven sender address and relay without extra attachments or automatic-message headers", async () => {
+test("support uses the public ticket identity without inheriting CRM Notifications or changing the relay and reply route", async () => {
   process.env.MAILGUN_DOMAIN = "mg.crm.awebco.com";
   process.env.MAILGUN_FROM_EMAIL = "CRM Notifications <noreply@mg.awebco.com>";
   let calls = 0;
@@ -1075,7 +1075,7 @@ test("Awebco Support branding keeps the proven sender address and relay without 
       "https://api.mailgun.net/v3/mg.crm.awebco.com/messages",
     );
     const form = init!.body as FormData;
-    assert.equal(form.get("from"), "Awebco Support <noreply@mg.awebco.com>");
+    assert.equal(form.get("from"), "Awebco Support <tickets@awebco.com>");
     assert.equal(form.getAll("inline").length, 0);
     assert.equal(form.get("h:Auto-Submitted"), null);
     assert.equal(form.get("h:X-Auto-Response-Suppress"), null);
