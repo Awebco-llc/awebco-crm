@@ -135,7 +135,8 @@ export async function supportInbound(input: {
           /^attachment-\d+$/.test(key) && typeof value !== "string",
       )
       .map(([, value]) => value as File);
-    validateSupportFiles(files);
+    // Mail signatures include inline images; preserve them without applying the five-file UI limit.
+    validateSupportFiles(files, 20);
     if (!body.trim() && !files.length) return supportJson({ ignored: true });
     const actor = {
       name: member
@@ -152,11 +153,18 @@ export async function supportInbound(input: {
       body,
       actor,
       files,
+      undefined,
+      20,
     );
     return supportJson({ success: true });
   } catch (error) {
-    if (error instanceof SupportError)
+    if (error instanceof SupportError) {
+      console.warn("[support] Inbound reply rejected.", {
+        status: error.status,
+        reason: error.message,
+      });
       return supportJson({ error: error.message }, error.status);
+    }
     console.error("[support] Inbound message could not be processed.");
     return supportJson({ error: "Message could not be processed." }, 503);
   }

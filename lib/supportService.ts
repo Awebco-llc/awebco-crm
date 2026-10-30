@@ -67,7 +67,7 @@ export function publicSupportTicket(
     updated_at: date(data.updatedAt),
     ...(detail
       ? {
-          category: String(data.category || ""),
+          category: String(data.category || "").replace(/^Category:\s*/i, ""),
           priority: String(data.priority || ""),
           attachments: legacySupportFiles(data.files),
         }
@@ -97,14 +97,14 @@ function publicMessage(id: string, data: RecordData): SupportMessage | null {
       : [],
   };
 }
-export function validateSupportFiles(files: File[]) {
+export function validateSupportFiles(files: File[], maxFiles: 5 | 20 = 5) {
   if (
-    files.length > 5 ||
+    files.length > maxFiles ||
     files.reduce((sum, f) => sum + f.size, 0) > SUPPORT_FILE_BYTES
   )
     throw new SupportError(
       400,
-      "Attach up to 5 files, with a maximum total size of 3 MB.",
+      `Attach up to ${maxFiles} files, with a maximum total size of 3 MB.`,
     );
   if (
     files.some(
@@ -242,8 +242,13 @@ export class SupportService {
         : {}),
     };
   }
-  async prepareFiles(ticketId: string, messageId: string, files: File[]) {
-    validateSupportFiles(files);
+  async prepareFiles(
+    ticketId: string,
+    messageId: string,
+    files: File[],
+    maxFiles: 5 | 20 = 5,
+  ) {
+    validateSupportFiles(files, maxFiles);
     const result: SupportAttachment[] = [];
     for (const [index, file] of files.entries()) {
       const bytes = Buffer.from(await file.arrayBuffer());
@@ -363,13 +368,19 @@ export class SupportService {
     actor: Actor,
     files: File[],
     companyId?: string,
+    maxFiles: 5 | 20 = 5,
   ) {
     if (!supportId(requestId)) throw new SupportError(400, "Invalid reply.");
     if (companyId) await this.company(companyId);
     await this.ticket(ticketId, companyId);
     if (!text.trim() && !files.length)
       throw new SupportError(400, "Write a reply or attach a file.");
-    const attachments = await this.prepareFiles(ticketId, requestId, files);
+    const attachments = await this.prepareFiles(
+      ticketId,
+      requestId,
+      files,
+      maxFiles,
+    );
     const hash = fingerprint([text, actor, attachments]);
     const ticketRef = this.db.collection("tickets").doc(ticketId),
       messageRef = ticketRef.collection("messages").doc(requestId);

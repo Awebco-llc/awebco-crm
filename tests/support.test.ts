@@ -889,3 +889,97 @@ test("preview notifications create delivery records only for the agreed recipien
     else process.env.PORTAL_SUPPORT_PREVIEW_RECIPIENT = oldRecipient;
   }
 });
+
+test("email replies retain signature images without widening the Portal upload limit", async () => {
+  const objects = new Map<string, Buffer>();
+  service = new SupportService(
+    db as never,
+    async (members) => members,
+    (() => ({
+      file: (path: string) => ({
+        save: async (bytes: Buffer) => {
+          objects.set(path, bytes);
+        },
+        download: async () => [objects.get(path)!],
+      }),
+    })) as never,
+  );
+  const files = Array.from(
+    { length: 7 },
+    (_, i) =>
+      new File(["email signature image"], `signature-${i}.png`, {
+        type: "image/png",
+      }),
+  );
+  const actor = {
+    name: "Owner",
+    email: "owner@example.com",
+    direction: "team" as const,
+  };
+  await assert.rejects(
+    () =>
+      service.reply(
+        ticketId,
+        requestId,
+        "Email reply verification",
+        actor,
+        files,
+      ),
+    { status: 400 },
+  );
+  assert.equal(objects.size, 0);
+  const result = await service.reply(
+    ticketId,
+    requestId,
+    "Email reply verification",
+    actor,
+    files,
+    undefined,
+    20,
+  );
+  assert.equal(result.messages[0].attachments.length, 7);
+  assert.equal(objects.size, 7);
+  assert.ok(result.messages[0].attachments.every((file) => !("path" in file)));
+  await assert.rejects(
+    () =>
+      service.reply(
+        ticketId,
+        "over-limit",
+        "Too many files",
+        actor,
+        [...files, ...files, ...files],
+        undefined,
+        20,
+      ),
+    { status: 400 },
+  );
+  await assert.rejects(
+    () =>
+      service.reply(
+        ticketId,
+        "over-size",
+        "Too large",
+        actor,
+        [
+          new File([new Uint8Array(3_000_001)], "large.png", {
+            type: "image/png",
+          }),
+        ],
+        undefined,
+        20,
+      ),
+    { status: 400 },
+  );
+});
+test("public form categories use their client-facing label without changing CRM data", async () => {
+  db.records.get(`tickets/${ticketId}`)!.category =
+    "Category: General Questions";
+  assert.equal(
+    (await service.detail(ticketId, company)).category,
+    "General Questions",
+  );
+  assert.equal(
+    db.records.get(`tickets/${ticketId}`)!.category,
+    "Category: General Questions",
+  );
+});
