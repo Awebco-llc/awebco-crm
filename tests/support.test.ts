@@ -248,6 +248,7 @@ test.beforeEach(() => {
   process.env.MAILGUN_SIGNING_KEY = token;
   process.env.MAILGUN_DOMAIN = "mg.awebco.com";
   process.env.MAILGUN_API_KEY = "test-key";
+  delete process.env.SUPPORT_SENDING_DOMAIN;
   globalThis.fetch = async (input, init) => {
     assert.equal(
       String(input),
@@ -1060,5 +1061,34 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
   assert.equal(detail.messages[0].inline_attachments!.length, 1);
   assert.match(detail.messages[0].email_signature!, /Jamie Client/);
   assert.ok(!JSON.stringify(detail).includes("support/"));
+  assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
+});
+
+test("support can send through the established mail domain while keeping existing signed reply addresses", async () => {
+  process.env.MAILGUN_DOMAIN = "mg.crm.awebco.com";
+  process.env.SUPPORT_SENDING_DOMAIN = "mg.awebco.com";
+  await service.reply(
+    ticketId,
+    crypto.randomUUID(),
+    "Delivery verification",
+    {
+      name: "Agency staff",
+      email: "staff@awebco.com",
+      direction: "team",
+    },
+    [],
+  );
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].from, "Awebco Support <support@mg.awebco.com>");
+  const recipient = /<([^>]+)>/.exec(sent[0].replyTo)![1];
+  assert.equal(
+    verifyReplyAddress(
+      recipient,
+      "owner@example.com",
+      "mg.crm.awebco.com",
+      token,
+    ),
+    ticketId,
+  );
   assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
 });

@@ -581,10 +581,16 @@ export class SupportService {
   ) {
     if (!supportEmailAllowed(email)) return "failed";
     const domain = process.env.MAILGUN_DOMAIN,
+      sendingDomain = (process.env.SUPPORT_SENDING_DOMAIN || domain || "")
+        .trim()
+        .toLowerCase(),
       key = process.env.MAILGUN_API_KEY,
       routingKey = process.env.MAILGUN_SIGNING_KEY;
     if (
       !domain ||
+      !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(
+        sendingDomain,
+      ) ||
       !key ||
       key.startsWith("your-") ||
       !routingKey ||
@@ -610,7 +616,7 @@ export class SupportService {
       attachments: presentation.attachments.map((file) => file.name),
     });
     const form = new FormData();
-    form.set("from", `Awebco Support <support@${domain}>`);
+    form.set("from", `Awebco Support <support@${sendingDomain}>`);
     form.set("to", email);
     form.set(
       "subject",
@@ -637,7 +643,7 @@ export class SupportService {
     form.set("h:Reply-To", `Awebco Support <${replyTo}>`);
     form.set(
       "h:Message-ID",
-      `<support-${ticketId}-${messageId}-${fingerprint(email).slice(0, 12)}@${domain}>`,
+      `<support-${ticketId}-${messageId}-${fingerprint(email).slice(0, 12)}@${sendingDomain}>`,
     );
     form.set("h:Auto-Submitted", "auto-generated");
     form.set("h:X-Auto-Response-Suppress", "All");
@@ -663,15 +669,18 @@ export class SupportService {
         attachment.name,
       );
     }
-    const response = await fetch(`https://${host}/v3/${domain}/messages`, {
-      method: "POST",
-      redirect: "manual",
-      headers: {
-        Authorization: `Basic ${Buffer.from(`api:${key}`).toString("base64")}`,
+    const response = await fetch(
+      `https://${host}/v3/${sendingDomain}/messages`,
+      {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`api:${key}`).toString("base64")}`,
+        },
+        body: form,
+        signal: AbortSignal.timeout(20000),
       },
-      body: form,
-      signal: AbortSignal.timeout(20000),
-    });
+    );
     // Only definitive provider rejection can be retried automatically. A timeout/5xx is ambiguous.
     return response.ok
       ? "accepted"
