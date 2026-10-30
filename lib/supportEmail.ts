@@ -35,6 +35,17 @@ export function supportEmailContent(raw: string, author = "", senderName = "") {
       }
     }
   }
+  if (start < 1) {
+    const last = lines.findLastIndex((line) => line.trim());
+    if (
+      last > 0 &&
+      lines.slice(0, last).some((line) => line.trim()) &&
+      /^Get Outlook for (?:iOS|Android)(?:\s*(?:<https:\/\/aka\.ms\/[^>]+>|\(https:\/\/aka\.ms\/[^)]+\)|https:\/\/aka\.ms\/\S+))?$/i.test(
+        lines[last].trim(),
+      )
+    )
+      start = last;
+  }
   const readable = (value: string) =>
     value
       .replace(/\[cid:[^\]]+\]/gi, "")

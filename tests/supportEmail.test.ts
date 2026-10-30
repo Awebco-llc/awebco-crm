@@ -26,6 +26,20 @@ test("email signatures are separated without discarding meaningful reply text or
     "Please call the number shown in the screenshot.\nThe image is below.",
   );
 });
+test("the real Outlook phone reply keeps its mobile footer in the signature without hiding message instructions", () => {
+  const text =
+    "Final reply verification\r\n\r\nGet Outlook for iOS<https://aka.ms/o0ukef>\r\n";
+  const result = supportMessagePresentation("email-phone", {
+    text,
+    author: "Troy",
+    attachments: [],
+  });
+  assert.equal(result.text, "Final reply verification");
+  assert.equal(result.signature, "Get Outlook for iOS (https://aka.ms/o0ukef)");
+  const instructions =
+    "Get Outlook for iOS<https://aka.ms/o0ukef>\nPlease include that link on the page.";
+  assert.equal(supportEmailContent(instructions, "Troy").signature, "");
+});
 test("real attachments remain visible while inline email assets are preserved separately", () => {
   const data = {
     text: raw,
