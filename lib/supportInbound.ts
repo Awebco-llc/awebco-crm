@@ -109,7 +109,7 @@ export async function supportInbound(input: {
         )?.[1] ||
         "",
     );
-    if (!messageId || messageId.length > 1000)
+    if (!messageId || messageId.length > 1000 || /[\r\n]/.test(messageId))
       return supportJson({ error: "Message ID is required." }, 400);
     // Automatic replies must never trigger another notification and create a mail loop.
     const header = (name: string) =>
@@ -129,12 +129,22 @@ export async function supportInbound(input: {
       : input.body;
     if (body.length > 10000)
       return supportJson({ error: "Reply is too long." }, 400);
-    const files = [...form.entries()]
-      .filter(
-        ([key, value]) =>
-          /^attachment-\d+$/.test(key) && typeof value !== "string",
-      )
-      .map(([, value]) => value as File);
+    const fileEntries = [...form.entries()].filter(
+      ([key, value]) =>
+        /^attachment-\d+$/.test(key) && typeof value !== "string",
+    );
+    const files = fileEntries.map(([, value]) => value as File);
+    let contentIds: unknown = {};
+    try {
+      contentIds = JSON.parse(String(form.get("content-id-map") || "{}"));
+    } catch {
+      /* Keep files visible if metadata is malformed. */
+    }
+    const inlineFields = new Set(
+      contentIds && typeof contentIds === "object" && !Array.isArray(contentIds)
+        ? Object.values(contentIds)
+        : [],
+    );
     // Mail signatures include inline images; preserve them without applying the five-file UI limit.
     validateSupportFiles(files, 20);
     if (!body.trim() && !files.length) return supportJson({ ignored: true });
@@ -154,7 +164,20 @@ export async function supportInbound(input: {
       actor,
       files,
       undefined,
-      20,
+      {
+        messageId,
+        senderName:
+          supportEmail(String(form.get("from") || "")) === sender
+            ? String(form.get("from") || "")
+                .split("<")[0]
+                .replace(/^\s*["']|["']\s*$/g, "")
+                .trim()
+                .slice(0, 200)
+            : undefined,
+        inlineFiles: fileEntries.flatMap(([key], index) =>
+          inlineFields.has(key) ? [index] : [],
+        ),
+      },
     );
     return supportJson({ success: true });
   } catch (error) {

@@ -51,6 +51,8 @@ export type SupportMessage = {
   created_at: string;
   direction: "client" | "team";
   kind?: "request";
+  email_signature?: string;
+  inline_attachments?: SupportAttachment[];
   attachments: SupportAttachment[];
 };
 export function supportId(value: unknown): value is string {

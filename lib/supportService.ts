@@ -1,3 +1,9 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  supportMessagePresentation,
+  supportNotification,
+} from "./supportEmail";
 import { getAuth } from "firebase-admin/auth";
 import { getApp } from "firebase-admin/app";
 import {
@@ -80,21 +86,27 @@ function publicMessage(id: string, data: RecordData): SupportMessage | null {
     !["client", "team"].includes(String(data.direction))
   )
     return null;
+  const presentation = supportMessagePresentation(id, data);
+  const file = (attachment: SupportAttachment) => ({
+    id: attachment.id,
+    name: attachment.name,
+    size: attachment.size,
+    type: attachment.type,
+  });
   return {
     id,
     author: String(data.author || "Awebco").slice(0, 200),
-    text: String(data.text || "").slice(0, 10000),
+    text: presentation.text.slice(0, 10000),
     created_at: String(data.created_at),
     direction: data.direction as "client" | "team",
-    ...(data.kind === "request" ? { kind: "request" } : {}),
-    attachments: Array.isArray(data.attachments)
-      ? data.attachments.map((file: SupportAttachment) => ({
-          id: file.id,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-        }))
-      : [],
+    ...(data.kind === "request" ? { kind: "request" as const } : {}),
+    ...(presentation.signature
+      ? { email_signature: presentation.signature }
+      : {}),
+    ...(presentation.inline.length
+      ? { inline_attachments: presentation.inline.map(file) }
+      : {}),
+    attachments: presentation.attachments.map(file),
   };
 }
 export function validateSupportFiles(files: File[], maxFiles: 5 | 20 = 5) {
@@ -368,7 +380,7 @@ export class SupportService {
     actor: Actor,
     files: File[],
     companyId?: string,
-    maxFiles: 5 | 20 = 5,
+    email?: { messageId: string; inlineFiles: number[]; senderName?: string },
   ) {
     if (!supportId(requestId)) throw new SupportError(400, "Invalid reply.");
     if (companyId) await this.company(companyId);
@@ -379,7 +391,7 @@ export class SupportService {
       ticketId,
       requestId,
       files,
-      maxFiles,
+      email ? 20 : 5,
     );
     const hash = fingerprint([text, actor, attachments]);
     const ticketRef = this.db.collection("tickets").doc(ticketId),
@@ -411,6 +423,15 @@ export class SupportService {
         author: actor.name,
         sender_email: actor.email,
         text: text.trim(),
+        ...(email
+          ? {
+              email_message_id: email.messageId,
+              email_sender_name: email.senderName || actor.name,
+              inline_attachment_ids: email.inlineFiles
+                .map((index) => attachments[index]?.id)
+                .filter(Boolean),
+            }
+          : {}),
         created_at: at,
         attachments,
         request_hash: hash,
@@ -419,6 +440,7 @@ export class SupportService {
       // Conversation timestamps are separate from the billing/completion date and task status.
       tx.update(ticketRef, {
         supportLastMessageAt: at,
+        ...(email ? { supportLastEmailMessageId: email.messageId } : {}),
         ...(actor.direction === "client"
           ? { supportParticipants: FieldValue.arrayUnion(actor.email) }
           : {}),
@@ -497,7 +519,7 @@ export class SupportService {
         ([email]) =>
           supportEmailAllowed(email) &&
           (message.kind === "request" ||
-            message.direction === "team" ||
+            (message.direction === "team" && !messageId.startsWith("email-")) ||
             email !== message.sender_email),
       );
       if (!recipients.length) {
@@ -576,16 +598,19 @@ export class SupportService {
     const link =
       audience === "team"
         ? `https://awebco-crm.vercel.app/?nav=Support%20Tickets&ticket=${encodeURIComponent(ticketId)}&conversation=client`
-        : `${ticket.supportPortalOrigin === "https://staging-portal.awebco.com" ? ticket.supportPortalOrigin : "https://portal.awebco.com"}/support?ticket=${encodeURIComponent(ticketId)}${supportId(ticket.supportPortalClientId) ? `&client=${ticket.supportPortalClientId}` : ""}`;
-    const footer =
-      audience === "team"
-        ? "Reply to this email to send a reply to the client. Use Internal notes in the CRM for private comments."
-        : "Reply to this email to continue the conversation, or open the ticket in your portal.";
+        : `${process.env.VERCEL_ENV === "preview" ? "https://staging-portal.awebco.com" : "https://portal.awebco.com"}/support?ticket=${encodeURIComponent(ticketId)}`;
+    const presentation = supportMessagePresentation(messageId, message);
+    const content = supportNotification({
+      title: String(ticket.projectName),
+      author: String(message.author),
+      text: presentation.text,
+      link,
+      audience,
+      received: message.kind === "request" && audience === "client",
+      attachments: presentation.attachments.map((file) => file.name),
+    });
     const form = new FormData();
-    form.set(
-      "from",
-      process.env.MAILGUN_FROM_EMAIL || `Awebco Support <support@${domain}>`,
-    );
+    form.set("from", `Awebco Support <support@${domain}>`);
     form.set("to", email);
     form.set(
       "subject",
@@ -595,18 +620,40 @@ export class SupportService {
         .replace(/[\r\n]/g, " ")
         .slice(0, 150)}`,
     );
-    form.set(
-      "text",
-      `${String(message.author)}\n\n${String(message.text)}\n\n${footer}\n${link}`,
+    form.set("text", content.text);
+    form.set("html", content.html);
+    form.append(
+      "inline",
+      new Blob(
+        [
+          new Uint8Array(
+            await readFile(join(process.cwd(), "public", "logo.png")),
+          ),
+        ],
+        { type: "image/png" },
+      ),
+      "awebco-logo.png",
     );
-    form.set("h:Reply-To", replyTo);
+    form.set("h:Reply-To", `Awebco Support <${replyTo}>`);
     form.set(
       "h:Message-ID",
       `<support-${ticketId}-${messageId}-${fingerprint(email).slice(0, 12)}@${domain}>`,
     );
+    form.set("h:Auto-Submitted", "auto-generated");
+    form.set("h:X-Auto-Response-Suppress", "All");
+    const parent = ticket.supportLastEmailMessageId;
+    if (
+      typeof parent === "string" &&
+      parent.length <= 1000 &&
+      !/[\r\n]/.test(parent) &&
+      /^<?[^<>\s]+@[^<>\s]+>?$/.test(parent)
+    ) {
+      const messageIdHeader = `<${parent.replace(/^<|>$/g, "")}>`;
+      form.set("h:In-Reply-To", messageIdHeader);
+      form.set("h:References", messageIdHeader);
+    }
     form.set("o:tag", "portal-support");
-    for (const attachment of (message.attachments ||
-      []) as SupportAttachment[]) {
+    for (const attachment of presentation.attachments) {
       if (!attachment.path?.startsWith(`support/${ticketId}/${messageId}/`))
         continue;
       const [bytes] = await this.storage().file(attachment.path).download();

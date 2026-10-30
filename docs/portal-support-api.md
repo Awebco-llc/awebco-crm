@@ -36,3 +36,9 @@ Public intake automatically links a company only when a unique existing company 
 ## Validation
 
 Focused checks: `node --import tsx --test tests/support.test.ts`, TypeScript, focused ESLint and a Next build. The support checks cover tenant isolation, redaction, idempotency, simultaneous replies, private attachments, uncertain sends, public form replay and billing preservation. WordPress hooks have offline fixtures in the canonical connector. Verify the actual CRM/Portal desktop and phone screens before source publication, then verify staging before production and actual authorized inbox round trips after cutover.
+
+## Email presentation
+
+Support sends from `Awebco Support <support@MAILGUN_DOMAIN>` so the sender matches the verified delivery domain. The existing CRM logo is embedded inline; the function build traces that static asset. HTML and plain-text versions share one ticket action. Production links always use the production Portal and omit a stored account ID; the authenticated Portal resolves the current account mapping. Preview delivery stays restricted to its agreed test inbox.
+
+Incoming email keeps its original text and files. Client/staff projections separate the signature and inline images into a collapsed section; real attachments remain visible. The rendered notification contains the new reply and real attachments, never signature images as regular attachments. Replies from email do not echo back to the sender, and the most recent incoming Message-ID supplies threading headers for subsequent responses. Conversation updates still leave billing dates/hours/status alone.

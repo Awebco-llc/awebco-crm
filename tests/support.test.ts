@@ -168,7 +168,15 @@ const savedEnv = { ...process.env },
   originalFetch = globalThis.fetch;
 let db: FakeDb,
   service: SupportService,
-  sent: Array<{ to: string; replyTo: string; body: string; from: string }>;
+  sent: Array<{
+    to: string;
+    replyTo: string;
+    body: string;
+    from: string;
+    html: string;
+    attachmentCount: number;
+    parent: string;
+  }>;
 const company = "company-a",
   ticketId = "existing-ticket";
 function ticket(patch: Data = {}) {
@@ -252,6 +260,9 @@ test.beforeEach(() => {
       replyTo: String(form.get("h:Reply-To")),
       body: String(form.get("text")),
       from: String(form.get("from")),
+      html: String(form.get("html")),
+      attachmentCount: form.getAll("attachment").length,
+      parent: String(form.get("h:In-Reply-To") || ""),
     });
     return Response.json({ id: "accepted" });
   };
@@ -935,7 +946,7 @@ test("email replies retain signature images without widening the Portal upload l
     actor,
     files,
     undefined,
-    20,
+    { messageId: "<email-fixture@example.com>", inlineFiles: [] },
   );
   assert.equal(result.messages[0].attachments.length, 7);
   assert.equal(objects.size, 7);
@@ -949,7 +960,7 @@ test("email replies retain signature images without widening the Portal upload l
         actor,
         [...files, ...files, ...files],
         undefined,
-        20,
+        { messageId: "<email-fixture@example.com>", inlineFiles: [] },
       ),
     { status: 400 },
   );
@@ -966,7 +977,7 @@ test("email replies retain signature images without widening the Portal upload l
           }),
         ],
         undefined,
-        20,
+        { messageId: "<email-fixture@example.com>", inlineFiles: [] },
       ),
     { status: 400 },
   );
@@ -982,4 +993,72 @@ test("public form categories use their client-facing label without changing CRM 
     db.records.get(`tickets/${ticketId}`)!.category,
     "Category: General Questions",
   );
+});
+
+test("incoming email replies never echo back to their own sender", async () => {
+  await service.reply(
+    ticketId,
+    "email-owner-reply",
+    "My reply",
+    { name: "Owner", email: "owner@example.com", direction: "team" },
+    [],
+    undefined,
+    { messageId: "<owner-reply@example.com>", inlineFiles: [] },
+  );
+  assert.equal(sent.length, 0);
+  assert.equal(
+    db.records.get(`tickets/${ticketId}/messages/email-owner-reply`)!
+      .email_status,
+    "not_required",
+  );
+  assert.equal(
+    db.records.get(`tickets/${ticketId}`)!.supportLastEmailMessageId,
+    "<owner-reply@example.com>",
+  );
+});
+test("forwarded replies use matching Awebco sender branding, thread headers, and real attachments only", async () => {
+  const objects = new Map<string, Buffer>();
+  service = new SupportService(
+    db as never,
+    async (members) => members,
+    (() => ({
+      file: (path: string) => ({
+        save: async (bytes: Buffer) => {
+          objects.set(path, bytes);
+        },
+        download: async () => [objects.get(path)!],
+      }),
+    })) as never,
+  );
+  const raw =
+    "Your update is complete.\n\n[cid:logo]\nJamie Client\nSupport specialist\n(217) 555-0100\nhttps://example.com/";
+  const files = [
+    new File(["inline logo"], "logo.png", { type: "image/png" }),
+    new File(["real report"], "report.pdf", { type: "application/pdf" }),
+  ];
+  await service.reply(
+    ticketId,
+    "email-staff-reply",
+    raw,
+    { name: "Jamie", email: "staff@awebco.com", direction: "team" },
+    files,
+    undefined,
+    { messageId: "<staff-reply@example.com>", inlineFiles: [0] },
+  );
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "owner@example.com");
+  assert.equal(sent[0].from, "Awebco Support <support@mg.awebco.com>");
+  assert.equal(sent[0].attachmentCount, 1);
+  assert.equal(sent[0].parent, "<staff-reply@example.com>");
+  assert.ok(!sent[0].body.includes("[cid:"));
+  assert.ok(!sent[0].body.includes("Support specialist"));
+  assert.ok(!sent[0].body.includes("staging-portal"));
+  assert.ok(sent[0].html.includes("View your support ticket"));
+  const detail = await service.detail(ticketId, company);
+  assert.equal(detail.messages[0].text, "Your update is complete.");
+  assert.equal(detail.messages[0].attachments.length, 1);
+  assert.equal(detail.messages[0].inline_attachments!.length, 1);
+  assert.match(detail.messages[0].email_signature!, /Jamie Client/);
+  assert.ok(!JSON.stringify(detail).includes("support/"));
+  assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
 });

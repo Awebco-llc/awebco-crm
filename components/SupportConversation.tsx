@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getAuth } from "firebase/auth";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { supportMessagePresentation } from "@/lib/supportEmail";
 import { getDb } from "@/lib/firebase";
 import { LockKeyhole, Mail, Paperclip, RefreshCw, Send, X } from "lucide-react";
 
@@ -15,6 +16,8 @@ type Message = {
   kind?: string;
   attachments: Attachment[];
   email_status?: string;
+  email_signature?: string;
+  inline_attachments?: Attachment[];
 };
 type Detail = {
   shared: boolean;
@@ -100,7 +103,18 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
           setMessages(
             snapshot.docs
               .filter((doc) => doc.data().visibility === "client")
-              .map((doc) => ({ ...doc.data(), id: doc.id }) as Message),
+              .map((doc) => {
+                const data = doc.data(),
+                  content = supportMessagePresentation(doc.id, data);
+                return {
+                  ...data,
+                  id: doc.id,
+                  text: content.text,
+                  email_signature: content.signature,
+                  attachments: content.attachments,
+                  inline_attachments: content.inline,
+                } as Message;
+              }),
           );
       },
       () => {
@@ -237,6 +251,34 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                   {file.name}
                 </button>
               ))}
+              {(message.email_signature ||
+                !!message.inline_attachments?.length) && (
+                <details className="mt-3 text-sm text-[#4A4D53]">
+                  <summary className="cursor-pointer">
+                    Email signature
+                    {message.inline_attachments?.length
+                      ? ` and inline images (${message.inline_attachments.length})`
+                      : ""}
+                  </summary>
+                  {message.email_signature && (
+                    <p className="whitespace-pre-wrap break-words mt-2">
+                      {message.email_signature}
+                    </p>
+                  )}
+                  {message.inline_attachments?.map((file) => (
+                    <button
+                      type="button"
+                      key={file.id}
+                      disabled={busy}
+                      onClick={() => void download(message.id, file)}
+                      className="flex items-start gap-2 text-blue-700 underline mt-2 text-left [overflow-wrap:anywhere]"
+                    >
+                      <Paperclip size={15} className="shrink-0" />
+                      {file.name}
+                    </button>
+                  ))}
+                </details>
+              )}
               <p className="text-xs text-[#4A4D53] mt-2">
                 {message.email_status === "accepted"
                   ? "Email notification accepted"
