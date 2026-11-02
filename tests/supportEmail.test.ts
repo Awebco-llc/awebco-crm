@@ -363,3 +363,27 @@ test("support email HTML escapes message content and provides a single branded t
   assert.ok(!result.text.includes("CRM Notifications"));
   assert.match(result.text, /Reply to this email/);
 });
+
+test("staff notifications omit private-workflow instructions even when Outlook quotes them", () => {
+  const result = supportNotification({
+    title: "TEST — Please ignore",
+    author: "Troy",
+    text: "We’re checking the support ticket system. No action is needed.",
+    link: "https://awebco-crm.vercel.app/?nav=Support%20Tickets&ticket=test",
+    audience: "team",
+    received: false,
+    attachments: [],
+  });
+  for (const body of [result.text, result.html]) {
+    assert.doesNotMatch(body, /Internal notes|private comments|reply to the client/i);
+    assert.match(body, /We’re checking the support ticket system/);
+  }
+  const reply = "Please keep the second instruction too.";
+  const plain = `${reply}\n\nFrom: Awebco Support <tickets@awebco.com>\nSent: Monday, November 2, 2026 12:00 PM\nTo: Troy <troy@awebco.com>\nSubject: TEST — Please ignore\n\n${result.text}`;
+  const html = `<p>${reply}</p><div id="divRplyFwdMsg">From: Awebco Support &lt;tickets@awebco.com&gt;<br>Sent: Monday, November 2, 2026 12:00 PM<br>To: Troy &lt;troy@awebco.com&gt;<br>Subject: TEST — Please ignore</div>${result.html}`;
+  for (const raw of [original(plain), original(plain, { html: [html], strippedText: reply, strippedHtml: [`<p>${reply}</p>`] })]) {
+    const parsed = supportEmailContent(plain, raw);
+    assert.match(parsed.text, /Please keep the second instruction too\./);
+    assert.doesNotMatch(`${parsed.text}\n${parsed.quoted}`, /Internal notes|private comments|reply to the client/i);
+  }
+});
