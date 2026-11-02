@@ -5,6 +5,8 @@ import { NextRequest } from "next/server";
 import { createSupportHandlers } from "../lib/supportHandlers";
 import { SupportService } from "../lib/supportService";
 import { supportEmailOriginal } from "../lib/supportEmail";
+import { createPublicSupportWebhook } from "../lib/supportIntake";
+import { createSupportInbound } from "../lib/supportInbound";
 import {
   upsertPublicSupport,
   verifiedSupportCompany,
@@ -18,6 +20,7 @@ import {
   supportEmailAllowed,
   supportTeamAccess,
   verifyReplyAddress,
+  verifySupportReplyAddress,
   verifySupportMailgun,
 } from "../lib/supportPolicy";
 
@@ -174,6 +177,7 @@ let db: FakeDb,
     replyTo: string;
     body: string;
     from: string;
+    sender: string;
     html: string;
     attachmentCount: number;
     parent: string;
@@ -249,6 +253,8 @@ test.beforeEach(() => {
   process.env.MAILGUN_SIGNING_KEY = token;
   process.env.MAILGUN_DOMAIN = "mg.awebco.com";
   process.env.MAILGUN_API_KEY = "test-key";
+  process.env.WEBHOOK_SECRET = token;
+  delete process.env.SUPPORT_MAILGUN_DOMAIN;
   delete process.env.MAILGUN_FROM_EMAIL;
   globalThis.fetch = async (input, init) => {
     assert.equal(
@@ -262,6 +268,7 @@ test.beforeEach(() => {
       replyTo: String(form.get("h:Reply-To")),
       body: String(form.get("text")),
       from: String(form.get("from")),
+      sender: String(form.get("h:Sender")),
       html: String(form.get("html")),
       attachmentCount: form.getAll("attachment").length,
       parent: String(form.get("h:In-Reply-To") || ""),
@@ -1223,4 +1230,123 @@ test("a Mailgun replay of a legacy message never rewrites originals or retries o
   );
   assert.deepEqual(db.records.get(ref), before);
   assert.equal(sent.length, count);
+});
+
+test("authenticated public form webhook preserves feed 28 and connector payloads without requiring a registered requester", async () => {
+  const payload = {
+    subject: 'Ticket #8123 - TEST — Please ignore',
+    body: 'We’re checking the support ticket system. No action is needed.',
+    name: 'New requester', email: 'new-person@example.net', company: 'Unregistered company',
+    category: 'Category: General Questions', priority: 'Low', uploads: 'https://awebco.com/download?gf-download=upload.pdf',
+  };
+  const resolve = () => db as never;
+  const post = createPublicSupportWebhook(() => [], (input) => upsertPublicSupport(input, resolve), (id, to) => publicSupportReplyRoute(id, to, resolve));
+  const req = (body: unknown, header = false) => new Request(`https://crm.example/api/tickets/webhook${header ? '' : `?secret=${token}`}`, {
+    method: 'POST', headers: { 'content-type': 'application/json', ...(header ? { 'x-webhook-secret': token } : {}) }, body: JSON.stringify(body),
+  });
+  const legacy = await post(req(payload));
+  assert.equal(legacy.status, 200);
+  const id = (await legacy.json()).ticketId;
+  const upgraded = await post(req({ ...payload, form_id: 80, entry_id: '8123', support_route: true, notification_to: payload.email }, true));
+  assert.equal(upgraded.status, 200);
+  const result = await upgraded.json();
+  assert.equal(result.ticketId, id);
+  assert.equal(result.routing.reply_to, replyAddress(id, payload.email, 'mg.awebco.com', token));
+  const saved = db.records.get(`tickets/${id}`)!;
+  assert.equal(saved.email, payload.email);
+  assert.equal(saved.companyId, undefined);
+  assert.equal(saved.category, 'General Questions');
+  assert.equal(saved.supportEntryId, '8123');
+  assert.equal(saved.files[0].name, 'upload.pdf');
+  assert.equal([...db.records.keys()].filter((path) => path.startsWith('tickets/')).length, 2);
+});
+
+test("public form webhook rejects generic email creation, bad provenance and malformed requests before any ticket write", async () => {
+  let writes = 0;
+  const post = createPublicSupportWebhook(() => [], async () => { writes++; return 'unexpected'; });
+  const base = { subject: 'Ticket #8123 - Help', body: 'Please help', name: 'Troy', email: 'troy@awebco.com', company: 'Awebco', category: 'Other', priority: 'Low' };
+  for (const body of [
+    { subject: '[tovartileandstone.com] Site Lockout Notification', from: 'wordpress@tovartileandstone.com', body: 'Lockout notice' },
+    { ...base, subject: 'An unrelated email' },
+    { ...base, form_id: 81, entry_id: '8123' },
+    { ...base, form_id: 80, entry_id: '9999' },
+    { ...base, form_id: 80 },
+    { ...base, entry_id: '8123' },
+    { ...base, email: '' },
+    { ...base, body: { text: 'wrong type' } },
+    [], null,
+  ]) {
+    const response = await post(new Request(`https://crm.example/api/tickets/webhook?secret=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+    assert.equal(response.status, 400);
+  }
+  for (const secret of ['', 'wrong-secret', 'é'.repeat(token.length)]) {
+    assert.equal((await post(new Request(`https://crm.example/api/tickets/webhook?secret=${encodeURIComponent(secret)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(base) }))).status, 401);
+  }
+  assert.equal((await post(new Request(`https://crm.example/api/tickets/webhook?secret=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' }))).status, 400);
+  assert.equal((await post(new Request(`https://crm.example/api/tickets/webhook?secret=${token}`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify(base) }))).status, 415);
+  assert.equal((await post(new Request(`https://crm.example/api/tickets/webhook?secret=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...base, body: 'a'.repeat(512001) }) }))).status, 413);
+  assert.equal(writes, 0);
+});
+
+test("new support domain sends matching Sender/From while old signed replies remain valid and tenant-bound", async () => {
+  process.env.MAILGUN_DOMAIN = 'mg.crm.awebco.com';
+  process.env.SUPPORT_MAILGUN_DOMAIN = 'mg.awebco.com';
+  const owner = 'owner@example.com';
+  await service.sendEmail(ticketId, ticket(), requestId, { author: 'Awebco', text: 'Test reply', visibility: 'client' }, owner, 'client');
+  assert.equal(sent[0].sender, sent[0].from);
+  assert.equal(sent[0].from, 'Awebco Support <tickets@awebco.com>');
+  assert.ok(sent[0].replyTo.endsWith('@mg.awebco.com'));
+  for (const domain of ['mg.crm.awebco.com', 'mg.awebco.com']) {
+    const address = replyAddress(ticketId, owner, domain, token);
+    assert.equal(verifySupportReplyAddress(address, owner, token), ticketId);
+    assert.equal(verifySupportReplyAddress(address, 'another@example.com', token), null);
+    assert.equal(verifySupportReplyAddress(address, owner, 'wrong-key'.repeat(8)), null);
+  }
+  assert.equal(verifySupportReplyAddress(replyAddress(ticketId, owner, 'other.example.com', token), owner, token), null);
+  const route = await publicSupportReplyRoute(ticketId, owner, () => db as never);
+  assert.ok(route!.reply_to.endsWith('@mg.awebco.com'));
+});
+
+test("signed incoming client and staff replies use the same ticket across new and legacy mail domains without duplicates", async () => {
+  process.env.MAILGUN_DOMAIN = 'mg.crm.awebco.com';
+  process.env.SUPPORT_MAILGUN_DOMAIN = 'mg.awebco.com';
+  const receive = createSupportInbound(() => service, async () => true);
+  const input = (sender: string, recipient: string, id: string) => {
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = 'test-inbound-nonce';
+    const formData = new FormData();
+    formData.set('Message-Id', `<${id}@example.com>`);
+    formData.set('body-plain', 'This is an approved test reply.');
+    formData.set('from', sender);
+    return { sender, recipient, body: 'This is an approved test reply.', timestamp, token: nonce, signature: createHmac('sha256', token).update(timestamp + nonce).digest('hex'), formData };
+  };
+  const owner = 'owner@example.com';
+  const legacy = input(owner, replyAddress(ticketId, owner, 'mg.crm.awebco.com', token), 'legacy-client');
+  assert.equal((await receive(legacy)).status, 200);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'staff@awebco.com');
+  assert.ok(sent[0].replyTo.endsWith('@mg.awebco.com'));
+  assert.equal((await receive(legacy)).status, 200);
+  assert.equal(sent.length, 1);
+  const team = input('staff@awebco.com', replyAddress(ticketId, 'support-team@awebco.com', 'mg.awebco.com', token), 'new-staff');
+  assert.equal((await receive(team)).status, 200);
+  assert.equal(sent.at(-1)!.to, owner);
+  assert.equal(sent.at(-1)!.sender, 'Awebco Support <tickets@awebco.com>');
+  const detail = await service.detail(ticketId, company);
+  assert.equal(detail.messages.length, 2);
+  assert.deepEqual(detail.messages.map((m) => m.direction), ['client', 'team']);
+  const saved = db.records.get(`tickets/${ticketId}`)!;
+  assert.equal(saved.status, 'Needs Invoiced');
+  assert.equal(saved.deadline, '2026-10-24');
+  assert.equal(saved.notes, 'Private billing note');
+  assert.equal([...db.records.keys()].filter((p) => /^tickets\/[^/]+$/.test(p)).length, 1);
+  const untrusted = input('outsider@example.net', replyAddress(ticketId, 'outsider@example.net', 'mg.awebco.com', token), 'outsider');
+  assert.equal((await receive(untrusted)).status, 403);
+  assert.equal((await receive({ ...legacy, signature: '0'.repeat(64) })).status, 401);
+  assert.equal((await receive({ ...legacy, recipient: legacy.recipient.replace(ticketId, 'another-ticket') })).status, 403);
+  const revoked = createSupportInbound(() => service, async () => false);
+  assert.equal((await revoked(team)).status, 403);
+  db.records.set(`tickets/${ticketId}`, { ...saved, supportVisibility: 'internal' });
+  assert.equal((await receive(legacy)).status, 404);
+  assert.equal(sent.length, 2);
 });

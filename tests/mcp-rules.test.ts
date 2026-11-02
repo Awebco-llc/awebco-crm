@@ -88,10 +88,23 @@ test('master can save the full Settings member form, create accounts and change 
   await assertSucceeds(deleteDoc(ref));
 });
 
-test('admin workspace management and the existing public ticket intake remain available', async () => {
+test('admin workspace management remains available and anonymous ticket creation is denied', async () => {
   const db = environment.authenticatedContext('admin').firestore();
   await assertSucceeds(updateDoc(doc(db, 'users/staff'), { permissions: { allowedWorkspaces: ['SEO', 'Local Listings'] }, updatedAt: serverTimestamp() }));
   const publicDb = environment.unauthenticatedContext().firestore();
-  await assertSucceeds(setDoc(doc(publicDb, 'tickets/public-form-test'), { projectName: 'Test intake', workspace: 'Support Tickets' }));
+  await assertFails(setDoc(doc(publicDb, 'tickets/public-form-test'), { projectName: 'Test intake', workspace: 'Support Tickets' }));
   await assertFails(getDoc(doc(publicDb, 'tickets/public-form-test')));
+});
+
+// Public visitors submit to WordPress; only the authenticated webhook/Admin SDK
+// writes for them. Portal clients also go through the tenant-scoped server API.
+test('untrusted and portal browser identities cannot bypass server ticket intake or mutate conversations', async () => {
+  for (const context of [environment.unauthenticatedContext(), environment.authenticatedContext('unknown'), environment.authenticatedContext('portal-client')]) {
+    const db = context.firestore();
+    await assertFails(setDoc(doc(db, 'tickets/forged'), { projectName: 'Forged form', workspace: 'Support Tickets', supportSource: 'awebco.com', supportEntryId: '123' }));
+    await assertFails(updateDoc(doc(db, 'tickets/task'), { projectName: 'Changed' }));
+    await assertFails(deleteDoc(doc(db, 'tickets/task')));
+    await assertFails(getDocs(collection(db, 'tickets')));
+    await assertFails(setDoc(doc(db, 'tickets/task/messages/forged'), { visibility: 'client', text: 'Forged reply' }));
+  }
 });

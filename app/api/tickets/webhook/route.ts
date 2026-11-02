@@ -1,5 +1,4 @@
-import { upsertPublicSupport, publicSupportReplyRoute } from '@/lib/supportPublic';
-import { SupportError } from '@/lib/supportService';
+import { createPublicSupportWebhook } from '@/lib/supportIntake';
 import { NextResponse } from 'next/server';
 
 interface ExtractedFile {
@@ -11,9 +10,9 @@ interface ExtractedFile {
 
 /**
  * Parses and extracts file and image links from the incoming webhook payload.
- * Stringifies the payload to search everywhere (email body, custom form fields, etc.).
+ * Only called after the authenticated form submission has been validated.
  */
-function extractFilesFromPayload(payload: any): ExtractedFile[] {
+function extractFilesFromPayload(payload: unknown): ExtractedFile[] {
   if (!payload) return [];
 
   const payloadStr = JSON.stringify(payload);
@@ -66,223 +65,9 @@ function extractFilesFromPayload(payload: any): ExtractedFile[] {
   return extractedFiles;
 }
 
-function parseFieldsFromText(text: string) {
-  const result: any = {};
-  if (!text) return result;
+/** Public Gravity Form intake only. Email replies use /api/email/inbound. */
+export const POST = createPublicSupportWebhook(extractFilesFromPayload);
 
-  const cleanText = text.replace(/\r\n/g, '\n');
-
-  // 1. Company Name: match "Company Name" label and the next line or content after colon
-  const companyMatch = cleanText.match(/Company\s*Name[\s:|]*\n*([^\n\r]+)/i);
-  if (companyMatch && companyMatch[1]) {
-    result.companyName = companyMatch[1].trim();
-  }
-
-  // 2. Email: match "Email" label and extract the email address
-  const emailMatch = cleanText.match(/Email[\s:|]*\n*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
-  if (emailMatch && emailMatch[1]) {
-    result.email = emailMatch[1].trim();
-  }
-
-  // 3. Name: match "Name" label and extract requester's name
-  const nameMatch = cleanText.match(/(?:^|\n)Name[\s:|]*\n*([^\n\r]+)/i);
-  if (nameMatch && nameMatch[1]) {
-    result.contactName = nameMatch[1].trim();
-  }
-
-  // 4. Category: match "Category" label
-  const categoryMatch = cleanText.match(/Category[\s:|]*\n*(?:Category:\s*)?([^\n\r]+)/i);
-  if (categoryMatch && categoryMatch[1]) {
-    result.category = categoryMatch[1].trim();
-  }
-
-  // 5. Priority: match "Priority" label
-  const priorityMatch = cleanText.match(/Priority[\s:|]*\n*(?:Priority:\s*)?([^\n\r]+)/i);
-  if (priorityMatch && priorityMatch[1]) {
-    const rawPriority = priorityMatch[1].trim();
-    if (/low/i.test(rawPriority)) result.priority = 'Low';
-    else if (/high/i.test(rawPriority)) result.priority = 'High';
-    else if (/urgent/i.test(rawPriority)) result.priority = 'Urgent';
-    else if (/medium/i.test(rawPriority)) result.priority = 'Medium';
-  }
-
-  return result;
-}
-
-/**
- * Inbound Email Webhook
- * Receives POST requests from email providers or form webhooks (like Gravity Forms)
- * and automatically creates a support ticket.
- */
-export async function POST(req: Request) {
-  try {
-    const url = new URL(req.url);
-    const querySecret = url.searchParams.get('secret') || url.search.slice(1);
-    const secret = querySecret || req.headers.get('x-webhook-secret') || req.headers.get('X-Webhook-Secret');
-    const expectedSecret = process.env.WEBHOOK_SECRET;
-
-    if (!expectedSecret || secret !== expectedSecret) {
-      console.warn('Unauthorized webhook access attempt.');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const payload = await req.json();
-    // Request content is private; do not log the submission payload.
-
-    // Map common email/form webhook fields
-    const subject = payload.subject || 'No Subject';
-    const textBody = payload.text || payload.body || payload.message || '';
-    const fromEmail = payload.from || payload.sender || payload.email || 'Unknown';
-    const toEmail = payload.to || '';
-
-    // Auto-extract any attached file or image links from the incoming payload
-    const extractedFiles = extractFilesFromPayload(payload);
-
-    // --- Explicitly parse the `uploads` key sent by Gravity Forms webhook ---
-    // The value can be a single URL string, a newline-separated string of URLs,
-    // or an array of URL strings.
-    const rawUploads = payload.uploads || payload.file || payload.upload || null;
-    if (rawUploads) {
-      const uploadUrls: string[] = [];
-      if (Array.isArray(rawUploads)) {
-        rawUploads.forEach((u: any) => { if (typeof u === 'string' && u.trim()) uploadUrls.push(u.trim()); });
-      } else if (typeof rawUploads === 'string') {
-        // May be newline- or comma-separated if multiple files
-        rawUploads.split(/[\n,]+/).forEach((u: string) => { if (u.trim()) uploadUrls.push(u.trim()); });
-      }
-
-      for (const urlStr of uploadUrls) {
-        // Skip if we already caught this URL via the generic extractor
-        if (extractedFiles.some(f => f.url === urlStr)) continue;
-        try {
-          const urlObj = new URL(urlStr);
-          const gfDownload = urlObj.searchParams.get('gf-download');
-          let filename = 'attachment';
-          if (gfDownload) {
-            const decoded = decodeURIComponent(gfDownload);
-            const parts = decoded.split('/');
-            filename = parts[parts.length - 1] || 'attachment';
-          } else {
-            const parts = urlObj.pathname.split('/');
-            const last = parts[parts.length - 1];
-            if (last) filename = decodeURIComponent(last);
-          }
-          extractedFiles.push({
-            id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            name: filename,
-            url: urlStr,
-            uploadedAt: new Date().toISOString(),
-          });
-        } catch {
-          // invalid URL — skip
-        }
-      }
-    }
-    // -------------------------------------------------------------------
-
-
-    const findInPayload = (keys: string[]) => {
-      for (const k of keys) {
-        if (payload[k]) return payload[k];
-        const foundKey = Object.keys(payload).find(pk => pk.toLowerCase() === k.toLowerCase());
-        if (foundKey && payload[foundKey]) return payload[foundKey];
-      }
-      return null;
-    };
-
-    let companyName = findInPayload(['company', 'companyName', 'company_name', 'companyNameField']) || '';
-    let contactName = findInPayload(['name', 'contactName', 'contact_name', 'contactNameField', 'requesterName']) || '';
-    let email = findInPayload(['email', 'emailAddress', 'fromEmail', 'from', 'sender']) || '';
-    let category = findInPayload(['category', 'ticketCategory', 'categoryField']) || '';
-    let priority = findInPayload(['priority', 'ticketPriority', 'priorityField']) || 'Medium';
-
-    // Parse email body text to extract fields if not found inside direct keys
-    const textParsed = parseFieldsFromText(textBody);
-    if (!companyName && textParsed.companyName) companyName = textParsed.companyName;
-    if (!contactName && textParsed.contactName) contactName = textParsed.contactName;
-    if (!email && textParsed.email) email = textParsed.email;
-    if (!category && textParsed.category) category = textParsed.category;
-    if (priority === 'Medium' && textParsed.priority) priority = textParsed.priority;
-
-    const entryId = /^Ticket #([0-9]{1,12}) - /i.exec(subject)?.[1];
-    if (entryId) {
-      const ticketId = await upsertPublicSupport({entryId,subject,description:textBody,email,contactName,companyName,category,priority,files:extractedFiles});
-      const routing = payload.support_route === true ? await publicSupportReplyRoute(ticketId,payload.notification_to) : null;
-      return NextResponse.json({success:true,ticketId,...(routing?{routing}:{})});
-    }
-
-    const nowISO = new Date().toISOString();
-    const fields: any = {
-      projectName: { stringValue: subject },
-      description: { stringValue: textBody || 'No content' },
-      status: { stringValue: 'Not Started' },
-      priority: { stringValue: priority },
-      assignee: { stringValue: '' },
-      assignees: { arrayValue: { values: [] } },
-      assignedToId: { stringValue: '' },
-      workspace: { stringValue: 'Support Tickets' },
-      companyName: { stringValue: companyName },
-      contactName: { stringValue: contactName },
-      email: { stringValue: email },
-      category: { stringValue: category },
-      createdAt: { timestampValue: nowISO },
-      updatedAt: { timestampValue: nowISO },
-      order: { integerValue: String(Date.now()) },
-      isManual: { booleanValue: false },
-      notes: { stringValue: '' },
-      files: {
-        arrayValue: {
-          values: extractedFiles.map(file => ({
-            mapValue: {
-              fields: {
-                id: { stringValue: file.id },
-                name: { stringValue: file.name },
-                url: { stringValue: file.url },
-                uploadedAt: { timestampValue: file.uploadedAt }
-              }
-            }
-          }))
-        }
-      }
-    };
-
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    const databaseId = process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID || '(default)';
-    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/tickets`;
-
-    const response = await fetch(firestoreUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ fields }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Firestore REST API error: ${errText}`);
-    }
-
-    const resJson = await response.json();
-    const docPathParts = resJson.name.split('/');
-    const ticketId = docPathParts[docPathParts.length - 1];
-
-    return NextResponse.json({
-      success: true,
-      ticketId: ticketId,
-      message: 'Ticket created successfully'
-    });
-  } catch (err: any) {
-    if (err instanceof SupportError) return NextResponse.json({success:false,error:err.message},{status:err.status});
-    console.error('Error in ticket webhook:', err);
-    return NextResponse.json({
-      success: false,
-      error: err.message || 'Failed to process webhook'
-    }, { status: 500 });
-  }
-}
-
-// Support GET for testing/health check
 export async function GET() {
   return NextResponse.json({ status: 'Webhook endpoint active' });
 }

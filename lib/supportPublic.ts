@@ -6,6 +6,7 @@ import {
   supportEmail,
   shareSupportTicket,
   supportId,
+  supportMailDomain,
   supportTeamAccess,
 } from "./supportPolicy";
 import { SupportError } from "./supportService";
@@ -173,7 +174,7 @@ export async function publicSupportReplyRoute(
     if (!targets.every((email) => authorized.has(email))) return null;
     audience = "team";
   }
-  const domain = process.env.MAILGUN_DOMAIN,
+  const domain = supportMailDomain(),
     key = process.env.MAILGUN_SIGNING_KEY;
   if (!domain || !key) return null;
   return {

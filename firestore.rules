@@ -17,10 +17,8 @@ service cloud.firestore {
       return getUserRole() in ['master_admin', 'admin', 'staff', 'freelancer'];
     }
 
-    // Allow public ticket creation (for gravity forms webhook routing)
-    match /tickets/{ticketId} {
-      allow create: if true;
-    }
+    // Public forms write through the authenticated server webhook/Admin SDK.
+    // Browser ticket operations use the existing authenticated team rule below.
 
     // Secure access: Only authenticated team members with a valid role can read/write.
     match /{collection}/{document=**} {
