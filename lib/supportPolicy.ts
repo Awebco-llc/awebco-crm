@@ -125,6 +125,23 @@ export function replyAddress(
     throw new Error("Ticket email routing is unavailable.");
   return `${local}@${domain}`;
 }
+// Support can move to an existing branded mail domain without changing other
+// CRM mail or invalidating signed reply addresses already in people's inboxes.
+export function supportMailDomain() {
+  return process.env.SUPPORT_MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || "";
+}
+export function verifySupportReplyAddress(
+  recipient: string,
+  sender: string,
+  key: string,
+) {
+  const domains = new Set([supportMailDomain(), process.env.MAILGUN_DOMAIN || ""]);
+  for (const domain of domains) {
+    const ticketId = verifyReplyAddress(recipient, sender, domain, key);
+    if (ticketId) return ticketId;
+  }
+  return null;
+}
 export function verifyReplyAddress(
   recipient: string,
   sender: string,

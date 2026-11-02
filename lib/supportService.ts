@@ -20,6 +20,7 @@ import {
   supportEmail,
   supportEmailAllowed,
   supportId,
+  supportMailDomain,
   supportStatus,
   SUPPORT_FILE_BYTES,
   ticketRequestId,
@@ -606,7 +607,7 @@ export class SupportService {
     audience: "client" | "team",
   ) {
     if (!supportEmailAllowed(email)) return "failed";
-    const domain = process.env.MAILGUN_DOMAIN,
+    const domain = supportMailDomain(),
       key = process.env.MAILGUN_API_KEY,
       routingKey = process.env.MAILGUN_SIGNING_KEY;
     if (
@@ -638,6 +639,7 @@ export class SupportService {
     });
     const form = new FormData();
     form.set("from", "Awebco Support <tickets@awebco.com>");
+    form.set("h:Sender", "Awebco Support <tickets@awebco.com>");
     form.set("to", email);
     form.set(
       "subject",

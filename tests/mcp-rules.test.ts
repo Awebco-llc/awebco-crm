@@ -88,10 +88,38 @@ test('master can save the full Settings member form, create accounts and change 
   await assertSucceeds(deleteDoc(ref));
 });
 
-test('admin workspace management and the existing public ticket intake remain available', async () => {
+test('admin workspace management remains available and anonymous ticket creation is denied', async () => {
   const db = environment.authenticatedContext('admin').firestore();
   await assertSucceeds(updateDoc(doc(db, 'users/staff'), { permissions: { allowedWorkspaces: ['SEO', 'Local Listings'] }, updatedAt: serverTimestamp() }));
   const publicDb = environment.unauthenticatedContext().firestore();
-  await assertSucceeds(setDoc(doc(publicDb, 'tickets/public-form-test'), { projectName: 'Test intake', workspace: 'Support Tickets' }));
+  await assertFails(setDoc(doc(publicDb, 'tickets/public-form-test'), { projectName: 'Test intake', workspace: 'Support Tickets' }));
   await assertFails(getDoc(doc(publicDb, 'tickets/public-form-test')));
+});
+
+// Public visitors submit to WordPress; only the authenticated webhook/Admin SDK
+// writes for them. Portal clients also go through the tenant-scoped server API.
+test('untrusted and portal browser identities cannot bypass server ticket intake or mutate conversations', async () => {
+  for (const context of [environment.unauthenticatedContext(), environment.authenticatedContext('unknown'), environment.authenticatedContext('portal-client')]) {
+    const db = context.firestore();
+    await assertFails(setDoc(doc(db, 'tickets/forged'), { projectName: 'Forged form', workspace: 'Support Tickets', supportSource: 'awebco.com', supportEntryId: '123' }));
+    await assertFails(updateDoc(doc(db, 'tickets/task'), { projectName: 'Changed' }));
+    await assertFails(deleteDoc(doc(db, 'tickets/task')));
+    await assertFails(getDocs(collection(db, 'tickets')));
+    await assertFails(setDoc(doc(db, 'tickets/task/messages/forged'), { visibility: 'client', text: 'Forged reply' }));
+  }
+});
+
+test('authorized staff can manually create and manage internal Support Tickets in the CRM', async () => {
+  for (const uid of ['master', 'admin', 'staff', 'freelancer']) {
+    const db = environment.authenticatedContext(uid).firestore();
+    const ref = doc(db, 'tickets', `manual-support-${uid}`);
+    await assertSucceeds(setDoc(ref, {
+      projectName: 'TEST — Please ignore', workspace: 'Support Tickets',
+      isManual: true, supportVisibility: 'internal', status: 'Not Started',
+      notes: 'No action is needed.', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+    await assertSucceeds(getDoc(ref));
+    await assertSucceeds(updateDoc(ref, { status: 'In Progress', notes: 'Private staff note' }));
+    await assertSucceeds(deleteDoc(ref));
+  }
 });
