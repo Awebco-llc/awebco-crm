@@ -1266,7 +1266,7 @@ test("public form webhook rejects generic email creation, bad provenance and mal
   const post = createPublicSupportWebhook(() => [], async () => { writes++; return 'unexpected'; });
   const base = { subject: 'Ticket #8123 - Help', body: 'Please help', name: 'Troy', email: 'troy@awebco.com', company: 'Awebco', category: 'Other', priority: 'Low' };
   for (const body of [
-    { subject: '[tovartileandstone.com] Site Lockout Notification', from: 'wordpress@tovartileandstone.com', body: 'Lockout notice' },
+    { subject: 'Unrelated site notification', from: 'wordpress@example.net', body: 'Lockout notice' },
     { ...base, subject: 'An unrelated email' },
     { ...base, form_id: 81, entry_id: '8123' },
     { ...base, form_id: 80, entry_id: '9999' },

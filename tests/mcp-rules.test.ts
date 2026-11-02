@@ -108,3 +108,18 @@ test('untrusted and portal browser identities cannot bypass server ticket intake
     await assertFails(setDoc(doc(db, 'tickets/task/messages/forged'), { visibility: 'client', text: 'Forged reply' }));
   }
 });
+
+test('authorized staff can manually create and manage internal Support Tickets in the CRM', async () => {
+  for (const uid of ['master', 'admin', 'staff', 'freelancer']) {
+    const db = environment.authenticatedContext(uid).firestore();
+    const ref = doc(db, 'tickets', `manual-support-${uid}`);
+    await assertSucceeds(setDoc(ref, {
+      projectName: 'TEST — Please ignore', workspace: 'Support Tickets',
+      isManual: true, supportVisibility: 'internal', status: 'Not Started',
+      notes: 'No action is needed.', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+    await assertSucceeds(getDoc(ref));
+    await assertSucceeds(updateDoc(ref, { status: 'In Progress', notes: 'Private staff note' }));
+    await assertSucceeds(deleteDoc(ref));
+  }
+});
