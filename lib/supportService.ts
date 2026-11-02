@@ -15,6 +15,7 @@ import {
   allowedSupportFile,
   fingerprint,
   legacySupportFiles,
+  legacySupportEmail,
   replyAddress,
   shareSupportTicket,
   supportEmail,
@@ -622,7 +623,12 @@ export class SupportService {
     const host = process.env.MAILGUN_HOST || "api.mailgun.net";
     if (!["api.mailgun.net", "api.eu.mailgun.net"].includes(host))
       return "failed";
-    const replyTo = replyAddress(ticketId, email, domain, routingKey);
+    const legacy = legacySupportEmail(ticket);
+    const replyTo = legacy
+      ? (audience === "team"
+          ? supportEmail(ticket.email)
+          : supportEmail(message.sender_email)) || "tickets@awebco.com"
+      : replyAddress(ticketId, email, domain, routingKey);
     const link =
       audience === "team"
         ? `https://awebco-crm.vercel.app/?nav=Support%20Tickets&ticket=${encodeURIComponent(ticketId)}&conversation=client`
@@ -632,7 +638,7 @@ export class SupportService {
       title: String(ticket.projectName),
       author: String(message.author),
       text: presentation.text,
-      link,
+      link: legacy && audience === "client" ? "" : link,
       audience,
       received: message.kind === "request" && audience === "client",
       attachments: presentation.attachments.map((file) => file.name),
