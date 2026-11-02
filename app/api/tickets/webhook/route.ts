@@ -10,7 +10,7 @@ interface ExtractedFile {
 
 /**
  * Parses and extracts file and image links from the incoming webhook payload.
- * Only called after the authenticated form submission has been validated.
+ * Only called after webhook authentication and form-shaped payload validation.
  */
 function extractFilesFromPayload(payload: unknown): ExtractedFile[] {
   if (!payload) return [];
