@@ -51,6 +51,7 @@ const normalize = (value: string) => value.replace(/\r\n?/g, "\n");
 const compact = (value: string) =>
   value
     .replace(/\[cid:[^\]]+\]/gi, "")
+    .replace(/^_{5,}[ \t]*$/gm, "")
     .replace(/[\s>]+/g, "")
     .toLowerCase();
 const readable = (value: string) =>
@@ -71,7 +72,7 @@ const readable = (value: string) =>
     .trim();
 
 type Part = { text: string; kind: "reply" | "quote" | "signature" };
-function htmlParts(html: string) {
+function htmlParts(html: string, outlookHistory = false) {
   const parts: Part[] = [];
   const append = (text: string, kind: Part["kind"]) => {
     if (parts.at(-1)?.kind === kind) parts[parts.length - 1].text += text;
@@ -118,11 +119,24 @@ function htmlParts(html: string) {
     if (tag === "img") {
       // Only files actually referenced in a collapsed block can be collapsed.
       if (/^cid:/i.test(attrs.src || "")) append(`[${attrs.src}]`, next);
-      else if (attrs.alt) append(`[Image: ${attrs.alt}]`, next);
+      if (attrs.alt) append(`[${attrs.alt}]`, next);
     }
     stack.push({ node, kind: next, close: true });
-    for (let i = node.childNodes.length - 1; i >= 0; i--)
-      stack.push({ node: node.childNodes[i], kind: next });
+    let siblingKind = next;
+    const children = node.childNodes.map((child) => {
+      // Outlook marks the start of its quoted thread, rather than wrapping it.
+      // Propose that suffix only when provider HTML is available to corroborate it.
+      if (
+        outlookHistory &&
+        "attrs" in child &&
+        child.attrs.some(
+          ({ name, value }) => name === "id" && value === "divRplyFwdMsg",
+        )
+      )
+        siblingKind = "quote";
+      return { node: child, kind: siblingKind };
+    });
+    for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]);
   }
   return parts;
 }
@@ -131,7 +145,7 @@ export function supportEmailText(original: SupportEmailOriginal) {
   return (
     original.plain ||
     original.html
-      .flatMap(htmlParts)
+      .flatMap((html) => htmlParts(html))
       .map((part) => part.text)
       .join("\n")
   );
@@ -165,6 +179,7 @@ function safeSignature(value: string) {
             /https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\+?[\d ().-]{7,}/i.test(
               line,
             ) ||
+            /^[\p{S}\s]*\d{1,6}[\p{L}\p{N}\s.,#'-]{1,100}$/u.test(line) ||
             /^[\p{L}][\p{L} '&,|–-]{0,75}$/u.test(line),
         )))
   );
@@ -177,7 +192,10 @@ export function supportEmailContent(
     signature = "",
     quoted = "",
     hidden = "";
-  const html = original?.html.length === 1 ? htmlParts(original.html[0]) : [];
+  const html =
+    original?.html.length === 1
+      ? htmlParts(original.html[0], original.strippedHtml.length === 1)
+      : [];
   // HTML is used only when its visible text agrees with the authoritative plain
   // body. Divergent alternatives and multi-part HTML remain conservative.
   const equivalent =
@@ -190,7 +208,7 @@ export function supportEmailContent(
         (part.kind === "signature" && !safeSignature(part.text)),
     );
     const candidate = reply.map((part) => part.text).join("\n");
-    const providerReplies = [
+    let providerReplies = [
       original?.strippedText || "",
       ...(original?.strippedHtml || []).map((value) =>
         htmlParts(value)
@@ -198,6 +216,32 @@ export function supportEmailContent(
           .join(""),
       ),
     ].filter((value) => value.trim());
+    if (original?.strippedHtml.length === 1 && original.strippedText?.trim()) {
+      const provider = htmlParts(original.strippedHtml[0]);
+      // Providers can retain marked signatures and blockquotes in both stripped
+      // fields, or remove a quote from only one alternative. Account for those
+      // known blocks, but require every remaining word in BOTH provider replies
+      // to survive. A provider HTML reply inside a quote still prevents collapse.
+      let providerText = compact(original.strippedText);
+      for (const part of html) {
+        if (
+          part.kind === "quote" ||
+          (part.kind === "signature" && safeSignature(part.text))
+        )
+          providerText = providerText.replace(compact(part.text), "");
+      }
+      providerReplies = [
+        providerText,
+        provider
+          .filter(
+            (part) =>
+              part.kind === "reply" ||
+              (part.kind === "signature" && !safeSignature(part.text)),
+          )
+          .map((part) => part.text)
+          .join("\n"),
+      ];
+    }
     // A provider reply missing from the HTML projection signals an inline edit.
     if (
       providerReplies.every((value) =>

@@ -204,6 +204,79 @@ test("HTML alternatives and provider disagreements fall back conservatively", ()
   );
 });
 
+test("Outlook table signatures, CID alt labels and corroborated history preserve interleaved answers", () => {
+  const signature =
+    "[cid:portrait]\nJamie Client\nBusiness Manager\n📞 (217) 555-0100\n📍 100 Example St. Example City, IL\n[network icon]<https://example.com/social>";
+  const reply =
+    "Verification reply.\nWhich photo?\nUse the green photo.\nWhich number?\nKeep the existing number.";
+  const signatureHtml =
+    '<div id="Signature"><table><tr><td><img src="cid:portrait"></td><td><p>Jamie Client<br>Business Manager</p><p>📞 (217) 555-0100<br>📍 100 Example St. Example City, IL</p><a href="https://example.com/social"><img src="cid:network" alt="network icon"></a></td></tr></table></div>';
+  const replyHtml =
+    "<p>Verification reply.</p><blockquote>Which photo?</blockquote><p>Use the green photo.</p><blockquote>Which number?</blockquote><p>Keep the existing number.</p>";
+  const header = "From: Support\nSent: Friday\nTo: Client\nSubject: Request";
+  const raw = `${signature}\n${reply}\n________________________________\n${header}\nEarlier message.`;
+  const email = original(raw, {
+    html: [
+      `${signatureHtml}${replyHtml}<hr><div id="divRplyFwdMsg">${header.replaceAll("\n", "<br>")}</div><div>Earlier message.</div>`,
+    ],
+    strippedText: `${signature}\n${reply}`,
+    // Mailgun can retain a blockquote in stripped-text but remove it from HTML.
+    strippedHtml: [
+      signatureHtml +
+        replyHtml.replace("<blockquote>Which number?</blockquote>", ""),
+    ],
+  });
+  const result = supportMessagePresentation("email-outlook", {
+    email_original: email,
+    email_attachment_cids: {
+      portrait: ["portrait"],
+      network: ["network"],
+      screenshot: ["unknown"],
+    },
+    attachments: [
+      { id: "portrait", name: "image.png" },
+      { id: "network", name: "image.png" },
+      { id: "screenshot", name: "screenshot.png" },
+      { id: "notes", name: "notes.txt" },
+    ],
+  });
+  assert.match(result.text, /Verification reply/);
+  assert.match(result.text, /Use the green photo/);
+  assert.match(result.text, /Keep the existing number/);
+  assert.doesNotMatch(
+    result.text,
+    /Jamie Client|Which photo|Which number|Earlier message/,
+  );
+  assert.match(result.signature, /100 Example St/);
+  assert.match(result.quoted, /Which photo/);
+  assert.match(result.quoted, /Earlier message/);
+  assert.deepEqual(
+    result.inline.map((file) => file.id),
+    ["portrait", "network"],
+  );
+  assert.deepEqual(
+    result.attachments.map((file) => file.id),
+    ["screenshot", "notes"],
+  );
+  assert.equal(result.original, raw);
+
+  // The Outlook boundary alone is insufficient to hide an unmarked suffix.
+  const uncertain = supportEmailContent(raw, {
+    ...email,
+    strippedHtml: [],
+    strippedText: undefined,
+  });
+  assert.match(uncertain.text, /Earlier message/);
+  // A provider's unquoted answer inside proposed history must remain visible.
+  const edited = supportEmailContent(raw, {
+    ...email,
+    strippedText: "Earlier message.",
+    strippedHtml: ["<p>Earlier message.</p>"],
+  });
+  assert.match(edited.text, /Earlier message/);
+  assert.equal(edited.quoted, "");
+});
+
 test("HTML-only content is readable, escaped by consumers and retained as a download, never executed", () => {
   const result = supportMessagePresentation("email-html", {
     email_original: original("", {
