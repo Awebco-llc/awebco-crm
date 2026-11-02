@@ -2,6 +2,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { getPortalListingsFirestore } from "./portalListingsDb";
 import {
   fingerprint,
+  legacySupportEmail,
   replyAddress,
   supportEmail,
   shareSupportTicket,
@@ -156,6 +157,8 @@ export async function publicSupportReplyRoute(
     ticket = (await db.collection("tickets").doc(ticketId).get()).data();
   if (!ticket || !shareSupportTicket(ticket))
     throw new SupportError(404, "Ticket not found.");
+  // Older connectors must preserve Gravity Forms' original Reply-To as well.
+  if (legacySupportEmail(ticket)) return null;
   const targets = (
     Array.isArray(to) ? to : typeof to === "string" ? to.split(",") : []
   ).map(supportEmail);

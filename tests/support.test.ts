@@ -1251,7 +1251,7 @@ test("authenticated public form webhook preserves feed 28 and connector payloads
   assert.equal(upgraded.status, 200);
   const result = await upgraded.json();
   assert.equal(result.ticketId, id);
-  assert.equal(result.routing.reply_to, replyAddress(id, payload.email, 'mg.awebco.com', token));
+  assert.equal(result.routing, undefined);
   const saved = db.records.get(`tickets/${id}`)!;
   assert.equal(saved.email, payload.email);
   assert.equal(saved.companyId, undefined);
@@ -1373,4 +1373,45 @@ test("incoming replies preserve case-sensitive manual ticket IDs on new and lega
   const messages = (await service.detail(manualId, company)).messages;
   assert.equal(messages.length, 2);
   assert.equal(db.records.has(`tickets/${manualId.toLowerCase()}`), false);
+});
+
+test("website form intake keeps direct replies even for known CRM companies", async () => {
+  for (const patch of [
+    { supportSource: "awebco.com" },
+    { projectName: "Ticket #6104 - Website update" },
+  ]) {
+    db.records.set(`tickets/${ticketId}`, ticket(patch));
+    for (const to of ["owner@example.com", "staff@awebco.com", "unknown@example.net"]) {
+      assert.equal(await publicSupportReplyRoute(ticketId, to, () => db as never), null);
+    }
+  }
+});
+
+test("already issued public-form relay addresses hand off to direct email without portal prompts", async () => {
+  db.records.set(`tickets/${ticketId}`, ticket({ supportSource: "awebco.com" }));
+  process.env.MAILGUN_DOMAIN = "mg.crm.awebco.com";
+  process.env.SUPPORT_MAILGUN_DOMAIN = "mg.awebco.com";
+  const receive = createSupportInbound(() => service, async () => true);
+  for (const domain of ["mg.crm.awebco.com", "mg.awebco.com"]) {
+    for (const sender of ["owner@example.com", "staff@awebco.com"]) {
+      const staff = sender.startsWith("staff");
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const nonce = `legacy-form-${domain}-${sender}`;
+      const formData = new FormData();
+      formData.set("Message-Id", `<${nonce}@example.com>`);
+      formData.set("body-plain", "Please update the website hours.");
+      const input = { sender, recipient: replyAddress(ticketId, staff ? "support-team@awebco.com" : sender, domain, token), body: "Please update the website hours.", timestamp, token: nonce, signature: createHmac("sha256", token).update(timestamp + nonce).digest("hex"), formData };
+      assert.equal((await receive(input)).status, 200);
+      const mail = sent.at(-1)!;
+      assert.equal(mail.to, staff ? "owner@example.com" : "staff@awebco.com");
+      assert.equal(mail.replyTo, staff ? "staff@awebco.com" : "owner@example.com");
+      if (staff) {
+        assert.doesNotMatch(mail.body + mail.html, /portal\.awebco\.com|View your support ticket|Internal notes|href=""/);
+        assert.match(mail.body, /Please update the website hours/);
+      }
+      const count = sent.length;
+      assert.equal((await receive(input)).status, 200);
+      assert.equal(sent.length, count);
+    }
+  }
 });

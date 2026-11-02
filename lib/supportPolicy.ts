@@ -79,6 +79,15 @@ export function supportStatus(value: unknown) {
   if (value === "On Hold") return "On hold";
   return "Status unavailable";
 }
+/** Website-origin requests keep the legacy email workflow; Portal-created requests opt in. */
+export function legacySupportEmail(ticket: Record<string, unknown>) {
+  return (
+    !ticket.supportPortalClientId &&
+    (ticket.supportSource === "awebco.com" ||
+      (ticket.isManual === false &&
+        /^Ticket #\d+\s*-\s*/.test(String(ticket.projectName))))
+  );
+}
 export function shareSupportTicket(
   ticket: Record<string, unknown>,
   companyId?: string,
