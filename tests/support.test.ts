@@ -1350,3 +1350,27 @@ test("signed incoming client and staff replies use the same ticket across new an
   assert.equal((await receive(legacy)).status, 404);
   assert.equal(sent.length, 2);
 });
+
+test("incoming replies preserve case-sensitive manual ticket IDs on new and legacy domains", async () => {
+  process.env.MAILGUN_DOMAIN = 'mg.crm.awebco.com';
+  process.env.SUPPORT_MAILGUN_DOMAIN = 'mg.awebco.com';
+  const manualId = 'ManualTicketAbC123xyz';
+  db.records.set(`tickets/${manualId}`, ticket());
+  const receive = createSupportInbound(() => service, async () => true);
+  const owner = 'owner@example.com';
+  for (const domain of ['mg.awebco.com', 'mg.crm.awebco.com']) {
+    const recipient = replyAddress(manualId, owner, domain, token);
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = `case-test-${domain}`;
+    const formData = new FormData();
+    formData.set('Message-Id', `<case-test-${domain}@example.com>`);
+    formData.set('body-plain', 'This reply belongs on the manual ticket.');
+    const input = { sender: owner, recipient: `Awebco Support <${recipient}>`, body: 'This reply belongs on the manual ticket.', timestamp, token: nonce, signature: createHmac('sha256', token).update(timestamp + nonce).digest('hex'), formData };
+    assert.equal((await receive(input)).status, 200);
+    assert.equal((await receive(input)).status, 200);
+    assert.equal((await receive({ ...input, recipient: recipient.replace(manualId, manualId.toLowerCase()) })).status, 403);
+  }
+  const messages = (await service.detail(manualId, company)).messages;
+  assert.equal(messages.length, 2);
+  assert.equal(db.records.has(`tickets/${manualId.toLowerCase()}`), false);
+});
