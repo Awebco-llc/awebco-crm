@@ -33,10 +33,12 @@ export function createSupportInbound(
   return async function supportInbound(input: InboundSupport) {
     try {
       const sender = supportEmail(input.sender),
-        recipient = supportEmail(input.recipient);
+        // Signed reply local parts contain the case-sensitive Firestore ID.
+        // Validate the email without lowercasing that routing identity.
+        recipient = (input.recipient.match(/<([^<>]+)>/)?.[1] || input.recipient).trim();
       if (
         !sender ||
-        !recipient ||
+        !supportEmail(recipient) ||
         !verifySupportMailgun(
           input.timestamp,
           input.token,
