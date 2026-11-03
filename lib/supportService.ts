@@ -23,6 +23,7 @@ import {
   supportId,
   supportMailDomain,
   supportStatus,
+  supportTeamAccess,
   SUPPORT_FILE_BYTES,
   ticketRequestId,
   type SupportAttachment,
@@ -97,6 +98,9 @@ function publicMessage(id: string, data: RecordData): SupportMessage | null {
   return {
     id,
     author: String(data.author || "Awebco").slice(0, 200),
+    ...(supportEmail(data.sender_email)
+      ? { author_email: supportEmail(data.sender_email)! }
+      : {}),
     text: presentation.text,
     ...(presentation.original !== undefined
       ? {
@@ -252,6 +256,38 @@ export class SupportService {
           ]
         : [];
     });
+    const teamEmails = [
+      ...new Set(
+        publicMessages
+          .filter((m) => m.direction === "team")
+          .map((m) => m.author_email)
+          .filter((v): v is string => !!v),
+      ),
+    ];
+    for (let offset = 0; offset < teamEmails.length; offset += 30) {
+      const profiles = await this.db
+        .collection("users")
+        .where("email", "in", teamEmails.slice(offset, offset + 30))
+        .get();
+      for (const profile of profiles.docs) {
+        const person = profile.data();
+        if (!supportTeamAccess(person)) continue;
+        for (const message of publicMessages) {
+          if (
+            message.direction !== "team" ||
+            message.author_email !== supportEmail(person.email)
+          )
+            continue;
+          message.author = String(person.name || message.author).slice(0, 200);
+          if (
+            typeof person.photoUrl === "string" &&
+            /^https:\/\//.test(person.photoUrl) &&
+            person.photoUrl.length <= 2048
+          )
+            message.author_image = person.photoUrl;
+        }
+      }
+    }
     return {
       ...publicSupportTicket(ticketId, ticket, true),
       messages: publicMessages,
@@ -641,6 +677,7 @@ export class SupportService {
       link: legacy && audience === "client" ? "" : link,
       audience,
       received: message.kind === "request" && audience === "client",
+      created: message.kind === "request",
       attachments: presentation.attachments.map((file) => file.name),
     });
     const form = new FormData();
@@ -649,7 +686,7 @@ export class SupportService {
     form.set("to", email);
     form.set(
       "subject",
-      `${message.kind === "request" && audience === "client" ? "Request received: " : "Re: "}${String(
+      `${message.kind === "request" && audience === "client" ? "Request received: " : message.kind === "request" ? "New ticket: " : "Re: "}${String(
         ticket.projectName,
       )
         .replace(/[\r\n]/g, " ")

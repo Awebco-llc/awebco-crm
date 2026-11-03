@@ -140,7 +140,7 @@ test("native plan/subtask projection uses assigned date, keeps admin preview use
   );
   assert.equal(result.items.find((i) => i.id === "private")?.title, "SEO work");
   assert.equal(
-    result.setup.samples.find((i) => i.title === "A private task")?.approved,
+    result.setup.samples.some((i) => i.title === "A private task"),
     false,
   );
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE_NOTE|SECRET|updatedAt/);
@@ -197,5 +197,54 @@ test("moves, missing parents, cycles and unsafe or unrelated URLs never become p
       "",
     ).items[0].url,
     null,
+  );
+});
+
+test("stale-group orphans, missing ancestors, cycles and hidden work never become setup samples", () => {
+  const result = automaticSeo(
+    [
+      row("calendar", { projectName: "2026 Content Calendar" }),
+      row("own", {
+        projectName: "Our article",
+        parentId: "calendar",
+        status: "Done",
+        deadline: "2026-10-29",
+      }),
+      row("navigation", {
+        projectName: "Added service pages to navigation",
+        status: "Done",
+        deadline: "2026-05-25",
+      }),
+      row("orphan", {
+        projectName: "Another client's golf course article",
+        parentId: "missing",
+        status: "Done",
+      }),
+      row("orphan-child", {
+        projectName: "Another client's signage article",
+        parentId: "orphan",
+        status: "Done",
+      }),
+      row("hidden", {
+        projectName: "Private title",
+        portalVisibility: "Hidden",
+      }),
+      row("cycle", { projectName: "Cycle title", parentId: "cycle" }),
+    ],
+    groupId,
+    "client-site.com",
+  );
+  assert.equal(result.setup.taskCount, 4);
+  assert.doesNotMatch(
+    JSON.stringify(result),
+    /golf course|signage article|Cycle title|Private title/,
+  );
+  assert.equal(
+    result.items.find((i) => i.id === "own")?.workType,
+    "publication",
+  );
+  assert.equal(
+    result.items.find((i) => i.id === "navigation")?.workType,
+    "task",
   );
 });

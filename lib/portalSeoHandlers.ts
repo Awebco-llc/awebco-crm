@@ -75,6 +75,7 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
           "workspace",
           "groupId",
           "parentId",
+          "companyId",
           ...(automatic
             ? [
                 "projectName",
@@ -83,6 +84,7 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
                 "url",
                 "portalVisibility",
                 "order",
+                "isDraft",
               ]
             : Object.values(options!.fields)
           ).filter((v): v is string => typeof v === "string"),
@@ -119,7 +121,12 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
             data: d.data(),
           }));
           if (automatic)
-            return automaticSeo(records, groupId, company?.data()?.domain);
+            return automaticSeo(
+              records,
+              groupId,
+              company?.data()?.domain,
+              typeof group.companyId === "string" ? group.companyId : undefined,
+            );
           return {
             items: projectSeo(records, groupId, options!),
             diagnostics: diagnoseSeo(records, groupId, options!),
@@ -140,7 +147,11 @@ export function createSeoHandler(resolveDb = getPortalListingsFirestore) {
         if (period && !/^20\d{2}-(0[1-9]|1[0-2])$/.test(period))
           return json({ error: "Invalid report month." }, 400);
         const candidates = eligibleSeo(items, effectiveOptions)
-          .filter((i) => !period || i.allocatedPeriod === period)
+          .filter(
+            (i) =>
+              (!("workType" in i) || i.workType !== "task") &&
+              (!period || i.allocatedPeriod === period),
+          )
           .slice(0, 12);
         for (let offset = 0; offset < candidates.length; offset += 3)
           await Promise.all(

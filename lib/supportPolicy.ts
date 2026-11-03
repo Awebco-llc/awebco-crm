@@ -47,6 +47,8 @@ export type SupportAttachment = {
 export type SupportMessage = {
   id: string;
   author: string;
+  author_email?: string;
+  author_image?: string;
   text: string;
   created_at: string;
   direction: "client" | "team";
@@ -144,7 +146,10 @@ export function verifySupportReplyAddress(
   sender: string,
   key: string,
 ) {
-  const domains = new Set([supportMailDomain(), process.env.MAILGUN_DOMAIN || ""]);
+  const domains = new Set([
+    supportMailDomain(),
+    process.env.MAILGUN_DOMAIN || "",
+  ]);
   for (const domain of domains) {
     const ticketId = verifyReplyAddress(recipient, sender, domain, key);
     if (ticketId) return ticketId;

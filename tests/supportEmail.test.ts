@@ -375,15 +375,93 @@ test("staff notifications omit private-workflow instructions even when Outlook q
     attachments: [],
   });
   for (const body of [result.text, result.html]) {
-    assert.doesNotMatch(body, /Internal notes|private comments|reply to the client/i);
+    assert.doesNotMatch(
+      body,
+      /Internal notes|private comments|reply to the client/i,
+    );
     assert.match(body, /We’re checking the support ticket system/);
   }
   const reply = "Please keep the second instruction too.";
   const plain = `${reply}\n\nFrom: Awebco Support <tickets@awebco.com>\nSent: Monday, November 2, 2026 12:00 PM\nTo: Troy <troy@awebco.com>\nSubject: TEST — Please ignore\n\n${result.text}`;
   const html = `<p>${reply}</p><div id="divRplyFwdMsg">From: Awebco Support &lt;tickets@awebco.com&gt;<br>Sent: Monday, November 2, 2026 12:00 PM<br>To: Troy &lt;troy@awebco.com&gt;<br>Subject: TEST — Please ignore</div>${result.html}`;
-  for (const raw of [original(plain), original(plain, { html: [html], strippedText: reply, strippedHtml: [`<p>${reply}</p>`] })]) {
+  for (const raw of [
+    original(plain),
+    original(plain, {
+      html: [html],
+      strippedText: reply,
+      strippedHtml: [`<p>${reply}</p>`],
+    }),
+  ]) {
     const parsed = supportEmailContent(plain, raw);
     assert.match(parsed.text, /Please keep the second instruction too\./);
-    assert.doesNotMatch(`${parsed.text}\n${parsed.quoted}`, /Internal notes|private comments|reply to the client/i);
+    assert.doesNotMatch(
+      `${parsed.text}\n${parsed.quoted}`,
+      /Internal notes|private comments|reply to the client/i,
+    );
   }
+});
+
+test("Outlook mobile signature tables and booking icons are removed from replies and notifications", () => {
+  const reply = "Okay, thanks. I will close the ticket.";
+  const signature =
+    "[cid:portrait]\nWrite a Review<https://example.com/review>\nJamie Staff\nSEO & PPC Manager\n📞 (217) 555-0100\n[https://example.com/calendar.png]<https://example.com/book>\nBook time to meet with me<https://example.com/book>";
+  const plain = `${reply}\n\n${signature}\n\nFrom: Support\nDate: Tuesday\nTo: Jamie\nSubject: Re: Ticket\nOld message`;
+  const sigHtml =
+    '<div id="ms-outlook-mobile-signature"><table><tr><td><img src="cid:portrait"><a href="https://example.com/review">Write a Review</a></td><td>Jamie Staff<br>SEO &amp; PPC Manager<br>📞 (217) 555-0100<br><a href="https://example.com/book"><img src="https://example.com/calendar.png"></a><br><a href="https://example.com/book">Book time to meet with me</a></td></tr></table></div>';
+  const message = supportMessagePresentation("email-outlook-mobile", {
+    email_original: original(plain, {
+      html: [
+        `<p>${reply}</p>${sigHtml}<div id="mail-editor-reference-message-container">From: Support<br>Date: Tuesday<br>To: Jamie<br>Subject: Re: Ticket<br>Old message</div>`,
+      ],
+      strippedText: `${reply}\n\n${signature}`,
+      strippedHtml: [`<p>${reply}</p>${sigHtml}`],
+    }),
+    email_attachment_cids: { portrait: ["portrait"] },
+    attachments: [
+      { id: "portrait", name: "image.jpeg" },
+      { id: "file", name: "document.pdf" },
+    ],
+  });
+  assert.equal(message.text, reply);
+  assert.deepEqual(
+    message.inline.map((file) => file.id),
+    ["portrait"],
+  );
+  assert.deepEqual(
+    message.attachments.map((file) => file.id),
+    ["file"],
+  );
+  const notification = supportNotification({
+    title: "Ticket",
+    author: "Jamie",
+    text: message.text,
+    link: "",
+    audience: "client",
+    received: false,
+    attachments: [],
+  });
+  assert.doesNotMatch(
+    notification.text,
+    /Review|Book time|Old message|555-0100/,
+  );
+});
+
+test("Gmail header separated from quoted history by a blank line is hidden", () => {
+  const reply = "Thanks, the link looks good.";
+  const content = supportEmailContent(
+    `${reply}\n\nOn Tue, Nov 3, 2026 at 12:30 PM Support <tickets@example.com> wrote:\n\n> Old message`,
+  );
+  assert.equal(content.text, reply);
+  const notification = supportNotification({
+    title: "Link update",
+    author: "Client",
+    text: content.text,
+    link: "",
+    audience: "team",
+    received: false,
+    created: true,
+    attachments: [],
+  });
+  assert.match(notification.text, /New ticket created/);
+  assert.doesNotMatch(notification.text, /wrote:|Old message/);
 });
