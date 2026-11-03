@@ -29,6 +29,7 @@ import {
   type SupportAttachment,
   type SupportMessage,
   type supportCreateInput,
+  type supportProfileInput,
 } from "./supportPolicy";
 import type { z } from "zod";
 
@@ -205,6 +206,34 @@ export class SupportService {
       throw new SupportError(404, "Ticket not found.");
     return data;
   }
+  async saveProfile(
+    companyId: string,
+    profile: z.infer<typeof supportProfileInput>,
+  ) {
+    await this.company(companyId);
+    await this.db
+      .collection("supportProfiles")
+      .doc(fingerprint([companyId, profile.email]))
+      .set({
+        ...profile,
+        companyId,
+        updated_at: new Date().toISOString(),
+      });
+  }
+  async profile(companyId: unknown, email: unknown, direction: unknown) {
+    const address = supportEmail(email);
+    if (!supportId(companyId) || !address) return null;
+    const doc = await this.db
+      .collection("supportProfiles")
+      .doc(fingerprint([companyId, address]))
+      .get();
+    const person = doc.data();
+    return person?.companyId === companyId &&
+      person.email === address &&
+      person.direction === direction
+      ? person
+      : null;
+  }
   async list(companyId: string) {
     await this.company(companyId);
     const result = await this.db
@@ -287,6 +316,31 @@ export class SupportService {
             message.author_image = person.photoUrl;
         }
       }
+    }
+    const identities = [
+      ...new Set(
+        publicMessages.map((m) => `${m.direction}:${m.author_email || ""}`),
+      ),
+    ];
+    for (let offset = 0; offset < identities.length; offset += 10) {
+      await Promise.all(
+        identities.slice(offset, offset + 10).map(async (identity) => {
+          const split = identity.indexOf(":");
+          const direction = identity.slice(0, split),
+            email = identity.slice(split + 1);
+          const person = await this.profile(ticket.companyId, email, direction);
+          if (!person) return;
+          for (const message of publicMessages) {
+            if (
+              message.author_email !== email ||
+              message.direction !== direction
+            )
+              continue;
+            message.author = person.name;
+            if (person.image) message.author_image = person.image;
+          }
+        }),
+      );
     }
     return {
       ...publicSupportTicket(ticketId, ticket, true),
@@ -670,9 +724,14 @@ export class SupportService {
         ? `https://awebco-crm.vercel.app/?nav=Support%20Tickets&ticket=${encodeURIComponent(ticketId)}&conversation=client`
         : `${process.env.VERCEL_ENV === "preview" ? "https://staging-portal.awebco.com" : "https://portal.awebco.com"}/support?ticket=${encodeURIComponent(ticketId)}`;
     const presentation = supportMessagePresentation(messageId, message);
+    const person = await this.profile(
+      ticket.companyId,
+      message.sender_email,
+      message.direction,
+    );
     const content = supportNotification({
       title: String(ticket.projectName),
-      author: String(message.author),
+      author: String(person?.name || message.author),
       text: presentation.text,
       link: legacy && audience === "client" ? "" : link,
       audience,

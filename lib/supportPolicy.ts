@@ -10,6 +10,22 @@ export const supportCategories = [
 export const supportPriorities = ["Low", "Medium", "High", "Urgent"] as const;
 export const SUPPORT_FILE_BYTES = 3_000_000;
 export const SUPPORT_BODY_BYTES = SUPPORT_FILE_BYTES + 64_000;
+export const supportProfileInput = z
+  .object({
+    email: z
+      .string()
+      .email()
+      .max(254)
+      .transform((v) => v.toLowerCase()),
+    name: z.string().trim().min(2).max(100),
+    image: z
+      .string()
+      .max(24000)
+      .refine((v) => /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(v))
+      .nullable(),
+    direction: z.enum(["client", "team"]),
+  })
+  .strict();
 export const supportReplyInput = z
   .object({
     request_id: z.string().uuid(),
