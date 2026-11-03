@@ -39,10 +39,6 @@ export function listingHandoff(
     "Username",
     "Password",
     "Link",
-    "Business name",
-    "Address",
-    "Phone",
-    "Website",
   ];
   const values = included.map((row) => {
     const parent = rows.find((p) => p.id === row.parentId);
@@ -56,12 +52,6 @@ export function listingHandoff(
       row.username || "",
       row.password || "",
       row.loginUrl || row.url || "",
-      company?.name || "",
-      [company?.street, company?.city, company?.state, company?.zipcode]
-        .filter(Boolean)
-        .join(", "),
-      company?.phone || "",
-      company?.domain || "",
     ];
   });
   return { headers, values };

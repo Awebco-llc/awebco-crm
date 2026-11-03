@@ -2507,7 +2507,7 @@ export default function WorkspaceProjectView({
       const {headers,values}=listingHandoff(data,selectedRowIds,companies);
       const XLSX=await import('xlsx');
       const sheet=XLSX.utils.aoa_to_sheet([headers,...values]);
-      sheet['!cols']=[{wch:28},{wch:28},{wch:20},{wch:32},{wch:32},{wch:55},{wch:28},{wch:48},{wch:20},{wch:35}];
+      sheet['!cols']=[{wch:28},{wch:28},{wch:20},{wch:32},{wch:32},{wch:55}];
       const workbook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(workbook,sheet,'Directory logins');
       XLSX.writeFile(workbook,'Client-directory-logins.xlsx');
       return;
