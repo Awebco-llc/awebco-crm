@@ -1,4 +1,6 @@
 'use client';
+
+import { listingHandoff } from '@/lib/listingHandoff';
 import { SupportConversation, SupportConversationPanel } from './SupportConversation';
 import { PortalSeoVisibility } from './PortalSeoVisibility';
 
@@ -2499,8 +2501,17 @@ export default function WorkspaceProjectView({
   const [copiedBoardEmail, setCopiedBoardEmail] = useState(false);
   const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const handleExportSelected = () => {
+  const handleExportSelected = async () => {
     if (selectedRowIds.size === 0) return;
+    if (projectType === 'Local Listings') {
+      const {headers,values}=listingHandoff(data,selectedRowIds,companies);
+      const XLSX=await import('xlsx');
+      const sheet=XLSX.utils.aoa_to_sheet([headers,...values]);
+      sheet['!cols']=[{wch:28},{wch:28},{wch:20},{wch:32},{wch:32},{wch:55},{wch:28},{wch:48},{wch:20},{wch:35}];
+      const workbook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(workbook,sheet,'Directory logins');
+      XLSX.writeFile(workbook,'Client-directory-logins.xlsx');
+      return;
+    }
 
     // Get the selected rows from the data array
     const selectedRows = data.filter(row => selectedRowIds.has(row.id));
@@ -4349,7 +4360,7 @@ export default function WorkspaceProjectView({
               className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#E2E4E9] bg-white text-[#1C1F23] hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
-              Export Selected ({selectedRowIds.size})
+              {projectType === 'Local Listings' ? 'Export client logins' : 'Export Selected'} ({selectedRowIds.size})
             </button>
           )}
           <button
