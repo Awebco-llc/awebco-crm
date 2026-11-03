@@ -154,9 +154,33 @@ export function extensionHandlers(
     "hours",
   ];
   async function details(db: Database, id: string, data: Data) {
-    const company = validDocumentId(data.companyId)
+    let company = validDocumentId(data.companyId)
       ? (await db.collection("companies").doc(data.companyId).get()).data()
       : undefined;
+    if (company) {
+      const siblings = await db
+        .collection("tickets")
+        .where("companyId", "==", data.companyId)
+        .select("workspace", "parentId")
+        .limit(201)
+        .get();
+      const roots = siblings.docs.filter(
+        (record) =>
+          record.data().workspace === "Local Listings" &&
+          isRootTicket(record.data()),
+      );
+      // A main-office address is not authority for several business locations.
+      if (
+        siblings.docs.length > 200 ||
+        roots.length !== 1 ||
+        roots[0].id !== id
+      )
+        company = {
+          name: company.name,
+          domain: company.domain,
+          website: company.website,
+        };
+    }
     return resourceDetails(id, data, company);
   }
   return {
