@@ -48,10 +48,29 @@ export function automaticSeo(
   records: SeoRecord[],
   groupId: string,
   domain: unknown,
+  companyId?: string,
 ) {
-  const scoped = records.filter(
+  const candidates = records.filter(
     (r) => r.data.workspace === "SEO" && r.data.groupId === groupId,
   );
+  const byId = new Map(candidates.map((r) => [r.id, r]));
+  function belongs(record: SeoRecord, seen = new Set<string>()): boolean {
+    if (
+      seen.has(record.id) ||
+      record.data.isDraft === true ||
+      (companyId &&
+        record.data.companyId &&
+        record.data.companyId !== companyId)
+    )
+      return false;
+    seen.add(record.id);
+    if (!record.data.parentId) return true;
+    const parent =
+      typeof record.data.parentId === "string" &&
+      byId.get(record.data.parentId);
+    return !!parent && belongs(parent, seen);
+  }
+  const scoped = candidates.filter((record) => belongs(record));
   if (new Set(scoped.map((r) => r.id)).size !== scoped.length)
     throw new Error("Duplicate tasks");
   const site = crmPublicUrl(domain);
@@ -109,10 +128,27 @@ export function automaticSeo(
     url: item.visible
       ? normalized.find((r) => r.id === item.id)!.data.url
       : null,
+    workType: (() => {
+      let record = byId.get(item.id);
+      if (record?.data.url) return "publication" as const;
+      while (record?.data.parentId) {
+        record = byId.get(String(record.data.parentId));
+        if (
+          record &&
+          /content calendar|new pages|blog posts/i.test(
+            String(record.data.projectName || ""),
+          )
+        )
+          return "publication" as const;
+      }
+      return "task" as const;
+    })(),
   }));
   const parents = new Set(items.map((i) => i.parentId));
   const previews = normalized
-    .filter((r) => !parents.has(r.id))
+    .filter(
+      (r) => !parents.has(r.id) && items.find((i) => i.id === r.id)?.visible,
+    )
     .sort(
       (a, b) =>
         Number(!!b.data.url) - Number(!!a.data.url) ||

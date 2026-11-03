@@ -8,6 +8,7 @@ import { SupportError, SupportService } from "./supportService";
 import {
   SUPPORT_BODY_BYTES,
   supportCreateInput,
+  supportProfileInput,
   supportEmail,
   supportId,
   supportReplyInput,
@@ -166,6 +167,16 @@ export function createSupportHandlers(
           !!process.env.MAILGUN_SIGNING_KEY &&
           !process.env.MAILGUN_SIGNING_KEY.startsWith("your-"),
       };
+    }),
+    profile: route("portal", async (r, service, p) => {
+      const body = await supportBody(r);
+      if (body.files.length)
+        throw new SupportError(400, "Use the profile photo field.");
+      await service.saveProfile(
+        p.resourceId!,
+        supportProfileInput.parse(body.payload),
+      );
+      return { saved: true };
     }),
     companies: route("portal", async (_r, service) => service.companies()),
     list: route("portal", async (_r, service, p) =>

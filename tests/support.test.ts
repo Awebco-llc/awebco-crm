@@ -82,6 +82,9 @@ class Ref {
   async update(patch: Data) {
     update(this.db, this.path, patch);
   }
+  async set(data: Data) {
+    this.db.records.set(this.path, structuredClone(data));
+  }
 }
 class Query {
   filters: Array<[string, unknown]> = [];
@@ -1414,4 +1417,61 @@ test("already issued public-form relay addresses hand off to direct email withou
       assert.equal(sent.length, count);
     }
   }
+});
+
+test("profile corrections and photos apply to existing ticket conversations and both notification audiences without crossing companies", async () => {
+  const api = handlers();
+  const profile = {
+    email: "owner@example.com",
+    name: "Corrected Client",
+    image: "data:image/jpeg;base64,/9j/2Q==",
+    direction: "client",
+  };
+  assert.equal(
+    (
+      await api.profile(
+        request("/api/portal/clients/company-a/profile", "POST", profile, null),
+        context(),
+      )
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await api.profile(
+        request("/api/portal/clients/company-a/profile", "POST", {
+          ...profile,
+          direction: "admin",
+        }),
+        context(),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await api.profile(
+        request("/api/portal/clients/company-a/profile", "POST", profile),
+        context(),
+      )
+    ).status,
+    200,
+  );
+  await service.reply(
+    ticketId,
+    requestId,
+    "Looks good.",
+    { email: profile.email, name: "oldname", direction: "client" },
+    [],
+    company,
+  );
+  const conversation = await service.detail(ticketId, company);
+  assert.equal(conversation.messages[0].author, profile.name);
+  assert.equal(conversation.messages[0].author_image, profile.image);
+  assert.ok(sent.some((message) => message.body.includes(profile.name)));
+  assert.equal(
+    await service.profile("company-b", profile.email, profile.direction),
+    null,
+  );
+  assert.equal(await service.profile(company, profile.email, "team"), null);
 });

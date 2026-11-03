@@ -51,6 +51,7 @@ const normalize = (value: string) => value.replace(/\r\n?/g, "\n");
 const compact = (value: string) =>
   value
     .replace(/\[cid:[^\]]+\]/gi, "")
+    .replace(/\[https?:\/\/[^\]\s]+\]/gi, "")
     .replace(/^_{5,}[ \t]*$/gm, "")
     .replace(/[\s>]+/g, "")
     .toLowerCase();
@@ -101,11 +102,14 @@ function htmlParts(html: string, outlookHistory = false) {
     );
     const marker = `${attrs.class || ""} ${attrs.id || ""} ${attrs["data-smartmail"] || ""}`;
     const next =
-      /(?:^|\s)(?:gmail_signature|moz-signature|Signature)(?:\s|$)/i.test(
+      /(?:^|\s)(?:gmail_signature|moz-signature|Signature|ms-outlook-mobile-signature)(?:\s|$)/i.test(
         marker,
       )
         ? "signature"
-        : tag === "blockquote" || /(?:^|\s)gmail_attr(?:\s|$)/.test(marker)
+        : tag === "blockquote" ||
+            /(?:^|\s)(?:gmail_attr|mail-editor-reference-message-container|ms-outlook-mobile-reference-message)(?:\s|$)/.test(
+              marker,
+            )
           ? "quote"
           : kind;
     const block = /^(div|p|blockquote|tr|li|section|table|hr)$/.test(tag);
@@ -161,8 +165,8 @@ function safeSignature(value: string) {
   // Ambiguous prose/instructions stay in the reply, even inside a marked signature.
   return (
     lines.length > 0 &&
-    lines.length <= 15 &&
-    value.length < 2000 &&
+    lines.length <= 40 &&
+    value.length < 12000 &&
     !lines.some((line) =>
       /\b(?:please|can you|could you|need|change|update|replace|remove|keep|add|use|include|don't|do not|must|should)\b/i.test(
         line,
@@ -273,7 +277,7 @@ export function supportEmailContent(
       quotedContext &&
       (/^\s*>/.test(lines[i]) ||
         (/^On .+wrote:\s*$/i.test(lines[i]) &&
-          /^\s*>/.test(lines[i + 1] || "")))
+          /^\s*>/.test(lines.slice(i + 1).find((line) => line.trim()) || "")))
     )
       quotes.push(lines[i]);
     else visible.push(lines[i]);
@@ -413,13 +417,16 @@ export function supportNotification(input: {
   link: string;
   audience: "team" | "client";
   received: boolean;
+  created?: boolean;
   attachments: string[];
 }) {
   const title = input.title.replace(/[\r\n]/g, " ").slice(0, 150);
   const heading = input.received
     ? "We received your request"
     : input.audience === "team"
-      ? "A new message on this ticket"
+      ? input.created
+        ? "New ticket created"
+        : "A new message on this ticket"
       : "A reply from your Awebco team";
   const action =
     input.audience === "team"

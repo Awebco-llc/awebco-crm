@@ -23,11 +23,13 @@ import {
   supportId,
   supportMailDomain,
   supportStatus,
+  supportTeamAccess,
   SUPPORT_FILE_BYTES,
   ticketRequestId,
   type SupportAttachment,
   type SupportMessage,
   type supportCreateInput,
+  type supportProfileInput,
 } from "./supportPolicy";
 import type { z } from "zod";
 
@@ -97,6 +99,9 @@ function publicMessage(id: string, data: RecordData): SupportMessage | null {
   return {
     id,
     author: String(data.author || "Awebco").slice(0, 200),
+    ...(supportEmail(data.sender_email)
+      ? { author_email: supportEmail(data.sender_email)! }
+      : {}),
     text: presentation.text,
     ...(presentation.original !== undefined
       ? {
@@ -201,6 +206,34 @@ export class SupportService {
       throw new SupportError(404, "Ticket not found.");
     return data;
   }
+  async saveProfile(
+    companyId: string,
+    profile: z.infer<typeof supportProfileInput>,
+  ) {
+    await this.company(companyId);
+    await this.db
+      .collection("supportProfiles")
+      .doc(fingerprint([companyId, profile.email]))
+      .set({
+        ...profile,
+        companyId,
+        updated_at: new Date().toISOString(),
+      });
+  }
+  async profile(companyId: unknown, email: unknown, direction: unknown) {
+    const address = supportEmail(email);
+    if (!supportId(companyId) || !address) return null;
+    const doc = await this.db
+      .collection("supportProfiles")
+      .doc(fingerprint([companyId, address]))
+      .get();
+    const person = doc.data();
+    return person?.companyId === companyId &&
+      person.email === address &&
+      person.direction === direction
+      ? person
+      : null;
+  }
   async list(companyId: string) {
     await this.company(companyId);
     const result = await this.db
@@ -252,6 +285,63 @@ export class SupportService {
           ]
         : [];
     });
+    const teamEmails = [
+      ...new Set(
+        publicMessages
+          .filter((m) => m.direction === "team")
+          .map((m) => m.author_email)
+          .filter((v): v is string => !!v),
+      ),
+    ];
+    for (let offset = 0; offset < teamEmails.length; offset += 30) {
+      const profiles = await this.db
+        .collection("users")
+        .where("email", "in", teamEmails.slice(offset, offset + 30))
+        .get();
+      for (const profile of profiles.docs) {
+        const person = profile.data();
+        if (!supportTeamAccess(person)) continue;
+        for (const message of publicMessages) {
+          if (
+            message.direction !== "team" ||
+            message.author_email !== supportEmail(person.email)
+          )
+            continue;
+          message.author = String(person.name || message.author).slice(0, 200);
+          if (
+            typeof person.photoUrl === "string" &&
+            /^https:\/\//.test(person.photoUrl) &&
+            person.photoUrl.length <= 2048
+          )
+            message.author_image = person.photoUrl;
+        }
+      }
+    }
+    const identities = [
+      ...new Set(
+        publicMessages.map((m) => `${m.direction}:${m.author_email || ""}`),
+      ),
+    ];
+    for (let offset = 0; offset < identities.length; offset += 10) {
+      await Promise.all(
+        identities.slice(offset, offset + 10).map(async (identity) => {
+          const split = identity.indexOf(":");
+          const direction = identity.slice(0, split),
+            email = identity.slice(split + 1);
+          const person = await this.profile(ticket.companyId, email, direction);
+          if (!person) return;
+          for (const message of publicMessages) {
+            if (
+              message.author_email !== email ||
+              message.direction !== direction
+            )
+              continue;
+            message.author = person.name;
+            if (person.image) message.author_image = person.image;
+          }
+        }),
+      );
+    }
     return {
       ...publicSupportTicket(ticketId, ticket, true),
       messages: publicMessages,
@@ -634,13 +724,19 @@ export class SupportService {
         ? `https://awebco-crm.vercel.app/?nav=Support%20Tickets&ticket=${encodeURIComponent(ticketId)}&conversation=client`
         : `${process.env.VERCEL_ENV === "preview" ? "https://staging-portal.awebco.com" : "https://portal.awebco.com"}/support?ticket=${encodeURIComponent(ticketId)}`;
     const presentation = supportMessagePresentation(messageId, message);
+    const person = await this.profile(
+      ticket.companyId,
+      message.sender_email,
+      message.direction,
+    );
     const content = supportNotification({
       title: String(ticket.projectName),
-      author: String(message.author),
+      author: String(person?.name || message.author),
       text: presentation.text,
       link: legacy && audience === "client" ? "" : link,
       audience,
       received: message.kind === "request" && audience === "client",
+      created: message.kind === "request",
       attachments: presentation.attachments.map((file) => file.name),
     });
     const form = new FormData();
@@ -649,7 +745,7 @@ export class SupportService {
     form.set("to", email);
     form.set(
       "subject",
-      `${message.kind === "request" && audience === "client" ? "Request received: " : "Re: "}${String(
+      `${message.kind === "request" && audience === "client" ? "Request received: " : message.kind === "request" ? "New ticket: " : "Re: "}${String(
         ticket.projectName,
       )
         .replace(/[\r\n]/g, " ")
