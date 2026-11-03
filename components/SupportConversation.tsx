@@ -10,6 +10,7 @@ type Attachment = { id: string; name: string; size?: number };
 type Message = {
   id: string;
   author: string;
+  author_image?: string;
   text: string;
   created_at: string;
   direction: string;
@@ -28,6 +29,36 @@ type Detail = {
   company_linked: boolean;
   messages: Message[];
 };
+function SupportAuthor({ message }: { message: Message }) {
+  const initials = message.author
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span
+        aria-hidden="true"
+        className="relative flex shrink-0 items-center justify-center w-8 h-8 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold overflow-hidden"
+      >
+        {initials}
+        {message.author_image && (
+          <img
+            src={message.author_image}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        )}
+      </span>
+      <strong>{message.author}</strong>
+    </div>
+  );
+}
 export function SupportConversationPanel({ ticketId }: { ticketId: string }) {
   const [open, setOpen] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -163,6 +194,9 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
   }
+  const identities = new Map(
+    (detail?.messages || []).map((message) => [message.id, message]),
+  );
   return (
     <section className="space-y-5 text-sm" aria-label="Client conversation">
       <div className="flex items-start justify-between gap-3">
@@ -234,7 +268,9 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
               className={`border rounded-lg p-4 ${message.direction === "team" ? "bg-blue-50 border-blue-100" : "bg-white border-[#E2E4E9]"}`}
             >
               <div className="flex flex-wrap justify-between gap-2">
-                <strong>{message.author}</strong>
+                <SupportAuthor
+                  message={identities.get(message.id) || message}
+                />
                 <time
                   className="text-xs text-[#4A4D53]"
                   dateTime={message.created_at}
