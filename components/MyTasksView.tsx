@@ -454,7 +454,7 @@ export default function MyTasksView({
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden absolute inset-0 bg-[#F9FAFB]">
-      <header className="min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col sm:flex-row items-stretch sm:items-center px-6 py-3 sm:py-0 shrink-0 justify-between gap-2">
+      <header className="hidden md:flex min-h-16 md:h-16 bg-white border-b border-[#E2E4E9] flex flex-col sm:flex-row items-stretch sm:items-center px-6 py-3 sm:py-0 shrink-0 justify-between gap-2">
         <h1 className="text-xl font-bold text-[#1C1F23]">My Tasks</h1>
         <div className="text-xs font-semibold text-[#8E9299] bg-gray-100 px-3 py-1 rounded-full w-fit">
           {activeTickets.length} Active Tasks • {completedTickets.length} Completed
@@ -465,7 +465,7 @@ export default function MyTasksView({
         {/* Section 1: Assigned Project & Support Tickets with Tab Headers */}
         <div>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-            <h2 className="text-lg font-bold text-[#1C1F23]">My Workspace Tasks & Tickets</h2>
+            <h2 className="hidden md:block text-lg font-bold text-[#1C1F23]">My Workspace Tasks & Tickets</h2>
             
             <div className="flex items-center gap-4 flex-wrap">
               {/* Segmented Tab Controls */}
@@ -478,7 +478,7 @@ export default function MyTasksView({
                       : 'border-transparent text-[#8E9299] hover:text-[#1C1F23]'
                   }`}
                 >
-                  Active Tasks
+                  <span className="md:hidden">Active</span><span className="hidden md:inline">Active Tasks</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                     activeTab === 'active' ? 'bg-[#F0F5FF] text-[#1061E3]' : 'bg-gray-100 text-gray-600'
                   }`}>
@@ -493,7 +493,7 @@ export default function MyTasksView({
                       : 'border-transparent text-[#8E9299] hover:text-[#1C1F23]'
                   }`}
                 >
-                  Completed & Invoiced
+                  <span className="md:hidden">Completed</span><span className="hidden md:inline">Completed & Invoiced</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                     activeTab === 'completed' ? 'bg-[#F0F5FF] text-[#1061E3]' : 'bg-gray-100 text-gray-600'
                   }`}>
@@ -508,26 +508,28 @@ export default function MyTasksView({
                   <button
                     type="button"
                     onClick={() => setViewMode('list')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    aria-label="List view" title="List view" aria-pressed={viewMode === 'list'}
+                    className={`min-h-11 md:min-h-0 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
                       viewMode === 'list'
                         ? 'bg-white text-[#1061E3] shadow-sm'
                         : 'text-[#8E9299] hover:text-[#1C1F23]'
                     }`}
                   >
                     <List className="w-3.5 h-3.5" />
-                    List
+                    <span className="hidden md:inline">List</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setViewMode('deadline')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    aria-label="Deadline view" title="Deadline view" aria-pressed={viewMode === 'deadline'}
+                    className={`min-h-11 md:min-h-0 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
                       viewMode === 'deadline'
                         ? 'bg-white text-[#1061E3] shadow-sm'
                         : 'text-[#8E9299] hover:text-[#1C1F23]'
                     }`}
                   >
                     <Calendar className="w-3.5 h-3.5" />
-                    Deadlines
+                    <span className="hidden md:inline">Deadlines</span>
                   </button>
                 </div>
               )}
@@ -784,7 +786,7 @@ export default function MyTasksView({
                             {ticket.priority || 'Medium'}
                           </span>
                         </td>
-                        <td data-label="Deadline" className="px-4 py-3 text-[13px] text-[#8E9299]">{formatDeadline(ticket.deadline)}</td>
+                        <td data-label="Deadline" className="px-4 py-3 text-[13px] text-[#8E9299]"><Calendar className="md:hidden inline w-3.5 h-3.5 mr-1" aria-hidden="true" />{formatDeadline(ticket.deadline)}</td>
                       </tr>
                     );
                   })}

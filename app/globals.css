@@ -68,7 +68,82 @@ html, body {
 
   .mobile-task-card {
     content-visibility: auto;
-    contain-intrinsic-size: auto 160px;
+    contain-intrinsic-size: auto 120px;
+  }
+
+  .workspace-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px 4px;
+    min-height: auto;
+    border-bottom: 0;
+    background: #F7F8FA;
+  }
+
+  .board-search {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    height: 44px;
+    border-radius: 12px;
+    background: white;
+  }
+
+  .board-search input {
+    min-width: 0;
+  }
+
+  .board-filter-toggle { grid-column: 2; grid-row: 1; }
+  .board-menu-toggle { grid-column: 3; grid-row: 1; }
+  .board-tools { display: contents; }
+  .board-tools > :not(.board-primary) { grid-column: 1 / -1; }
+  .board-tools > select.board-primary { display: none; grid-column: 1 / -1; width: 100%; }
+  .workspace-toolbar[data-filters-open="true"] .board-tools > select.board-primary { display: block; margin-top: 8px; }
+  .workspace-heading[data-expanded="false"] { display: none; }
+
+  .board-tools > .board-create {
+    position: absolute;
+    z-index: 20;
+    right: 20px;
+    bottom: 20px;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 19px;
+    box-shadow: 0 6px 20px #1061E32B;
+  }
+
+  .board-create span { display: none; }
+  .board-create svg { width: 25px; height: 25px; }
+
+  .mobile-task-actions {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 80dvh;
+    margin: 0;
+    padding: 0 0 env(safe-area-inset-bottom);
+    border: 0;
+    border-radius: 24px 24px 0 0;
+    background: white;
+    color: #1C1F23;
+    overflow-y: auto;
+  }
+
+  .mobile-task-actions::backdrop { background: #10203C55; }
+
+  .mobile-app-header { padding-left: 8px; padding-right: 12px; border-bottom: 0; }
+  .mobile-app-header > button { margin-right: 4px; }
+  .mobile-app-header .relative > .absolute {
+    position: fixed;
+    inset: 56px 12px auto;
+    width: auto;
+    max-height: calc(100dvh - 140px);
+    overflow-y: auto;
   }
 
   /* Reflow My Tasks while retaining its existing status update controls. */
@@ -101,18 +176,20 @@ html, body {
   }
 
   .mobile-task-table td:first-child {
+    font-size: 15px;
+    font-weight: 600;
     grid-column: 1 / -1;
   }
 
   .mobile-task-table td:not(:first-child)::before {
-    content: attr(data-label);
-    display: block;
-    margin-bottom: 4px;
-    font-size: 12px;
-    color: #4A4D53;
+    display: none;
   }
 
   .mobile-task-table select {
+    text-transform: none;
+    font-weight: 500;
+    border-radius: 8px;
+    width: 100%;
     min-height: 44px;
     max-width: 100%;
   }

@@ -1767,12 +1767,17 @@ export default function Page() {
             })}
           </nav>
         )}
+        <div className="md:hidden mt-auto border-t border-white/10 p-3 space-y-1">
+          <button type="button" onClick={() => handleNavClick('Profile')} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm text-white"><UserCircle size={18} />Profile</button>
+          <button type="button" onClick={() => handleNavClick('Settings')} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm text-white"><SettingsIcon size={18} />Settings</button>
+          <button type="button" onClick={logout} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm text-white"><LogOut size={18} />Log out</button>
+        </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-grow min-w-0 min-h-0 flex flex-col overflow-hidden relative bg-[#F7F8FA]">
         {/* Global Top Navigation */}
-        <header className="h-14 bg-white border-b border-[#E2E4E9] flex items-center justify-between md:justify-end px-4 md:px-6 shrink-0 z-20">
+        <header className="mobile-app-header h-14 bg-white border-b border-[#E2E4E9] flex items-center justify-between md:justify-end px-4 md:px-6 shrink-0 z-20">
           <button 
             onClick={() => setIsSidebarOpen(true)}
             className="min-h-11 min-w-11 p-2 text-[#8E9299] hover:text-[#1C1F23] md:hidden rounded transition-colors mr-2 cursor-pointer"
@@ -1781,6 +1786,7 @@ export default function Page() {
           >
             <Menu className="w-5 h-5" />
           </button>
+          <h1 className="md:hidden flex-1 min-w-0 truncate text-[17px] font-semibold tracking-tight">{activeContentNav}</h1>
           <div className="flex items-center gap-3 md:gap-5">
             <div className="relative" ref={notificationsRef}>
               <button
@@ -1864,22 +1870,22 @@ export default function Page() {
             </div>
             <button 
               onClick={() => handleNavClick('Settings')} 
-              className={`hover:text-[#1C1F23] transition-colors ${activeContentNav === 'Settings' ? 'text-[#1061E3]' : 'text-[#8E9299]'}`}
+              className={`hidden md:block hover:text-[#1C1F23] transition-colors ${activeContentNav === 'Settings' ? 'text-[#1061E3]' : 'text-[#8E9299]'}`}
               title="Settings"
             >
               <SettingsIcon className="w-5 h-5" />
             </button>
             <button 
               onClick={logout} 
-              className="text-[#8E9299] hover:text-[#D32F2F] transition-colors"
+              className="hidden md:block text-[#8E9299] hover:text-[#D32F2F] transition-colors"
               title="Log Out"
             >
               <LogOut className="w-5 h-5" />
             </button>
-            <div className="h-6 w-px bg-[#E2E4E9]"></div>
+            <div className="hidden md:block h-6 w-px bg-[#E2E4E9]"></div>
             <button 
               onClick={() => handleNavClick('Profile')} 
-              className="w-8 h-8 rounded-full bg-[#003366] text-white flex items-center justify-center font-bold text-xs shrink-0 border-2 border-transparent hover:border-[#1061E3] transition-all cursor-pointer shadow-sm hover:shadow"
+              className="w-8 h-8 rounded-full bg-[#003366] text-white hidden md:flex items-center justify-center font-bold text-xs shrink-0 border-2 border-transparent hover:border-[#1061E3] transition-all cursor-pointer shadow-sm hover:shadow"
               title="Profile"
             >
               {currentTeamMember?.initials || 'A'}
@@ -1887,7 +1893,7 @@ export default function Page() {
           </div>
         </header>
 
-        <div className="flex-grow relative overflow-hidden">
+        <div className="flex-grow min-h-0 relative overflow-hidden">
           {canAccessCRM && activeContentNav === 'Contacts' ? (
           <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
             {/* Top Bar */}
@@ -2318,6 +2324,11 @@ export default function Page() {
             </div>
           )}
         </AnimatePresence>
+        <nav aria-label="Mobile navigation" className="md:hidden flex shrink-0 border-t border-[#E8EBF0] bg-white px-4 pt-1 pb-1">
+          <button type="button" aria-current={activeContentNav === 'My Tasks' ? 'page' : undefined} onClick={() => handleNavClick('My Tasks')} className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium ${activeContentNav === 'My Tasks' ? 'text-[#1061E3]' : 'text-[#777E8A]'}`}><LayoutList size={21} strokeWidth={1.7} />Tasks</button>
+          <button type="button" aria-current={WORKSPACE_NAV_NAMES.includes(activeContentNav) ? 'page' : undefined} onClick={() => setIsSidebarOpen(true)} className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium ${WORKSPACE_NAV_NAMES.includes(activeContentNav) ? 'text-[#1061E3]' : 'text-[#777E8A]'}`}><FolderOpen size={21} strokeWidth={1.7} />Boards</button>
+          <button type="button" aria-current={activeContentNav === 'Inbox' ? 'page' : undefined} onClick={() => handleNavClick('Inbox')} className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium ${activeContentNav === 'Inbox' ? 'text-[#1061E3]' : 'text-[#777E8A]'}`}><MessageSquare size={21} strokeWidth={1.7} />Inbox</button>
+        </nav>
       </main>
       </div>
     </div>

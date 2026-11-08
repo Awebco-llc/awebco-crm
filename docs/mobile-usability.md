@@ -5,12 +5,12 @@ Based on GitHub main `d297b4d`. Work is isolated on `codex/mobile-usability` in 
 ## Changes
 
 - Phones below 768 px open a compact workspace board. Task names, status, company, priority, due date and assignees wrap within the screen. Subtasks expand in place, including deeper ancestry. Task and subtask buttons open the existing editor and use its existing write handlers.
-- Creating a task or subtask on a phone opens the new record for editing. Support cards have a Client reply button that opens the existing client conversation in either editor mode, without enabling sharing automatically.
+- Creating a task or subtask on a phone opens the new record for editing. Support cards have a three-dot action sheet with a Client conversation action that opens the existing client conversation in either editor mode, without enabling sharing automatically.
 - Full table remains available on phones for bulk selection, exports, group actions, columns, sorting and drag operations. Desktop keeps its existing table.
 - Search input updates immediately while expensive filtering can render at lower priority. A memoized parent index replaces repeated full-board scans for child counts, statuses and expansion. Compact mode does not mount the table's drag-and-drop tree.
 - Main sections load on demand with a loading indicator. Firestore subscriptions, permissions, support APIs and notification rules are unchanged.
 - My Tasks reflows its existing list and status controls into cards on phones. Inbox shows either the conversation list or the selected chat, with a back button; an unopened mobile chat is not marked read.
-- Mobile controls have larger targets, inputs avoid Safari focus zoom, and the shell and editors use the dynamic viewport height. Less-used board tools remain accessible under More. Active editor tabs scroll into view.
+- Mobile controls have larger targets, inputs avoid Safari focus zoom, and the shell and editors use the dynamic viewport height. Less-used board tools remain accessible under the three-dot board menu. Active editor tabs scroll into view.
 
 ## Verification
 
@@ -19,7 +19,7 @@ The latest GitHub build and changed build used the same lockfile, Node version a
 | Measurement | GitHub main | Mobile branch |
 | --- | ---: | ---: |
 | Next.js initial First Load JS for `/` | 599 kB | 306 kB |
-| Home route size | 373 kB | 80.5 kB |
+| Home route size | 373 kB | 80.9 kB |
 
 Initial JS is about 49% smaller. Selected-screen chunks still load when those screens open; these numbers are not a measured physical-device speedup.
 
@@ -60,3 +60,11 @@ Implementation references: [Next.js lazy loading](https://nextjs.org/docs/app/gu
 | 4. My Tasks | [Task list](/tmp/awebco-mobile-review/06-my-tasks.png) |
 | 5. Inbox | [Conversation](/tmp/awebco-mobile-review/07-inbox.png) |
 | Desktop check | [Original table layout](/tmp/awebco-mobile-review/09-desktop.png) |
+
+## App-style simplification
+
+The second pass removes the persistent row of task actions and repeated headings. Phones now have a single screen title, search with icon filter/menu controls, a floating create button, and bottom navigation for Tasks, Boards and Inbox. Settings, profile and logout are available from the sidebar. Cards use short dates, calendar/priority icons and assignee avatars; secondary task actions open a native modal bottom sheet. Its icon controls have accessible names, and the dialog supports native focus containment and Escape dismissal. The task editor uses icon tabs on phones and retains text tabs on desktop.
+
+Current screenshots: [board](/tmp/awebco-mobile-review/10-app-like-board.png) and [task actions](/tmp/awebco-mobile-review/11-task-action-sheet.png). Earlier screenshots and DOM counts above describe the first pass.
+
+The second pass also passes the production build, TypeScript and all 98 regression tests. Browser checks cover the native action sheet, client conversation routing, floating task creation and editing, subtask expansion, filter results, list/table switching and bottom navigation at phone widths. [Small phone](/tmp/awebco-mobile-review/12-app-small-phone.png), [icon task editor](/tmp/awebco-mobile-review/13-icon-task-editor.png), [My Tasks](/tmp/awebco-mobile-review/14-app-my-tasks.png). Physical-device limitations above still apply.

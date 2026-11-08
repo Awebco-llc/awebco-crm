@@ -417,7 +417,7 @@ export default function InboxView({
 
   return (
     <div className="flex flex-col flex-grow overflow-hidden absolute inset-0 bg-[#F9FAFB]">
-      <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center px-6 shrink-0">
+      <header className="hidden md:flex h-16 bg-white border-b border-[#E2E4E9] flex items-center px-6 shrink-0">
         <h1 className="text-xl font-bold text-[#1C1F23]">Inbox</h1>
       </header>
 

@@ -8,7 +8,7 @@ import { PortalSeoVisibility } from './PortalSeoVisibility';
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot, Building2, Check } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot, Building2, Check, SlidersHorizontal, MoreHorizontal, LayoutList, Table2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -1975,6 +1975,7 @@ export default function WorkspaceProjectView({
   const isMobile = useMobileViewport();
   const [mobileTableView, setMobileTableView] = useState(false);
   const [showBoardOptions, setShowBoardOptions] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const compactBoard = isMobile && !mobileTableView;
   const [subtaskFilters, setSubtaskFilters] = useState<Record<string, string>>({});
   const [subtaskSorts, setSubtaskSorts] = useState<Record<string, string>>({}); // 'none' | 'asc' | 'desc'
@@ -4208,8 +4209,8 @@ export default function WorkspaceProjectView({
   return (
     <div className="workspace-view flex-grow min-h-0 min-w-0 flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
-      <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col lg:flex-row lg:items-center justify-between p-4 lg:px-6 gap-3 shrink-0">
-        <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full lg:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
+      <header data-filters-open={showMobileFilters} className="workspace-toolbar min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col lg:flex-row lg:items-center justify-between p-4 lg:px-6 gap-3 shrink-0">
+        <div className="board-search bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full lg:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
           <Search className="w-4 h-4 text-[#8E9299]" />
           <input
             type="text"
@@ -4219,6 +4220,7 @@ export default function WorkspaceProjectView({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        <button type="button" title="Filter board" aria-label="Filter board" aria-expanded={showMobileFilters} onClick={() => { setShowMobileFilters(open => !open); setShowBoardOptions(false); }} className={`board-filter-toggle md:hidden flex h-11 w-11 items-center justify-center rounded-xl ${showMobileFilters || statusFilter !== 'all' ? 'bg-blue-50 text-[#1061E3]' : 'text-[#777E8A]'}`}><SlidersHorizontal size={20} /></button>
         <div className="board-tools flex flex-wrap items-center gap-2 md:gap-3" data-expanded={showBoardOptions}>
           {(projectType === 'SEO' || projectType === 'Local Listings') && (
             <button
@@ -4400,18 +4402,20 @@ export default function WorkspaceProjectView({
           </button>
           <button
             onClick={handleAddWebsite}
-            className="board-primary px-3 md:px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+            aria-label={isMobile ? "New task" : "New Project"}
+            title="New task"
+            className="board-create board-primary px-3 md:px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             <span className="md:hidden">New task</span><span className="hidden md:inline">New Project</span>
           </button>
-          <button type="button" className="board-primary md:hidden min-h-11 px-3 rounded-md border border-[#E2E4E9] text-sm font-semibold" aria-expanded={showBoardOptions} onClick={() => setShowBoardOptions(open => !open)}>More</button>
+          <button type="button" title="Board options" aria-label="Board options" className="board-menu-toggle board-primary md:hidden flex h-11 w-11 items-center justify-center rounded-xl text-[#777E8A]" aria-expanded={showBoardOptions} onClick={() => { setShowBoardOptions(open => !open); setShowMobileFilters(false); }}><MoreHorizontal size={21} /></button>
         </div>
       </header>
 
-      <div className="px-3 py-3 md:p-6 shrink-0">
+      <div className="workspace-heading px-3 py-3 md:p-6 shrink-0" data-expanded={showBoardOptions}>
         <div className="flex items-center justify-between gap-2 md:mb-4">
-          <h1 className="m-0 text-xl md:text-2xl font-bold text-[#1C1F23]">{projectType}</h1>
+          <h1 className="hidden md:block m-0 text-xl md:text-2xl font-bold text-[#1C1F23]">{projectType}</h1>
           <button
             disabled={isAddingGroup}
             onClick={async () => {
@@ -4449,11 +4453,11 @@ export default function WorkspaceProjectView({
           </button>
         </div>
       </div>
-      {isMobile && <div className="px-3 pb-3 flex gap-2" aria-label="Board view">
-        <button type="button" aria-pressed={!mobileTableView} onClick={() => setMobileTableView(false)} className={`min-h-11 px-4 rounded-lg text-sm font-semibold ${!mobileTableView ? 'bg-[#1061E3] text-white' : 'bg-white border border-[#E2E4E9]'}`}>Compact</button>
-        <button type="button" aria-pressed={mobileTableView} onClick={() => setMobileTableView(true)} className={`min-h-11 px-4 rounded-lg text-sm font-semibold ${mobileTableView ? 'bg-[#1061E3] text-white' : 'bg-white border border-[#E2E4E9]'}`}>Full table</button>
+      {isMobile && showBoardOptions && <div className="px-3 pb-3 flex gap-2" aria-label="Board view">
+        <button type="button" aria-pressed={!mobileTableView} onClick={() => setMobileTableView(false)} className={`min-h-11 px-4 rounded-lg text-sm font-semibold ${!mobileTableView ? 'bg-[#1061E3] text-white' : 'bg-white border border-[#E2E4E9]'}`}><LayoutList size={17} className="inline mr-2" />List</button>
+        <button type="button" aria-pressed={mobileTableView} onClick={() => setMobileTableView(true)} className={`min-h-11 px-4 rounded-lg text-sm font-semibold ${mobileTableView ? 'bg-[#1061E3] text-white' : 'bg-white border border-[#E2E4E9]'}`}><Table2 size={17} className="inline mr-2" />Table</button>
       </div>}
-      <div className="flex-grow min-h-0 min-w-0 px-3 pb-6 md:px-6 overflow-auto overscroll-contain">
+      <div className="flex-grow min-h-0 min-w-0 px-3 pb-24 md:pb-6 md:px-6 overflow-auto overscroll-contain">
         {compactBoard ? <MobileWorkspaceBoard
           groups={groups}
           rowsForGroup={id => visibleData.filter(row => !row.parentId && getRowGroupId(row) === id)}
@@ -5649,7 +5653,7 @@ export default function WorkspaceProjectView({
                 className="task-detail-panel relative w-full max-w-md bg-white shadow-2xl flex flex-col h-dvh border-l border-[#E2E4E9]"
               >
                 <div className="px-6 py-4 border-b border-[#E2E4E9] flex items-center justify-between bg-[#F9FAFB] shrink-0">
-                  <h3 className="font-bold text-lg text-[#1C1F23]">Edit {projectType} Details</h3>
+                  <h3 className="min-w-0 truncate font-semibold text-base md:text-lg text-[#1C1F23]"><span className="md:hidden">{data.find(row => row.id === editingRowId)?.projectName || 'Task'}</span><span className="hidden md:inline">Edit {projectType} Details</span></h3>
                   <button aria-label="Close task details" onClick={() => setEditingRowId(null)} className="min-w-11 text-[#8E9299] hover:text-[#1C1F23] transition-colors">
                     <X className="w-5 h-5" />
                   </button>
@@ -5657,23 +5661,26 @@ export default function WorkspaceProjectView({
                 <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
                   <div className="flex gap-2 overflow-x-auto">
                     {[
-                      { id: 'details', label: 'Details' },
-                      { id: 'description', label: 'Description' },
-                      { id: 'updates', label: projectType === 'Support Tickets' ? 'Internal notes' : 'Updates' },
-                      ...(projectType === 'Support Tickets' ? [{ id: 'client', label: 'Client conversation' }] : []),
-                      { id: 'files', label: 'Files' },
+                      { id: 'details', label: 'Details', icon: Info },
+                      { id: 'description', label: 'Description', icon: FileIcon },
+                      { id: 'updates', label: projectType === 'Support Tickets' ? 'Internal notes' : 'Updates', icon: MessageCircle },
+                      ...(projectType === 'Support Tickets' ? [{ id: 'client', label: 'Client conversation', icon: Mail }] : []),
+                      { id: 'files', label: 'Files', icon: Paperclip },
                     ].map(tab => (
                       <button
                         key={tab.id}
                         ref={activeEditTab === tab.id ? activeTabButtonRef : undefined}
                         type="button"
                         onClick={() => setActiveEditTab(tab.id as EditTab)}
-                        className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${activeEditTab === tab.id
+                        aria-label={tab.label}
+                        title={tab.label}
+                        aria-pressed={activeEditTab === tab.id}
+                        className={`flex flex-1 md:flex-none items-center justify-center min-w-11 md:min-w-0 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${activeEditTab === tab.id
                             ? 'bg-[#1061E3] text-white'
                             : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
                           }`}
                       >
-                        {tab.label}
+                        <tab.icon className="md:hidden w-[18px] h-[18px]" aria-hidden="true" /><span className="hidden md:inline">{tab.label}</span>
                       </button>
                     ))}
                   </div>
