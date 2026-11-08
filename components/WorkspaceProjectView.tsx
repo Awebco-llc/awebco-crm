@@ -1,10 +1,12 @@
 'use client';
 
+import MobileWorkspaceBoard from './MobileWorkspaceBoard';
+import { useMobileViewport } from '@/hooks/useMobileViewport';
 import { listingHandoff } from '@/lib/listingHandoff';
 import { SupportConversation, SupportConversationPanel } from './SupportConversation';
 import { PortalSeoVisibility } from './PortalSeoVisibility';
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot, Building2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1969,6 +1971,11 @@ export default function WorkspaceProjectView({
   onCloseRow?: () => void
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const isMobile = useMobileViewport();
+  const [mobileTableView, setMobileTableView] = useState(false);
+  const [showBoardOptions, setShowBoardOptions] = useState(false);
+  const compactBoard = isMobile && !mobileTableView;
   const [subtaskFilters, setSubtaskFilters] = useState<Record<string, string>>({});
   const [subtaskSorts, setSubtaskSorts] = useState<Record<string, string>>({}); // 'none' | 'asc' | 'desc'
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -2269,8 +2276,8 @@ export default function WorkspaceProjectView({
       return true;
     });
 
-    if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase().trim();
+    if (deferredSearchQuery.trim() !== '') {
+      const q = deferredSearchQuery.toLowerCase().trim();
       const matchesSearch = (row: any) => {
         if (row.projectName?.toLowerCase().includes(q)) return true;
         if (row.status?.toLowerCase().includes(q)) return true;
@@ -2393,7 +2400,7 @@ export default function WorkspaceProjectView({
       const cmp = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
       return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
-  }, [rawTickets, rawGroups, companies, flagKey, sortConfig, teamMembers, searchQuery, columns]);
+  }, [rawTickets, rawGroups, companies, flagKey, sortConfig, teamMembers, deferredSearchQuery, columns]);
 
   const groups = React.useMemo(() => {
 
@@ -2448,13 +2455,30 @@ export default function WorkspaceProjectView({
   const [quickMentionIndex, setQuickMentionIndex] = useState(-1);
   const quickUpdateTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [activeEditTab, setActiveEditTab] = useState<EditTab>('details');
+  const requestedEditTab = useRef<EditTab | null>(null);
+  const activeTabButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (editingRowId && isMobile) {
+      activeTabButtonRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [activeEditTab, editingRowId, isMobile]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, rowId: string, isSubRow: boolean } | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const childrenByParent = useMemo(() => {
+    const index = new Map<string, any[]>();
+    for (const row of data) {
+      if (!row.parentId) continue;
+      const children = index.get(row.parentId) || [];
+      children.push(row);
+      index.set(row.parentId, children);
+    }
+    return index;
+  }, [data]);
   const getSubtaskRows = useCallback((parentId: string, visibleDataList: any[]) => {
-    let subRows = data.filter((sub: any) => sub.parentId === parentId);
+    let subRows = (childrenByParent.get(parentId) || []);
     const filterVal = subtaskFilters[parentId] || 'all';
     if (filterVal !== 'all') {
       subRows = subRows.filter(s => s.status === filterVal);
@@ -2485,7 +2509,7 @@ export default function WorkspaceProjectView({
       });
     }
     return subRows;
-  }, [data, subtaskFilters, subtaskSorts]);
+  }, [childrenByParent, subtaskFilters, subtaskSorts]);
 
   const rowMatchesStatus = useCallback((row: any) => {
     if (statusFilter === 'all') return true;
@@ -2493,10 +2517,10 @@ export default function WorkspaceProjectView({
       return row.status === statusFilter;
     } else {
       if (row.status === statusFilter) return true;
-      const subs = data.filter(t => t.parentId === row.id);
+      const subs = childrenByParent.get(row.id) || [];
       return subs.some(s => s.status === statusFilter);
     }
-  }, [statusFilter, data]);
+  }, [statusFilter, childrenByParent]);
   const [isBoardEmailOpen, setIsBoardEmailOpen] = useState(false);
   const [copiedBoardEmail, setCopiedBoardEmail] = useState(false);
   const [isBoardMembersOpen, setIsBoardMembersOpen] = useState(false);
@@ -2877,7 +2901,8 @@ export default function WorkspaceProjectView({
   React.useEffect(() => {
     if (editingRowId) {
       const query = new URLSearchParams(window.location.search);
-      setActiveEditTab(projectType === 'Support Tickets' && query.get('ticket') === editingRowId && query.get('conversation') === 'client' ? 'client' : 'details');
+      setActiveEditTab(requestedEditTab.current || (projectType === 'Support Tickets' && query.get('ticket') === editingRowId && query.get('conversation') === 'client' ? 'client' : 'details'));
+      requestedEditTab.current = null;
     }
   }, [editingRowId, projectType]);
 
@@ -3722,7 +3747,8 @@ export default function WorkspaceProjectView({
     }
 
     try {
-      await createTicket(newSubRow);
+      const id = await createTicket(newSubRow);
+      if (isMobile) setEditingRowId(id);
     } catch (err) {
       console.error('Failed to create sub-task', err);
     }
@@ -4108,6 +4134,7 @@ export default function WorkspaceProjectView({
 
       console.log('Payload being sent to Firestore:', newTicket);
       const id = await createTicket(newTicket);
+      if (isMobile) setEditingRowId(id);
       console.log('Successfully created ticket with ID:', id);
     } catch (err) {
       console.error('CRITICAL ERROR in handleAddWebsite:', err);
@@ -4179,7 +4206,7 @@ export default function WorkspaceProjectView({
   }, [activeDragId, overDragId, orderedRowIds]);
 
   return (
-    <div className="flex-grow flex flex-col overflow-hidden absolute inset-0">
+    <div className="workspace-view flex-grow min-h-0 min-w-0 flex flex-col overflow-hidden absolute inset-0">
       {/* Top Bar */}
       <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-col lg:flex-row lg:items-center justify-between p-4 lg:px-6 gap-3 shrink-0">
         <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 w-full lg:w-[300px] focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
@@ -4192,7 +4219,7 @@ export default function WorkspaceProjectView({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <div className="board-tools flex flex-wrap items-center gap-2 md:gap-3" data-expanded={showBoardOptions}>
           {(projectType === 'SEO' || projectType === 'Local Listings') && (
             <button
               onClick={() => triggerSheetsSync()}
@@ -4347,7 +4374,8 @@ export default function WorkspaceProjectView({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] outline-none focus:ring-2 focus:ring-[#1061E3]"
+            aria-label="Filter board by status"
+            className="board-primary min-w-0 flex-1 md:flex-none px-3 md:px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] outline-none focus:ring-2 focus:ring-[#1061E3]"
           >
             <option value="all">All Statuses</option>
             {statusOptions.map((status) => (
@@ -4372,17 +4400,18 @@ export default function WorkspaceProjectView({
           </button>
           <button
             onClick={handleAddWebsite}
-            className="px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="board-primary px-3 md:px-4 py-2 rounded-md text-sm font-semibold cursor-pointer border border-[#1061E3] bg-[#1061E3] text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            New Project
+            <span className="md:hidden">New task</span><span className="hidden md:inline">New Project</span>
           </button>
+          <button type="button" className="board-primary md:hidden min-h-11 px-3 rounded-md border border-[#E2E4E9] text-sm font-semibold" aria-expanded={showBoardOptions} onClick={() => setShowBoardOptions(open => !open)}>More</button>
         </div>
       </header>
 
-      <div className="p-6 shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="m-0 text-2xl font-bold text-[#1C1F23]">{projectType}</h1>
+      <div className="px-3 py-3 md:p-6 shrink-0">
+        <div className="flex items-center justify-between gap-2 md:mb-4">
+          <h1 className="m-0 text-xl md:text-2xl font-bold text-[#1C1F23]">{projectType}</h1>
           <button
             disabled={isAddingGroup}
             onClick={async () => {
@@ -4419,8 +4448,32 @@ export default function WorkspaceProjectView({
             {isAddingGroup ? 'Adding...' : 'Add Group'}
           </button>
         </div>
-      </div>      <div className="flex-grow px-6 pb-6 overflow-auto">
-        <DndContext
+      </div>
+      {isMobile && <div className="px-3 pb-3 flex gap-2" aria-label="Board view">
+        <button type="button" aria-pressed={!mobileTableView} onClick={() => setMobileTableView(false)} className={`min-h-11 px-4 rounded-lg text-sm font-semibold ${!mobileTableView ? 'bg-[#1061E3] text-white' : 'bg-white border border-[#E2E4E9]'}`}>Compact</button>
+        <button type="button" aria-pressed={mobileTableView} onClick={() => setMobileTableView(true)} className={`min-h-11 px-4 rounded-lg text-sm font-semibold ${mobileTableView ? 'bg-[#1061E3] text-white' : 'bg-white border border-[#E2E4E9]'}`}>Full table</button>
+      </div>}
+      <div className="flex-grow min-h-0 min-w-0 px-3 pb-6 md:px-6 overflow-auto overscroll-contain">
+        {compactBoard ? <MobileWorkspaceBoard
+          groups={groups}
+          rowsForGroup={id => visibleData.filter(row => !row.parentId && getRowGroupId(row) === id)}
+          childrenForRow={id => getSubtaskRows(id, visibleData)}
+          expandedIds={expandedIds}
+          collapsedGroupIds={collapsedGroupIds}
+          toggleExpand={toggleExpand}
+          toggleGroup={id => setCollapsedGroupIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+          })}
+          onOpen={setEditingRowId}
+          onConversation={projectType === 'Support Tickets' ? id => {
+            requestedEditTab.current = 'client';
+            setEditingRowId(id);
+          } : undefined}
+          onAddSubtask={addSubRow}
+          teamMembers={teamMembers}
+        /> : <DndContext
           id="websites-dnd-context"
           sensors={sensors}
           collisionDetection={verticalCollisionDetection}
@@ -4453,7 +4506,6 @@ export default function WorkspaceProjectView({
           }}>
           <SortableContext items={groups.map(g => `group-sortable-${g.id}`)} strategy={verticalListSortingStrategy}>
             {groups.map((group) => {
-              const visibleData = data.filter(r => rowMatchesStatus(r));
               const groupRows = visibleData.filter(r => !r.parentId && getRowGroupId(r) === group.id);
               const isCollapsed = collapsedGroupIds.has(group.id);
 
@@ -4624,7 +4676,7 @@ export default function WorkspaceProjectView({
                                   projectType={projectType}
                                   runningLiveCount={
                                     projectType === 'Local Listings'
-                                      ? data.filter(r => r.parentId === row.id).filter(r => {
+                                      ? (childrenByParent.get(row.id) || []).filter(r => {
                                           const status = (r.status || '').trim().toLowerCase();
                                           return status === 'running' || status === 'live';
                                         }).length
@@ -4632,7 +4684,7 @@ export default function WorkspaceProjectView({
                                   }
                                   holdDownCount={
                                     projectType === 'Local Listings'
-                                      ? data.filter(r => r.parentId === row.id).filter(r => {
+                                      ? (childrenByParent.get(row.id) || []).filter(r => {
                                           const status = (r.status || '').trim().toLowerCase();
                                           return status === 'on hold' || status === 'down';
                                         }).length
@@ -4642,7 +4694,7 @@ export default function WorkspaceProjectView({
                                     e.preventDefault();
                                     setContextMenu({ x: e.clientX, y: e.clientY, rowId, isSubRow });
                                   }}
-                                  subtaskCount={data.filter(r => r.parentId === row.id).length}
+                                  subtaskCount={(childrenByParent.get(row.id) || []).length}
                                   isSelected={selectedRowIds.has(row.id)}
                                   onToggleSelect={(shiftKey?: boolean) => handleToggleSelectRow(row.id, shiftKey)}
                                   onCommentsClick={handleCommentsButtonClick}
@@ -4655,7 +4707,7 @@ export default function WorkspaceProjectView({
                                   onSetSubtaskFilter={(rid: string, val: string) => setSubtaskFilters(prev => ({ ...prev, [rid]: val }))}
                                   subtaskSort={subtaskSorts[row.id] || 'none'}
                                   onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
-                                  uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === row.id).map((s: any) => s.status).filter(Boolean)))}
+                                  uniqueSubtaskStatuses={Array.from(new Set((childrenByParent.get(row.id) || []).map((s: any) => s.status).filter(Boolean)))}
                                   columnWidths={columnWidths}
                                   activeDragId={activeDragId}
                                   isDragOverTarget={overDragId === `row-${row.id}`}
@@ -4695,7 +4747,7 @@ export default function WorkspaceProjectView({
                                       onSetSubtaskFilter={(rid: string, val: string) => setSubtaskFilters(prev => ({ ...prev, [rid]: val }))}
                                       subtaskSort={subtaskSorts[subRow.id] || 'none'}
                                       onSetSubtaskSort={(rid: string, val: string) => setSubtaskSorts(prev => ({ ...prev, [rid]: val }))}
-                                      uniqueSubtaskStatuses={Array.from(new Set(data.filter((s: any) => s.parentId === subRow.id).map((s: any) => s.status).filter(Boolean)))}
+                                      uniqueSubtaskStatuses={Array.from(new Set((childrenByParent.get(subRow.id) || []).map((s: any) => s.status).filter(Boolean)))}
                                       columnWidths={columnWidths}
                                       activeDragId={activeDragId}
                                       isDragOverTarget={overDragId === `row-${subRow.id}`}
@@ -4814,7 +4866,7 @@ export default function WorkspaceProjectView({
               return null;
             })() : null}
           </DragOverlay>
-        </DndContext>
+        </DndContext>}
       </div>
 
       {/* Context Menu */}
@@ -5003,7 +5055,7 @@ export default function WorkspaceProjectView({
       <AnimatePresence>
         {editingRowId && (
           useFullScreenUnifiedTicketView ? (
-            <div className="fixed inset-0 z-50 bg-[#F9FAFB] flex flex-col h-screen w-screen overflow-hidden">
+            <div role="dialog" aria-modal="true" aria-label={`${projectType} details`} className="fixed inset-0 z-50 task-detail-panel bg-[#F9FAFB] flex flex-col h-dvh w-screen overflow-hidden">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -5012,14 +5064,14 @@ export default function WorkspaceProjectView({
                 className="flex flex-col h-full w-full"
               >
                 {/* Header bar */}
-                <header className="h-16 bg-white border-b border-[#E2E4E9] flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
+                <header className="min-h-16 bg-white border-b border-[#E2E4E9] flex flex-wrap items-center justify-between gap-2 px-3 py-2 md:px-6 shrink-0 z-10 shadow-sm">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setEditingRowId(null)}
                       className="flex items-center gap-2 text-sm font-semibold text-[#4A4D53] hover:text-[#1C1F23] transition-colors bg-[#F0F2F5] hover:bg-[#E2E8F0] px-4 py-2 rounded-lg"
                     >
                       <X className="w-4 h-4" />
-                      Back to {projectType}
+                      <span className="md:hidden">Back</span><span className="hidden md:inline">Back to {projectType}</span>
                     </button>
                     {allowDeletingRows && (
                       <button
@@ -5035,7 +5087,7 @@ export default function WorkspaceProjectView({
                       </button>
                     )}
                   </div>
-                  <h2 className="text-base font-bold text-[#1C1F23]">{projectType} — Detail View</h2>
+                  <h2 className="hidden md:block text-base font-bold text-[#1C1F23]">{projectType} — Detail View</h2>
                   <button
                     onClick={() => setEditingRowId(null)}
                     className="flex items-center gap-2 text-sm font-semibold text-white bg-[#1061E3] hover:bg-blue-700 transition-colors px-4 py-2 rounded-lg shadow-sm"
@@ -5045,7 +5097,7 @@ export default function WorkspaceProjectView({
                 </header>
 
                 {/* Scrollable Content Container */}
-                <div className="flex-grow overflow-y-auto p-6 md:p-10">
+                <div className="flex-grow min-h-0 overflow-y-auto overscroll-contain p-3 md:p-10">
                   {(() => {
                     const editingRow = data.find(r => r.id === editingRowId);
                     if (!editingRow) return null;
@@ -5355,7 +5407,7 @@ export default function WorkspaceProjectView({
                           </div>
                         </div>
 
-                        {projectType === 'Support Tickets' && <SupportConversationPanel key={editingRowId} ticketId={editingRowId} />}
+                        {projectType === 'Support Tickets' && <SupportConversationPanel key={`${editingRowId}-${activeEditTab === 'client'}`} ticketId={editingRowId} defaultOpen={activeEditTab === 'client'} />}
 
                         {/* Card 4: Updates & Discussion */}
                         <div className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm overflow-hidden p-6 md:p-8">
@@ -5593,11 +5645,12 @@ export default function WorkspaceProjectView({
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="relative w-full max-w-md bg-white shadow-2xl flex flex-col h-full border-l border-[#E2E4E9]"
+                role="dialog" aria-modal="true" aria-label={`${projectType} details`}
+                className="task-detail-panel relative w-full max-w-md bg-white shadow-2xl flex flex-col h-dvh border-l border-[#E2E4E9]"
               >
                 <div className="px-6 py-4 border-b border-[#E2E4E9] flex items-center justify-between bg-[#F9FAFB] shrink-0">
                   <h3 className="font-bold text-lg text-[#1C1F23]">Edit {projectType} Details</h3>
-                  <button onClick={() => setEditingRowId(null)} className="text-[#8E9299] hover:text-[#1C1F23] transition-colors">
+                  <button aria-label="Close task details" onClick={() => setEditingRowId(null)} className="min-w-11 text-[#8E9299] hover:text-[#1C1F23] transition-colors">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -5612,6 +5665,7 @@ export default function WorkspaceProjectView({
                     ].map(tab => (
                       <button
                         key={tab.id}
+                        ref={activeEditTab === tab.id ? activeTabButtonRef : undefined}
                         type="button"
                         onClick={() => setActiveEditTab(tab.id as EditTab)}
                         className={`px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${activeEditTab === tab.id
@@ -5624,7 +5678,7 @@ export default function WorkspaceProjectView({
                     ))}
                   </div>
                 </div>
-                <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
+                <div className="flex-grow min-h-0 overflow-y-auto overscroll-contain p-3 md:p-6 flex flex-col gap-4">
                   {activeEditTab === 'details' && projectType === 'SEO' && <PortalSeoVisibility id={editingRowId} value={data.find(r => r.id === editingRowId)?.portalVisibility} />}
                   {activeEditTab === 'details' && (() => {
                     const editingRow = data.find(r => r.id === editingRowId);

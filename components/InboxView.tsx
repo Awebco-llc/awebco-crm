@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { TeamMember } from './Shared';
-import { Search, Send, ExternalLink, Smile, Paperclip, X, Download, Copy, Check, Loader2, FileText } from 'lucide-react';
+import { useMobileViewport } from '@/hooks/useMobileViewport';
+import { ArrowLeft, Search, Send, ExternalLink, Smile, Paperclip, X, Download, Copy, Check, Loader2, FileText } from 'lucide-react';
 import { createMessage, markMessageAsRead, updateMessage } from '@/lib/crmStore';
 import type { ChatAttachment } from '@/lib/crmStore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -171,6 +172,9 @@ export default function InboxView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeReactionPickerId, setActiveReactionPickerId] = useState<string | null>(null);
 
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const isMobile = useMobileViewport();
+
   // File attachment state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -233,7 +237,7 @@ export default function InboxView({
 
   // Mark messages from the selected user as read when the chat is active
   useEffect(() => {
-    if (!currentUserId || !selectedUserId) return;
+    if (!currentUserId || !selectedUserId || (isMobile && !mobileChatOpen)) return;
     const unreadFromSelected = messages.filter(
       (m) => m.senderId === selectedUserId && m.receiverId === currentUserId && !m.read
     );
@@ -244,7 +248,7 @@ export default function InboxView({
         );
       });
     }
-  }, [messages, currentUserId, selectedUserId]);
+  }, [messages, currentUserId, selectedUserId, isMobile, mobileChatOpen]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -417,9 +421,9 @@ export default function InboxView({
         <h1 className="text-xl font-bold text-[#1C1F23]">Inbox</h1>
       </header>
 
-      <div className="flex flex-grow overflow-hidden">
+      <div className="flex flex-grow min-h-0 min-w-0 overflow-hidden">
         {/* Sidebar */}
-        <div className="w-[300px] bg-white border-r border-[#E2E4E9] flex flex-col shrink-0">
+        <div className={`${mobileChatOpen ? 'hidden md:flex' : 'flex'} w-full md:w-[300px] min-h-0 bg-white border-r border-[#E2E4E9] flex-col shrink-0`}>
           <div className="p-4 border-b border-[#E2E4E9]">
             <div className="bg-[#F0F2F5] rounded-md px-3 py-2 flex items-center gap-2 focus-within:ring-2 focus-within:ring-[#1061E3] transition-shadow">
               <Search className="w-4 h-4 text-[#8E9299]" />
@@ -441,10 +445,11 @@ export default function InboxView({
               const isSelected = selectedUserId === member.id;
 
               return (
-                <div 
+                <button
+                  type="button"
                   key={member.id}
-                  onClick={() => setSelectedUserId(member.id)}
-                  className={`p-4 border-b border-[#F0F2F5] cursor-pointer hover:bg-gray-50 transition-colors flex items-center gap-3 ${isSelected ? 'bg-[#F0F7FF] border-l-4 border-l-[#1061E3]' : 'border-l-4 border-l-transparent'}`}
+                  onClick={() => { setSelectedUserId(member.id); setMobileChatOpen(true); }}
+                  className={`w-full text-left p-4 border-b border-[#F0F2F5] cursor-pointer hover:bg-gray-50 transition-colors flex items-center gap-3 ${isSelected ? 'bg-[#F0F7FF] border-l-4 border-l-[#1061E3]' : 'border-l-4 border-l-transparent'}`}
                 >
                   <div 
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
@@ -467,17 +472,18 @@ export default function InboxView({
                       </p>
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
 
         {/* Chat Area */}
-        <div className="flex-grow flex flex-col bg-[#F9FAFB]">
+        <div className={`${mobileChatOpen ? 'flex' : 'hidden md:flex'} flex-grow min-w-0 min-h-0 flex-col bg-[#F9FAFB]`}>
           {selectedUser ? (
             <>
               {/* Chat Header */}
+              <button type="button" onClick={() => setMobileChatOpen(false)} className="md:hidden min-h-11 flex items-center gap-2 px-4 bg-white text-sm font-semibold text-[#1061E3]"><ArrowLeft size={18} />All conversations</button>
               <div className="p-4 bg-white border-b border-[#E2E4E9] flex items-center gap-3 shrink-0">
                 <div 
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
@@ -492,7 +498,7 @@ export default function InboxView({
               </div>
 
               {/* Messages List */}
-              <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
+              <div className="flex-grow min-h-0 overflow-y-auto overscroll-contain p-3 md:p-6 flex flex-col gap-4">
                 {currentChatMessages.length === 0 ? (
                   <div className="flex-grow flex items-center justify-center text-[#8E9299] text-sm italic">
                     No messages yet. Start the conversation!
@@ -524,7 +530,7 @@ export default function InboxView({
                     }));
 
                     return (
-                      <div key={msg.id} className={`flex gap-3 max-w-[70%] ${isMine ? 'self-end flex-row-reverse' : 'self-start'}`}>
+                      <div key={msg.id} className={`flex gap-2 md:gap-3 max-w-[92%] md:max-w-[70%] ${isMine ? 'self-end flex-row-reverse' : 'self-start'}`}>
                         {showAvatar ? (
                           <div 
                             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-sm"

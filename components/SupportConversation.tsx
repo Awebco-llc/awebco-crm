@@ -59,28 +59,34 @@ function SupportAuthor({ message }: { message: Message }) {
     </div>
   );
 }
-export function SupportConversationPanel({ ticketId }: { ticketId: string }) {
+export function SupportConversationPanel({ ticketId, defaultOpen = false }: { ticketId: string; defaultOpen?: boolean }) {
+  const panelRef = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(() => {
+    if (defaultOpen) return true;
     if (typeof window === "undefined") return false;
     const query = new URLSearchParams(window.location.search);
     return (
       query.get("ticket") === ticketId && query.get("conversation") === "client"
     );
   });
+  useEffect(() => {
+    if (defaultOpen) panelRef.current?.scrollIntoView({ block: "start" });
+  }, [defaultOpen]);
   return (
     <details
+      ref={panelRef}
       open={open}
       className="bg-white rounded-xl border border-[#E2E4E9] shadow-sm"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary className="cursor-pointer p-6 md:p-8 font-semibold text-[#1C1F23]">
+      <summary className="cursor-pointer p-4 md:p-8 font-semibold text-[#1C1F23]">
         Client conversation
         <span className="block mt-1 font-normal text-sm text-[#4A4D53]">
           Open to read or send a reply shared with the client.
         </span>
       </summary>
       {open && (
-        <div className="px-6 pb-6 md:px-8 md:pb-8">
+        <div className="px-4 pb-4 md:px-8 md:pb-8">
           <SupportConversation ticketId={ticketId} />
         </div>
       )}
@@ -198,7 +204,7 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
     (detail?.messages || []).map((message) => [message.id, message]),
   );
   return (
-    <section className="space-y-5 text-sm" aria-label="Client conversation">
+    <section className="client-conversation min-w-0 space-y-5 text-sm" aria-label="Client conversation">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-bold text-base text-[#1C1F23] flex gap-2 items-center">
@@ -212,7 +218,7 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
         </div>
         <button
           type="button"
-          className="p-2 rounded hover:bg-gray-100"
+          className="min-h-11 min-w-11 p-2 rounded hover:bg-gray-100"
           aria-label="Refresh client conversation"
           onClick={() => setRevision((v) => v + 1)}
         >

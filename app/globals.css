@@ -1,5 +1,131 @@
 @import "tailwindcss";
 
+/* Keep the application within the visible area as phone browser bars move. */
+html, body {
+  width: 100%;
+  min-height: 100%;
+}
+
+[data-drag-handle] {
+  touch-action: none;
+}
+
+@media (max-width: 767px) {
+  .app-shell {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .board-tools[data-expanded="false"] > :not(.board-primary) {
+    display: none;
+  }
+
+  .board-tools > .relative > .absolute {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 160px;
+    width: auto;
+    max-height: calc(100dvh - 180px);
+    overflow-y: auto;
+  }
+
+  .app-shell main > header button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .workspace-view button,
+  .workspace-view select,
+  .task-detail-panel button,
+  .client-conversation summary {
+    min-height: 44px;
+  }
+
+  /* 16px prevents Safari zooming the page while entering a task or reply. */
+  .app-shell input:not([type="checkbox"]):not([type="radio"]),
+  .app-shell textarea,
+  .app-shell select,
+  .app-shell [contenteditable="true"],
+  .task-detail-panel input:not([type="checkbox"]):not([type="radio"]),
+  .task-detail-panel textarea,
+  .task-detail-panel select,
+  .task-detail-panel [contenteditable="true"] {
+    font-size: 16px;
+  }
+
+  .task-detail-panel {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .task-detail-panel > div > header button {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .client-conversation {
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-task-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 160px;
+  }
+
+  /* Reflow My Tasks while retaining its existing status update controls. */
+  .mobile-task-table,
+  .mobile-task-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .mobile-task-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .mobile-task-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .mobile-task-table td {
+    padding: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  .mobile-task-table td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .mobile-task-table td:not(:first-child)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #4A4D53;
+  }
+
+  .mobile-task-table select {
+    min-height: 44px;
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @media print {
   @page {
     margin: 0.5in;

@@ -461,7 +461,7 @@ export default function MyTasksView({
         </div>
       </header>
 
-      <div className="flex-grow p-6 overflow-auto space-y-8">
+      <div className="flex-grow min-h-0 min-w-0 p-3 md:p-6 overflow-auto overscroll-contain space-y-8">
         {/* Section 1: Assigned Project & Support Tickets with Tab Headers */}
         <div>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
@@ -677,7 +677,7 @@ export default function MyTasksView({
             </div>
           ) : (
             <div className="overflow-x-auto bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
-              <table className="w-full text-left border-collapse min-w-[900px]">
+              <table className="mobile-task-table w-full text-left border-collapse md:min-w-[900px]">
                 <thead className="sticky top-0 z-10 shadow-sm select-none">
                   <tr>
                     <th 
@@ -745,16 +745,16 @@ export default function MyTasksView({
                         className="border-b border-[#F0F2F5] hover:bg-gray-50 cursor-pointer transition-colors"
                         onClick={() => onOpenTask?.(navName, rowId)}
                       >
-                        <td className="px-4 py-3 text-[13px] font-medium text-[#1C1F23]">
+                        <td data-label="Task" className="px-4 py-3 text-[13px] font-medium text-[#1C1F23]">
                           <div className="flex flex-col">
-                            <span>{ticket.projectName}</span>
+                            <button type="button" className="min-h-11 md:min-h-0 text-left hover:underline" onClick={(e) => { e.stopPropagation(); onOpenTask?.(navName, rowId); }}>{ticket.projectName}</button>
                             {ticket.companyName && (
                               <span className="text-[11px] text-[#8E9299] font-normal">{ticket.companyName}</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-[13px] text-[#8E9299] font-medium">{ticket.workspace}</td>
-                        <td className="px-4 py-3 text-[13px]" onClick={(e) => e.stopPropagation()}>
+                        <td data-label="Workspace" className="px-4 py-3 text-[13px] text-[#8E9299] font-medium">{ticket.workspace}</td>
+                        <td data-label="Status" className="px-4 py-3 text-[13px]" onClick={(e) => e.stopPropagation()}>
                           <select
                             value={ticket.status || 'Not Started'}
                             onChange={async (e) => {
@@ -779,12 +779,12 @@ export default function MyTasksView({
                             ))}
                           </select>
                         </td>
-                        <td className="px-4 py-3 text-[13px]">
+                        <td data-label="Priority" className="px-4 py-3 text-[13px]">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${priorityClass}`}>
                             {ticket.priority || 'Medium'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-[13px] text-[#8E9299]">{formatDeadline(ticket.deadline)}</td>
+                        <td data-label="Deadline" className="px-4 py-3 text-[13px] text-[#8E9299]">{formatDeadline(ticket.deadline)}</td>
                       </tr>
                     );
                   })}

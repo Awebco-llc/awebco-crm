@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown, X, Mail, GripVertical, Bell,
@@ -8,20 +9,7 @@ import {
   FolderOpen, UserCircle, Receipt, LogOut, MessageSquare, Pencil, Trash2, Upload, Menu, Rocket, Download, Copy, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import WorkspaceProjectView from '@/components/WorkspaceProjectView';
 
-import InboxView from '@/components/InboxView';
-import SettingsView from '@/components/SettingsView';
-import CompaniesView from '@/components/CompaniesView';
-import DealsView from '@/components/DealsView';
-import ProposalsView from '@/components/ProposalsView';
-import ProductsServicesView from '@/components/ProductsServicesView';
-import EmailModal from '@/components/EmailModal';
-import MyTasksView from '@/components/MyTasksView';
-import ProfileView from '@/components/ProfileView';
-import FilesView from '@/components/FilesView';
-import ImportModal from '@/components/ImportModal';
-import ContactTimelinePane from '@/components/ContactTimelinePane';
 import { AssigneeDropdown, TeamMember, Company, CompanyDropdown, Contact, Status, ProductService, Proposal, Deal, ContactGroup, ContactActivity, Ticket } from '@/components/Shared';
 import { createContact, subscribeCompanies, subscribeContacts, subscribeUsers, updateContact, subscribeProducts, subscribeProposals, subscribeDeals, subscribeContactGroups, createContactGroup, updateContactGroup, deleteContact, deleteContactGroup, updateTeamMember, subscribeMessages, createMessage, subscribeActivities, createActivity, deleteActivity, subscribeTickets } from '@/lib/crmStore';
 import { useAuth } from '@/hooks/AuthContext';
@@ -48,6 +36,24 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
+
+function ViewLoading() {
+  return <div role="status" className="p-6 text-sm text-[#4A4D53]">Loading…</div>;
+}
+
+const WorkspaceProjectView = dynamic(() => import('@/components/WorkspaceProjectView'), { loading: ViewLoading });
+const InboxView = dynamic(() => import('@/components/InboxView'), { loading: ViewLoading });
+const SettingsView = dynamic(() => import('@/components/SettingsView'), { loading: ViewLoading });
+const CompaniesView = dynamic(() => import('@/components/CompaniesView'), { loading: ViewLoading });
+const DealsView = dynamic(() => import('@/components/DealsView'), { loading: ViewLoading });
+const ProposalsView = dynamic(() => import('@/components/ProposalsView'), { loading: ViewLoading });
+const ProductsServicesView = dynamic(() => import('@/components/ProductsServicesView'), { loading: ViewLoading });
+const EmailModal = dynamic(() => import('@/components/EmailModal'), { loading: ViewLoading });
+const MyTasksView = dynamic(() => import('@/components/MyTasksView'), { loading: ViewLoading });
+const ProfileView = dynamic(() => import('@/components/ProfileView'), { loading: ViewLoading });
+const FilesView = dynamic(() => import('@/components/FilesView'), { loading: ViewLoading });
+const ImportModal = dynamic(() => import('@/components/ImportModal'), { loading: ViewLoading });
+const ContactTimelinePane = dynamic(() => import('@/components/ContactTimelinePane'), { loading: ViewLoading });
 
 const INITIAL_CONTACTS: Contact[] = [];
 
@@ -1602,7 +1608,7 @@ export default function Page() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#F7F8FA] text-[#1C1F23] font-sans overflow-hidden">
+    <div className="app-shell flex flex-col h-dvh w-full bg-[#F7F8FA] text-[#1C1F23] font-sans overflow-hidden">
       <div className="flex flex-grow min-h-0 overflow-hidden">
       {dataError ? (
         <div className="fixed top-4 right-4 z-[100] max-w-md rounded-md border border-[#FEE2E2] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] shadow-sm">
@@ -1764,13 +1770,14 @@ export default function Page() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-grow flex flex-col overflow-hidden relative bg-[#F7F8FA]">
+      <main className="flex-grow min-w-0 min-h-0 flex flex-col overflow-hidden relative bg-[#F7F8FA]">
         {/* Global Top Navigation */}
         <header className="h-14 bg-white border-b border-[#E2E4E9] flex items-center justify-between md:justify-end px-4 md:px-6 shrink-0 z-20">
           <button 
             onClick={() => setIsSidebarOpen(true)}
-            className="p-1 text-[#8E9299] hover:text-[#1C1F23] md:hidden rounded transition-colors mr-2 cursor-pointer"
+            className="min-h-11 min-w-11 p-2 text-[#8E9299] hover:text-[#1C1F23] md:hidden rounded transition-colors mr-2 cursor-pointer"
             title="Open Sidebar"
+            aria-expanded={isSidebarOpen}
           >
             <Menu className="w-5 h-5" />
           </button>
