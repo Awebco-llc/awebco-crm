@@ -68,3 +68,7 @@ The second pass removes the persistent row of task actions and repeated headings
 Current screenshots: [board](/tmp/awebco-mobile-review/10-app-like-board.png) and [task actions](/tmp/awebco-mobile-review/11-task-action-sheet.png). Earlier screenshots and DOM counts above describe the first pass.
 
 The second pass also passes the production build, TypeScript and all 98 regression tests. Browser checks cover the native action sheet, client conversation routing, floating task creation and editing, subtask expansion, filter results, list/table switching and bottom navigation at phone widths. [Small phone](/tmp/awebco-mobile-review/12-app-small-phone.png), [icon task editor](/tmp/awebco-mobile-review/13-icon-task-editor.png), [My Tasks](/tmp/awebco-mobile-review/14-app-my-tasks.png). Physical-device limitations above still apply.
+
+## Direct task opening
+
+Tapping anywhere in the task card's main content (including status, date and avatars) opens the existing task editor immediately. The subtask toggle remains independent. Only the three-dot button opens secondary actions, and the redundant Open task menu item has been removed. Verified in the phone preview by tapping the status area and observing the task editor directly, then checking the separate menu contains only Add subtask and Client conversation. TypeScript, focused lint and the production build pass. [Direct-open result](/tmp/awebco-mobile-review/16-direct-task-open.png).
