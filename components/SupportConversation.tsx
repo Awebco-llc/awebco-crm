@@ -110,7 +110,7 @@ async function supportRequest<T>(
   if (!response.ok) throw new Error(result.error || "Please try again.");
   return result;
 }
-export function SupportConversation({ ticketId }: { ticketId: string }) {
+export function SupportConversation({ ticketId, mobileLayout = false }: { ticketId: string; mobileLayout?: boolean }) {
   const [detail, setDetail] = useState<Detail | null>(null),
     [messages, setMessages] = useState<Message[]>([]),
     [text, setText] = useState(""),
@@ -120,6 +120,10 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
     [notice, setNotice] = useState(""),
     [revision, setRevision] = useState(0);
   const requestId = useRef(crypto.randomUUID());
+  const messageListRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (mobileLayout && messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+  }, [mobileLayout, messages]);
   const base = `/api/support/tickets/${encodeURIComponent(ticketId)}`;
   useEffect(() => {
     let active = true;
@@ -203,34 +207,7 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
   const identities = new Map(
     (detail?.messages || []).map((message) => [message.id, message]),
   );
-  return (
-    <section className="client-conversation min-w-0 space-y-5 text-sm" aria-label="Client conversation">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-bold text-base text-[#1C1F23] flex gap-2 items-center">
-            <Mail size={18} />
-            Client conversation
-          </h3>
-          <p className="text-[#4A4D53] mt-1">
-            Replies here are shared with the client and emailed to the
-            conversation’s participants.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="min-h-11 min-w-11 p-2 rounded hover:bg-gray-100"
-          aria-label="Refresh client conversation"
-          onClick={() => setRevision((v) => v + 1)}
-        >
-          <RefreshCw size={17} />
-        </button>
-      </div>
-      <p className="flex gap-2 items-center text-[#4A4D53] bg-[#F9FAFB] border border-[#E2E4E9] rounded-lg p-3">
-        <LockKeyhole size={17} className="shrink-0" />
-        Internal notes stay private and are never sent from this area.
-      </p>
-      {detail && (
-        <label className="flex items-start gap-2 cursor-pointer">
+  const sharingControl = detail ? (<label className="flex items-start gap-2 cursor-pointer">
           <input
             type="checkbox"
             className="mt-1"
@@ -257,9 +234,58 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                 : "Add the requester email in ticket details."}
             </small>
           </span>
-        </label>
-      )}
-      {!detail && !error && <p role="status">Loading conversation…</p>}
+        </label>) : null;
+  const attachmentPicker = <>
+          <label className="block">
+            Attach files
+            <input
+              type="file"
+              multiple
+              disabled={busy}
+              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+              className="block mt-1 w-full text-sm"
+              onChange={(e) => {
+                const chosen = Array.from(e.target.files || []);
+                e.target.value = "";
+                if (
+                  chosen.length + files.length > 5 ||
+                  [...files, ...chosen].reduce((n, f) => n + f.size, 0) >
+                    3000000
+                ) {
+                  setError(
+                    "Attach up to 5 files, with a maximum total size of 3 MB.",
+                  );
+                  return;
+                }
+                setFiles([...files, ...chosen]);
+              }}
+            />
+          </label>
+          <p className="text-xs text-[#4A4D53]">Up to 5 files, 3 MB total.</p>
+  </>;
+  return (
+    <section className={`client-conversation min-w-0 text-sm ${mobileLayout ? "client-conversation-mobile" : "space-y-5"}`} aria-label="Client conversation">
+      <div className={mobileLayout ? "flex shrink-0 items-center justify-between gap-2 border-b border-[#E8EBF0] bg-white px-3 py-2" : "flex items-start justify-between gap-3"}>
+        {mobileLayout ? <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-[#1061E3]">{detail?.shared ? 'Shared with client' : 'Client replies'}</p><p className="mt-1 truncate text-xs text-[#777E8A]">{detail?.requester || 'Client conversation'}</p></div> : <div>
+          <h3 className="font-bold text-base text-[#1C1F23] flex gap-2 items-center"><Mail size={18} />Client conversation</h3>
+          <p className="text-[#4A4D53] mt-1">Replies here are shared with the client and emailed to the conversation’s participants.</p>
+        </div>}
+        {mobileLayout && detail && <details className="relative"><summary className="flex min-h-11 cursor-pointer items-center rounded-lg px-2 text-xs text-[#777E8A]">Client access</summary><div className="absolute right-0 top-full z-10 w-64 rounded-xl border border-[#E8EBF0] bg-white p-4 shadow-lg">{sharingControl}</div></details>}
+        <button
+          type="button"
+          className="min-h-11 min-w-11 p-2 rounded hover:bg-gray-100"
+          aria-label="Refresh client conversation"
+          onClick={() => setRevision((v) => v + 1)}
+        >
+          <RefreshCw size={17} />
+        </button>
+      </div>
+      {!mobileLayout && <p className="flex gap-2 items-center text-[#4A4D53] bg-[#F9FAFB] border border-[#E2E4E9] rounded-lg p-3">
+        <LockKeyhole size={17} className="shrink-0" />
+        Internal notes stay private and are never sent from this area.
+      </p>}
+      {!mobileLayout && sharingControl}
+      {!detail && !error && <p role="status" className={mobileLayout ? "flex-1 p-4" : undefined}>Loading conversation…</p>}
       {detail && !detail.shared && (
         <p className="p-3 rounded-lg bg-amber-50 text-amber-900">
           This ticket is internal. Set its company and requester email, then
@@ -267,7 +293,7 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
         </p>
       )}
       {messages.length ? (
-        <ol className="space-y-3" aria-label="Messages">
+        <ol ref={messageListRef} className={mobileLayout ? "min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-3 p-3" : "space-y-3"} aria-label="Messages">
           {messages.map((message) => (
             <li
               key={message.id}
@@ -388,56 +414,31 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
           ))}
         </ol>
       ) : (
-        detail && <p className="text-[#4A4D53]">No client messages yet.</p>
+        detail && <p className={mobileLayout ? "min-h-0 flex-1 overflow-y-auto p-4 text-[#777E8A]" : "text-[#4A4D53]"}>No client messages yet.</p>
       )}
       {detail?.shared && (
-        <div className="border-2 border-blue-200 rounded-xl p-4 space-y-3">
+        <div className={mobileLayout ? "mobile-reply-composer" : "border-2 border-blue-200 rounded-xl p-4 space-y-3"}>
           <label
-            className="block font-semibold"
+            className={mobileLayout ? "sr-only" : "block font-semibold"}
             htmlFor={`client-reply-${ticketId}`}
           >
             Reply to client
           </label>
           <textarea
             id={`client-reply-${ticketId}`}
-            rows={5}
+            rows={mobileLayout ? 2 : 5}
             maxLength={10000}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full border border-[#C8CDD5] rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+            className="w-full min-w-0 border border-[#C8CDD5] rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
             placeholder="Write a reply for the client…"
             disabled={busy}
           />
-          <label className="block">
-            Attach files
-            <input
-              type="file"
-              multiple
-              disabled={busy}
-              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
-              className="block mt-1 w-full text-sm"
-              onChange={(e) => {
-                const chosen = Array.from(e.target.files || []);
-                e.target.value = "";
-                if (
-                  chosen.length + files.length > 5 ||
-                  [...files, ...chosen].reduce((n, f) => n + f.size, 0) >
-                    3000000
-                ) {
-                  setError(
-                    "Attach up to 5 files, with a maximum total size of 3 MB.",
-                  );
-                  return;
-                }
-                setFiles([...files, ...chosen]);
-              }}
-            />
-          </label>
-          <p className="text-xs text-[#4A4D53]">Up to 5 files, 3 MB total.</p>
+          {mobileLayout ? <details className="mobile-reply-attachments min-w-0"><summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 text-xs text-[#4A4D53]"><Paperclip size={17} />Attach{files.length ? ` (${files.length})` : ''}</summary>{attachmentPicker}</details> : attachmentPicker}
           {files.map((file, index) => (
             <div
               key={`${index}-${file.name}`}
-              className="flex gap-2 items-center break-all"
+              className={`flex gap-2 items-center break-all ${mobileLayout ? "col-span-2 text-xs" : ""}`}
             >
               <span>{file.name}</span>
               <button
@@ -452,6 +453,7 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
           ))}
           <button
             type="button"
+            aria-label="Send reply to client"
             disabled={busy || (!text.trim() && !files.length)}
             onClick={() =>
               void perform(async () => {
@@ -476,17 +478,17 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
             className="flex items-center justify-center gap-2 bg-[#1061E3] text-white rounded-lg px-4 py-2.5 font-semibold disabled:opacity-50"
           >
             <Send size={16} />
-            {busy ? "Sending…" : "Send reply to client"}
+            {busy ? "Sending…" : mobileLayout ? "Send reply" : "Send reply to client"}
           </button>
         </div>
       )}
       {error && (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className={mobileLayout ? "shrink-0 bg-red-50 px-3 py-2 text-xs text-red-700" : "text-red-700"}>
           {error}
         </p>
       )}
       {notice && (
-        <p role="status" className="text-green-800">
+        <p role="status" className={mobileLayout ? "shrink-0 px-3 py-1 text-xs text-green-800" : "text-green-800"}>
           {notice}
         </p>
       )}

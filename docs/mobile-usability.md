@@ -72,3 +72,20 @@ The second pass also passes the production build, TypeScript and all 98 regressi
 ## Direct task opening
 
 Tapping anywhere in the task card's main content (including status, date and avatars) opens the existing task editor immediately. The subtask toggle remains independent. Only the three-dot button opens secondary actions, and the redundant Open task menu item has been removed. Verified in the phone preview by tapping the status area and observing the task editor directly, then checking the separate menu contains only Add subtask and Client conversation. TypeScript, focused lint and the production build pass. [Direct-open result](/tmp/awebco-mobile-review/16-direct-task-open.png).
+
+## Focused phone task and support screens
+
+The next pass is scoped below 768 px. Desktop keeps the existing table, side panel, full-screen editor preference, field order, conversation presentation and write handlers. The saved desktop editor preference is not changed; phones use the focused task page regardless of that preference.
+
+- The phone header has back/close controls and Saving, Saved or failed-save feedback. Subtasks have a Back to parent task action.
+- Overview shows the task title, status, calendar deadline, named assignees, direct-opening subtasks and description. More details retains company, priority, billing, contact and custom fields, plus the existing delete confirmation. Files remains a separate accessible icon tab.
+- Shared support tickets open Client replies first. New/manual/internal tasks and subtasks open Overview. This chooses a starting tab only; it does not change sharing or authorization. Existing explicit conversation links still work.
+- The client message history scrolls above a bottom reply composer. Attachment selection is collapsed under Attach; the existing file limits, validation, request IDs, delivery details and reply API are retained. Client access contains the existing sharing checkbox.
+- Internal notes have a separate tab, an explicit private-to-team notice and a bottom composer. Enter adds a newline on phones; the submit button or Ctrl/Command+Enter posts. Desktop Enter behavior is retained.
+- Compact boards offer an Overdue focus when relevant, preserve parents of overdue subtasks, and exclude completed/invoiced/live work. Calendar deadline input values are normalized on phones without changing stored values until edited.
+
+Browser checks with disposable in-memory data passed at 390 × 844 and 320 × 568: direct conversation opening; reply submission and cleared composer; private note submission; status and multi-assignee changes with Saved feedback; additional fields; direct child opening/back to parent; task/subtask creation and renaming; Files availability; and overdue filtering that excluded a completed task. At 320 px the document width remained 320 px, and both the reply textarea and Send button fit inside the viewport. A deliberately rejected local update showed Could not save instead of Saved. Desktop checks at 1440 px confirmed the existing table, detail fields and client conversation remain available. No live customer messages, uploads or production writes were used.
+
+The production build, TypeScript, focused lint (zero errors; existing warnings only) and all 102 non-emulator tests pass, including four new tests covering calendar dates, overdue boundaries/completed statuses and starting-tab agreement with existing support sharing states. Initial First Load JS remains 306 kB. GitHub was fetched again and main remained `d297b4d`. The physical-device, keyboard and delivery limitations above still apply.
+
+Current evidence: [phone conversation](/tmp/awebco-mobile-review/17-client-replies.png), [phone overview](/tmp/awebco-mobile-review/18-task-overview.png), [desktop panel](/tmp/awebco-mobile-review/19-desktop-preserved.png). Logs: `build-focused-tasks.log` and `tests-focused-tasks.log` in the same temporary evidence directory.

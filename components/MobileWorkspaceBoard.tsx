@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronRight, Flag, ListTree, MessageCircle, MoreHorizontal, Plus, X } from 'lucide-react';
+import { isTaskOverdue } from '@/lib/mobileTaskPresentation';
 import { getStatusBadgeClasses, type Ticket, type TeamMember } from './Shared';
 
 type BoardGroup = { id: string; name: string };
@@ -27,6 +28,8 @@ export default function MobileWorkspaceBoard({
   onAddSubtask: (id: string) => void;
   teamMembers: TeamMember[];
 }) {
+  const [today] = useState(() => new Date());
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [actionRow, setActionRow] = useState<Ticket | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -44,6 +47,16 @@ export default function MobileWorkspaceBoard({
     callback(id);
   }
 
+  const boardGroups = groups.map(group => ({ ...group, rows: rowsForGroup(group.id) }));
+  function hasOverdueTask(row: Ticket, ancestors = new Set<string>()): boolean {
+    if (ancestors.has(row.id)) return false;
+    if (isTaskOverdue(row, today)) return true;
+    const next = new Set(ancestors).add(row.id);
+    return childrenForRow(row.id).some(child => hasOverdueTask(child, next));
+  }
+  const overdueRoots = new Set(boardGroups.flatMap(group => group.rows.filter(row => hasOverdueTask(row)).map(row => row.id)));
+  const filterOverdue = overdueOnly && overdueRoots.size > 0;
+
   function renderRow(row: Ticket, ancestors = new Set<string>()) {
     if (ancestors.has(row.id)) return null;
     const nextAncestors = new Set(ancestors).add(row.id);
@@ -60,7 +73,7 @@ export default function MobileWorkspaceBoard({
         <span className="flex min-h-11 items-center gap-2 text-xs text-[#777E8A]">
           <span className={`max-w-[45%] truncate rounded-md px-2 py-1 font-medium ${getStatusBadgeClasses(row.status || 'Not Started')}`}>{row.status || 'Not Started'}</span>
           {highPriority && <Flag size={14} className="shrink-0 text-[#D97706]" role="img" aria-label={`${row.priority} priority`}><title>{row.priority} priority</title></Flag>}
-          {row.deadline && <span className="flex min-w-0 items-center gap-1 whitespace-nowrap" title={`Due ${row.deadline}`}><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="truncate">{shortDate(row.deadline)}</span></span>}
+          {row.deadline && <span className={`flex min-w-0 items-center gap-1 whitespace-nowrap ${isTaskOverdue(row, today) ? 'text-red-700 font-medium' : ''}`} title={`${isTaskOverdue(row, today) ? 'Overdue · ' : 'Due '}${row.deadline}`}><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="truncate">{shortDate(row.deadline)}</span></span>}
           <span className="ml-auto flex shrink-0 -space-x-1.5">
             {assignees.slice(0, 2).map(member => <span key={member.id} role="img" aria-label={member.name} title={member.name} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[8px] font-semibold text-white" style={{ backgroundColor: member.color || '#003366' }}>{member.initials}</span>)}
             {assignees.length > 2 && <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-gray-100 text-[8px]">+{assignees.length - 2}</span>}
@@ -78,8 +91,12 @@ export default function MobileWorkspaceBoard({
 
   return <>
     <div className="space-y-5" aria-label="Compact board">
-      {groups.map(group => {
-        const rows = rowsForGroup(group.id);
+      {overdueRoots.size > 0 && <div className="flex gap-2 pt-2" aria-label="Task focus">
+        <button type="button" onClick={() => setOverdueOnly(false)} aria-pressed={!filterOverdue} className={`min-h-11 rounded-xl px-3 text-xs font-medium ${!filterOverdue ? 'bg-[#E9EDF3] text-[#1C1F23]' : 'text-[#777E8A]'}`}>All tasks</button>
+        <button type="button" onClick={() => setOverdueOnly(true)} aria-pressed={filterOverdue} className={`flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-medium ${filterOverdue ? 'bg-red-50 text-red-700' : 'text-[#777E8A]'}`}><Flag size={14} />Overdue {overdueRoots.size}</button>
+      </div>}
+      {boardGroups.map(group => {
+        const rows = filterOverdue ? group.rows.filter(row => overdueRoots.has(row.id)) : group.rows;
         const collapsed = collapsedGroupIds.has(group.id);
         return <section key={group.id} aria-label={group.name}>
           <h2><button type="button" aria-expanded={!collapsed} onClick={() => toggleGroup(group.id)} className="flex min-h-11 w-full items-center gap-2 px-1 text-left text-sm font-semibold text-[#4A4D53]">

@@ -1,6 +1,8 @@
 'use client';
 
 import MobileWorkspaceBoard from './MobileWorkspaceBoard';
+import MobileTaskOverview from './MobileTaskOverview';
+import { mobileDateValue, mobileStartsWithClientReplies } from '@/lib/mobileTaskPresentation';
 import { useMobileViewport } from '@/hooks/useMobileViewport';
 import { listingHandoff } from '@/lib/listingHandoff';
 import { SupportConversation, SupportConversationPanel } from './SupportConversation';
@@ -8,7 +10,7 @@ import { PortalSeoVisibility } from './PortalSeoVisibility';
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot, Building2, Check, SlidersHorizontal, MoreHorizontal, LayoutList, Table2 } from 'lucide-react';
+import { Plus, GripHorizontal, GripVertical, X, Search, ChevronDown, ChevronRight, CornerDownRight, Trash2, Copy, Pencil, Paperclip, AtSign, File as FileIcon, Mail, Upload, Loader2, ArrowRight, ExternalLink, RefreshCw, CheckCircle2, MessageCircle, MessageCirclePlus, Info, ChevronUp, ChevronsUpDown, Download, Calendar, Clock, Clipboard, Bot, Building2, Check, SlidersHorizontal, MoreHorizontal, LayoutList, Table2, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DndContext,
@@ -2456,6 +2458,7 @@ export default function WorkspaceProjectView({
   const [quickMentionIndex, setQuickMentionIndex] = useState(-1);
   const quickUpdateTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [activeEditTab, setActiveEditTab] = useState<EditTab>('details');
+  const [mobileRowSaves, setMobileRowSaves] = useState<Record<string, { pending: number; error: boolean; saved: boolean }>>({});
   const requestedEditTab = useRef<EditTab | null>(null);
   const activeTabButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -2902,10 +2905,12 @@ export default function WorkspaceProjectView({
   React.useEffect(() => {
     if (editingRowId) {
       const query = new URLSearchParams(window.location.search);
-      setActiveEditTab(requestedEditTab.current || (projectType === 'Support Tickets' && query.get('ticket') === editingRowId && query.get('conversation') === 'client' ? 'client' : 'details'));
+      const openedRow = dataRef.current.find(row => row.id === editingRowId);
+      const openClient = projectType === 'Support Tickets' && ((query.get('ticket') === editingRowId && query.get('conversation') === 'client') || (isMobile && openedRow && mobileStartsWithClientReplies(openedRow)));
+      setActiveEditTab(requestedEditTab.current || (openClient ? 'client' : 'details'));
       requestedEditTab.current = null;
     }
-  }, [editingRowId, projectType]);
+  }, [editingRowId, projectType, isMobile]);
 
   React.useEffect(() => {
     if (openRowId && data.some(row => row.id === openRowId)) {
@@ -3142,6 +3147,8 @@ export default function WorkspaceProjectView({
   }, [rawTickets, data, rowMatchesStatus, getSubtaskRows]);
 
   const handleUpdateRow = async (id: string, patch: any) => {
+    if (isMobile) setMobileRowSaves(prev => ({ ...prev, [id]: { pending: (prev[id]?.pending || 0) + 1, error: false, saved: false } }));
+    let saveFailed = false;
     try {
       const updatedPatch = { ...patch };
 
@@ -3259,7 +3266,10 @@ export default function WorkspaceProjectView({
       await updateTicket(id, updatedPatch);
       triggerSheetsSync();
     } catch (err) {
+      saveFailed = true;
       console.error('Failed to update ticket', err);
+    } finally {
+      if (isMobile) setMobileRowSaves(prev => ({ ...prev, [id]: { pending: Math.max(0, (prev[id]?.pending || 1) - 1), error: saveFailed || !!prev[id]?.error, saved: !saveFailed } }));
     }
   };
 
@@ -3749,7 +3759,7 @@ export default function WorkspaceProjectView({
 
     try {
       const id = await createTicket(newSubRow);
-      if (isMobile) setEditingRowId(id);
+      if (isMobile) { requestedEditTab.current = 'details'; setEditingRowId(id); }
     } catch (err) {
       console.error('Failed to create sub-task', err);
     }
@@ -4135,7 +4145,7 @@ export default function WorkspaceProjectView({
 
       console.log('Payload being sent to Firestore:', newTicket);
       const id = await createTicket(newTicket);
-      if (isMobile) setEditingRowId(id);
+      if (isMobile) { requestedEditTab.current = 'details'; setEditingRowId(id); }
       console.log('Successfully created ticket with ID:', id);
     } catch (err) {
       console.error('CRITICAL ERROR in handleAddWebsite:', err);
@@ -5058,7 +5068,7 @@ export default function WorkspaceProjectView({
       {/* Edit Row Panel */}
       <AnimatePresence>
         {editingRowId && (
-          useFullScreenUnifiedTicketView ? (
+          useFullScreenUnifiedTicketView && !isMobile ? (
             <div role="dialog" aria-modal="true" aria-label={`${projectType} details`} className="fixed inset-0 z-50 task-detail-panel bg-[#F9FAFB] flex flex-col h-dvh w-screen overflow-hidden">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -5645,28 +5655,47 @@ export default function WorkspaceProjectView({
                 onClick={() => setEditingRowId(null)}
               />
               <motion.div
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
+                initial={isMobile ? { opacity: 0 } : { x: '100%' }}
+                animate={isMobile ? { opacity: 1 } : { x: 0 }}
+                exit={isMobile ? { opacity: 0 } : { x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                 role="dialog" aria-modal="true" aria-label={`${projectType} details`}
-                className="task-detail-panel relative w-full max-w-md bg-white shadow-2xl flex flex-col h-dvh border-l border-[#E2E4E9]"
+                className="task-detail-panel mobile-task-page relative w-full max-w-md bg-white shadow-2xl flex flex-col h-dvh border-l border-[#E2E4E9]"
               >
-                <div className="px-6 py-4 border-b border-[#E2E4E9] flex items-center justify-between bg-[#F9FAFB] shrink-0">
+                {isMobile && <header className="flex min-h-16 shrink-0 items-center gap-2 border-b border-[#E8EBF0] bg-white px-2">
+                  <button type="button" aria-label={data.find(row => row.id === editingRowId)?.parentId ? 'Back to parent task' : 'Back to board'} onClick={() => {
+                    const parentId = data.find(row => row.id === editingRowId)?.parentId;
+                    if (parentId && data.some(row => row.id === parentId)) { requestedEditTab.current = 'details'; setEditingRowId(parentId); }
+                    else setEditingRowId(null);
+                  }} className="flex h-11 w-11 items-center justify-center rounded-xl text-[#4A4D53]"><ArrowLeft size={21} /></button>
+                  <div className="min-w-0 flex-1 py-2"><p className="truncate text-sm font-semibold">{data.find(row => row.id === editingRowId)?.projectName || 'Task'}</p>
+                    <p role={mobileRowSaves[editingRowId]?.error ? 'alert' : 'status'} className={`mt-0.5 text-[11px] ${mobileRowSaves[editingRowId]?.error ? 'text-red-700' : 'text-[#777E8A]'}`}>
+                      {mobileRowSaves[editingRowId]?.pending ? 'Saving…' : mobileRowSaves[editingRowId]?.error ? 'Could not save. Check your connection and try again.' : mobileRowSaves[editingRowId]?.saved ? 'Saved' : projectType}
+                    </p>
+                  </div>
+                  <button type="button" aria-label="Close task details" onClick={() => setEditingRowId(null)} className="flex h-11 w-11 items-center justify-center rounded-xl text-[#777E8A]"><X size={18} /></button>
+                </header>}
+                <div className="hidden md:flex px-6 py-4 border-b border-[#E2E4E9] items-center justify-between bg-[#F9FAFB] shrink-0">
                   <h3 className="min-w-0 truncate font-semibold text-base md:text-lg text-[#1C1F23]"><span className="md:hidden">{data.find(row => row.id === editingRowId)?.projectName || 'Task'}</span><span className="hidden md:inline">Edit {projectType} Details</span></h3>
                   <button aria-label="Close task details" onClick={() => setEditingRowId(null)} className="min-w-11 text-[#8E9299] hover:text-[#1C1F23] transition-colors">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                <div className="px-6 py-3 border-b border-[#E2E4E9] bg-white shrink-0">
-                  <div className="flex gap-2 overflow-x-auto">
-                    {[
+                <div className="mobile-task-tabbar px-3 py-1 md:px-6 md:py-3 border-b border-[#E2E4E9] bg-white shrink-0">
+                  <div className="flex gap-1 md:gap-2 overflow-x-auto">
+                    {(isMobile ? [
+                      ...(projectType === 'Support Tickets' ? [{ id: 'client', label: 'Client replies', icon: Mail }] : []),
+                      { id: 'details', label: 'Overview', icon: Info },
+                      { id: 'updates', label: projectType === 'Support Tickets' ? 'Internal notes' : 'Updates', icon: MessageCircle },
+                      ...(activeEditTab === 'description' ? [{ id: 'description', label: 'Description', icon: FileIcon }] : []),
+                      { id: 'files', label: 'Files', icon: Paperclip },
+                    ] : [
                       { id: 'details', label: 'Details', icon: Info },
                       { id: 'description', label: 'Description', icon: FileIcon },
                       { id: 'updates', label: projectType === 'Support Tickets' ? 'Internal notes' : 'Updates', icon: MessageCircle },
                       ...(projectType === 'Support Tickets' ? [{ id: 'client', label: 'Client conversation', icon: Mail }] : []),
                       { id: 'files', label: 'Files', icon: Paperclip },
-                    ].map(tab => (
+                    ]).map(tab => (
                       <button
                         key={tab.id}
                         ref={activeEditTab === tab.id ? activeTabButtonRef : undefined}
@@ -5675,17 +5704,17 @@ export default function WorkspaceProjectView({
                         aria-label={tab.label}
                         title={tab.label}
                         aria-pressed={activeEditTab === tab.id}
-                        className={`flex flex-1 md:flex-none items-center justify-center min-w-11 md:min-w-0 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${activeEditTab === tab.id
+                        className={`flex flex-none items-center justify-center min-w-11 md:min-w-0 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${activeEditTab === tab.id
                             ? 'bg-[#1061E3] text-white'
                             : 'bg-[#F0F2F5] text-[#4A4D53] hover:bg-[#E2E8F0]'
                           }`}
                       >
-                        <tab.icon className="md:hidden w-[18px] h-[18px]" aria-hidden="true" /><span className="hidden md:inline">{tab.label}</span>
+                        {isMobile && tab.id === 'files' ? <Paperclip size={18} aria-hidden="true" /> : <span>{tab.label}</span>}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="flex-grow min-h-0 overflow-y-auto overscroll-contain p-3 md:p-6 flex flex-col gap-4">
+                <div className="mobile-task-scroll flex-grow min-h-0 overflow-y-auto overscroll-contain p-3 md:p-6 flex flex-col gap-4">
                   {activeEditTab === 'details' && projectType === 'SEO' && <PortalSeoVisibility id={editingRowId} value={data.find(r => r.id === editingRowId)?.portalVisibility} />}
                   {activeEditTab === 'details' && (() => {
                     const editingRow = data.find(r => r.id === editingRowId);
@@ -5710,10 +5739,10 @@ export default function WorkspaceProjectView({
                         }
                       });
                     }
-                    return displayCols.map(col => {
+                    const renderDetailField = (col: Column) => {
                       if (col.id === 'companyName') {
                         return (
-                          <div key={col.id}>
+                          <div key={col.id} data-task-field={col.id}>
                             <div className="flex items-center gap-1.5 mb-1.5">
                               <label className="block text-sm font-semibold text-[#4A4D53]">Company (Auto Sync)</label>
                               {editingRow?.companyId && projectType !== 'Support Tickets' && (
@@ -5734,10 +5763,10 @@ export default function WorkspaceProjectView({
                       }
 
                       return (
-                        <div key={col.id}>
-                          <label className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
+                        <div key={col.id} data-task-field={col.id}>
+                          <label htmlFor={`task-field-${col.id}`} className="block text-sm font-semibold text-[#4A4D53] mb-1.5">{col.header}</label>
                           {col.id === 'status' ? (
-                            <select
+                            <select id={`task-field-${col.id}`}
                               value={editingRow?.[col.id] ?? ''}
                               onChange={e => {
                                 const patch: any = { [col.id]: e.target.value };
@@ -5770,7 +5799,7 @@ export default function WorkspaceProjectView({
                               ).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
                           ) : col.id === 'priority' ? (
-                            <select
+                            <select id={`task-field-${col.id}`}
                               value={editingRow?.[col.id] ?? ''}
                               onChange={e => {
                                 handleUpdateRow(editingRowId, { [col.id]: e.target.value });
@@ -5783,7 +5812,7 @@ export default function WorkspaceProjectView({
                               ))}
                             </select>
                           ) : col.id === 'planType' ? (
-                            <select
+                            <select id={`task-field-${col.id}`}
                               value={editingRow?.[col.id] ?? 'Basic Plan'}
                               onChange={e => {
                                 handleUpdateRow(editingRowId, { [col.id]: e.target.value });
@@ -5803,6 +5832,7 @@ export default function WorkspaceProjectView({
                           ) : col.id === 'assignee' ? (
                             <div className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md bg-white">
                               <AssigneeDropdown
+                                triggerLabel={isMobile ? (editingRow?.assignees || (editingRow?.assignee ? [editingRow.assignee] : [])).map((id: string) => teamMembers.find(member => member.id === id)?.name || id).join(', ') || 'Unassigned' : undefined}
                                 values={editingRow?.assignees || (editingRow?.[col.id] ? [editingRow[col.id]] : [])}
                                 onSaveMultiple={(newVals) => {
                                   handleUpdateRow(editingRowId, {
@@ -5814,7 +5844,7 @@ export default function WorkspaceProjectView({
                               />
                             </div>
                           ) : col.id === 'projectName' ? (
-                            <input
+                            <input id={`task-field-${col.id}`}
                               type="text"
                               value={editingRow?.projectName ?? ''}
                               onChange={e => handleUpdateRow(editingRowId, { projectName: e.target.value })}
@@ -5823,9 +5853,9 @@ export default function WorkspaceProjectView({
                             />
                           ) : (
                             <div className="flex items-center gap-2">
-                              <input
+                              <input id={`task-field-${col.id}`}
                                 type={col.id === 'deadline' ? 'date' : 'text'}
-                                value={editingRow?.[col.id] ?? ''}
+                                value={isMobile && col.id === 'deadline' ? mobileDateValue(editingRow?.[col.id] || '') : (editingRow?.[col.id] ?? '')}
                                 onChange={e => {
                                   handleUpdateRow(editingRowId, { [col.id]: e.target.value });
                                 }}
@@ -5847,7 +5877,20 @@ export default function WorkspaceProjectView({
                           )}
                         </div>
                       );
-                    });
+                    };
+                    if (!isMobile || !editingRow) return displayCols.map(renderDetailField);
+                    const essentialIds = ['projectName', 'status', 'deadline', 'assignee'];
+                    const essentials = essentialIds.map(id => displayCols.find(col => col.id === id) || { id, header: id === 'projectName' ? 'Task' : id === 'deadline' ? 'Due date' : id === 'assignee' ? 'Assignee' : 'Status' });
+                    return <MobileTaskOverview
+                      row={editingRow}
+                      primaryFields={essentials.map(renderDetailField)}
+                      extraFields={displayCols.filter(col => !essentialIds.includes(col.id)).map(renderDetailField)}
+                      subtasks={getSubtaskRows(editingRowId, data)}
+                      onOpenTask={id => { requestedEditTab.current = 'details'; setEditingRowId(id); }}
+                      onAddSubtask={() => { void addSubRow(editingRowId); }}
+                      onDescription={() => setActiveEditTab('description')}
+                      onDelete={allowDeletingRows ? () => { setRowToDeleteId(editingRowId); setEditingRowId(null); } : undefined}
+                    />;
                   })()}
 
                   {/* Updates Section */}
@@ -5868,13 +5911,13 @@ export default function WorkspaceProjectView({
                     );
                   })()}
 
-                  {activeEditTab === 'client' && projectType === 'Support Tickets' && <SupportConversation key={editingRowId} ticketId={editingRowId} />}
+                  {activeEditTab === 'client' && projectType === 'Support Tickets' && <SupportConversation key={editingRowId} ticketId={editingRowId} mobileLayout={isMobile} />}
                   {activeEditTab === 'updates' && (
-                    <div>
-                      <h4 className="font-bold text-sm text-[#1C1F23] mb-4">{projectType === 'Support Tickets' ? 'Internal notes' : 'Updates'}</h4>
-                      {projectType === 'Support Tickets' && <p className="text-sm text-[#4A4D53] mb-4">Only your team can see these notes. They are never emailed to the client.</p>}
+                    <div className={isMobile ? "mobile-note-conversation" : undefined}>
+                      <h4 className="hidden md:block font-bold text-sm text-[#1C1F23] mb-4">{projectType === 'Support Tickets' ? 'Internal notes' : 'Updates'}</h4>
+                      {projectType === 'Support Tickets' && <p className="text-sm text-[#4A4D53] mb-4">{isMobile ? 'Private to your team. Not sent to the client.' : 'Only your team can see these notes. They are never emailed to the client.'}</p>}
 
-                      <div className="flex flex-col gap-2 relative mb-6">
+                      <div className="mobile-note-composer flex flex-col gap-2 relative mb-6">
                         {attachedFile && (
                           <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-md p-2">
                             <div className="flex items-center gap-2 text-sm text-[#1061E3]">
@@ -5931,7 +5974,7 @@ export default function WorkspaceProjectView({
                                   } else if (e.key === 'Escape') {
                                     setShowMentionMenu(false);
                                   }
-                                } else if (e.key === 'Enter' && !e.shiftKey) {
+                                } else if (e.key === 'Enter' && !e.shiftKey && (!isMobile || e.ctrlKey || e.metaKey)) {
                                   e.preventDefault();
                                   handleAddUpdate(editingRowId);
                                 }
@@ -6012,16 +6055,17 @@ export default function WorkspaceProjectView({
                           </div>
                           <button
                             onClick={() => handleAddUpdate(editingRowId)}
+                            aria-label={projectType === 'Support Tickets' ? 'Post internal note' : 'Post update'}
                             disabled={(!newUpdateText.trim() && !attachedFile) || isPostingUpdate}
                             className="px-4 py-2 h-[80px] bg-[#1061E3] text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center gap-1.5"
                           >
                             {isPostingUpdate && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Post
+                            {isMobile && projectType === 'Support Tickets' ? 'Add note' : 'Post'}
                           </button>
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-4">
+                      <div className="mobile-note-history flex flex-col gap-4">
                         {(() => {
                           const editingRow = data.find(r => r.id === editingRowId);
                           return [...(editingRow?.updates || [])].reverse().map((update: any) => (
@@ -6194,7 +6238,7 @@ export default function WorkspaceProjectView({
                     );
                   })()}
                 </div>
-                <div className="p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] flex justify-between items-center shrink-0">
+                <div className="hidden md:flex p-4 border-t border-[#E2E4E9] bg-[#F9FAFB] justify-between items-center shrink-0">
                   {allowDeletingRows && (
                     <button
                       onClick={() => {

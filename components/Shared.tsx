@@ -405,13 +405,15 @@ export function AssigneeDropdown({
   onSave,
   teamMembers,
   values,
-  onSaveMultiple
+  onSaveMultiple,
+  triggerLabel
 }: {
   value?: string,
   onSave?: (val: string) => void,
   teamMembers: TeamMember[],
   values?: string[],
-  onSaveMultiple?: (vals: string[]) => void
+  onSaveMultiple?: (vals: string[]) => void,
+  triggerLabel?: string
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -524,11 +526,12 @@ export function AssigneeDropdown({
   ) : null;
 
   return (
-    <div className="relative inline-block hover:bg-gray-100 rounded px-1 -mx-1" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
+    <div className={triggerLabel ? "relative block w-full rounded hover:bg-gray-50" : "relative inline-block hover:bg-gray-100 rounded px-1 -mx-1"} onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex items-center justify-center cursor-pointer hover:ring-2 ring-gray-200 transition-all rounded-full p-0.5"
+        aria-label={triggerLabel ? `Change assignees: ${triggerLabel}` : undefined}
+        className={triggerLabel ? "flex min-h-11 w-full items-center gap-3 rounded-lg px-1 text-left" : "inline-flex items-center justify-center cursor-pointer hover:ring-2 ring-gray-200 transition-all rounded-full p-0.5"}
       >
         {isMulti ? (
           <div className="flex -space-x-1.5 overflow-hidden items-center">
@@ -584,6 +587,7 @@ export function AssigneeDropdown({
             +
           </div>
         )}
+        {triggerLabel && <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1C1F23]">{triggerLabel}</span>}
       </button>
 
       {dropdownMenu}
