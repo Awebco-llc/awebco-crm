@@ -1,5 +1,6 @@
 import {
   addDoc,
+  arrayRemove,
   collection,
   doc,
   onSnapshot,
@@ -379,6 +380,13 @@ export async function createTicket(input: Omit<Ticket, 'id'>): Promise<string> {
 export async function updateTicket(id: string, patch: Partial<Omit<Ticket, 'id'>>): Promise<void> {
   const cleanPatch = cleanUndefined(patch);
   await setDoc(doc(getDb(), 'tickets', id), { ...cleanPatch, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function deleteTicketUpdate(id: string, update: NonNullable<Ticket['updates']>[number]): Promise<void> {
+  await updateDoc(doc(getDb(), 'tickets', id), {
+    updates: arrayRemove(update),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function deleteTicket(id: string): Promise<void> {
