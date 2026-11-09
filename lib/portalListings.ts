@@ -52,8 +52,8 @@ export function toPublicResource(id: string, data: Record<string, unknown>): Pub
 }
 
 export function mapListingStatus(status: unknown): PublicListing['status'] {
-  if (status === 'Running') return 'active';
-  if (status === 'Down') return 'attention';
+  if (status === 'Running' || status === 'Live') return 'active';
+  if (['Down', 'Needs Updated', 'Needs Replaced', 'Site Down', '404 or Error'].includes(status as string)) return 'attention';
   if (status === 'On Hold') return 'on_hold';
   if (status === 'Not Started' || status === 'Setup' || status === 'In Progress') return 'pending';
   return 'unknown';

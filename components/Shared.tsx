@@ -270,11 +270,11 @@ export function getStatusBadgeClasses(value: string) {
           value === 'Setup' ? 'bg-[#E3F2FD] text-[#1976D2]' :
             value === 'Awaiting Customer' ? 'bg-[#FEF9C3] text-[#CA8A04]' :
               value === 'Awaiting Review' || value === 'Awaiting review' || value === 'awaiting review' ? 'bg-[#F3E8FF] text-[#9333EA]' :
-              value === 'Needs Invoiced' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
+              value === 'Needs Invoiced' || value === 'Needs Updated' || value === 'Needs Replaced' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
                 value === 'Done' ? 'bg-[#ECFDF3] text-[#10B981]' :
                   value === 'Running' ? 'bg-[#ECFDF3] text-[#10B981]' :
                     value === 'On Hold' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
-                      value === 'Down' || value === 'DOWN' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
+                      value === 'Down' || value === 'DOWN' || value === 'Site Down' || value === '404 or Error' ? 'bg-[#FFEBEB] text-[#D32F2F]' :
                       value === 'Planning' ? 'bg-[#E3F2FD] text-[#1976D2]' :
                         value === 'S7: Content Collection' ? 'bg-[#FFF4E5] text-[#ED6C02]' :
                           value === 'S8: Design' ? 'bg-[#F3E8FF] text-[#9333EA]' :
