@@ -41,6 +41,8 @@ interface Column {
   header: string;
 }
 
+const LOCAL_LISTING_SUB_ROW_STATUSES = ['Not Started', 'Live', 'Needs Updated', 'In Progress', 'Needs Replaced', 'Site Down', '404 or Error'];
+
 const INITIAL_COLUMNS: Column[] = [
   { id: 'projectName', header: 'Project Name' },
   { id: 'assignee', header: 'Assignee' },
@@ -1272,7 +1274,9 @@ const SortableRow = React.memo(function SortableRow({
             <EditableStatus
               value={row[col.id]}
               options={
-                projectType === 'Local Listings'
+                projectType === 'Local Listings' && row.parentId
+                  ? LOCAL_LISTING_SUB_ROW_STATUSES
+                  : projectType === 'Local Listings'
                   ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
                   : projectType === 'Social Media'
                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
@@ -1280,7 +1284,7 @@ const SortableRow = React.memo(function SortableRow({
                       ? ['Not Started', 'Planning', 'In Progress', 'On Hold', 'Awaiting Review', 'Done']
                       : row.parentId
                         ? (projectType === 'Local Listings'
-                          ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                          ? LOCAL_LISTING_SUB_ROW_STATUSES
                           : projectType === 'Social Media'
                             ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
                             : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', ...(projectType === 'Support Tickets' ? ['Closed'] : [])])
@@ -2994,6 +2998,14 @@ export default function WorkspaceProjectView({
   };
 
   const statusOptions = getStatusOptions();
+  const bulkStatusOptions = projectType === 'Local Listings' && selectedRowIds.size > 0
+    ? data.filter(row => selectedRowIds.has(row.id)).every(row => row.parentId)
+      ? LOCAL_LISTING_SUB_ROW_STATUSES
+      : data.some(row => selectedRowIds.has(row.id) && row.parentId)
+        ? statusOptions.filter(status => LOCAL_LISTING_SUB_ROW_STATUSES.includes(status))
+        : statusOptions
+    : statusOptions;
+  const filterStatusOptions = projectType === 'Local Listings' ? Array.from(new Set([...statusOptions, ...LOCAL_LISTING_SUB_ROW_STATUSES])) : statusOptions;
   const defaultStatus = statusOptions[0];
 
   React.useEffect(() => {
@@ -4350,7 +4362,7 @@ export default function WorkspaceProjectView({
             className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] outline-none focus:ring-2 focus:ring-[#1061E3]"
           >
             <option value="all">All Statuses</option>
-            {statusOptions.map((status) => (
+            {filterStatusOptions.map((status) => (
               <option key={status} value={status}>{status}</option>
             ))}
           </select>
@@ -4489,7 +4501,7 @@ export default function WorkspaceProjectView({
                   const status = (r.status || '').trim().toLowerCase();
                   if (status === 'running' || status === 'live') {
                     runningLiveCount++;
-                  } else if (status === 'on hold' || status === 'down') {
+                  } else if (status === 'on hold' || status === 'down' || status === 'site down' || status === '404 or error') {
                     holdDownCount++;
                   }
                 };
@@ -4634,7 +4646,7 @@ export default function WorkspaceProjectView({
                                     projectType === 'Local Listings'
                                       ? data.filter(r => r.parentId === row.id).filter(r => {
                                           const status = (r.status || '').trim().toLowerCase();
-                                          return status === 'on hold' || status === 'down';
+                                          return status === 'on hold' || status === 'down' || status === 'site down' || status === '404 or error';
                                         }).length
                                       : undefined
                                   }
@@ -5089,7 +5101,7 @@ export default function WorkspaceProjectView({
                                   }}
                                   className="w-full px-3 py-2 border border-[#E2E4E9] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1061E3] font-medium text-[#1C1F23]"
                                 >
-                                  {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                  {(projectType === 'Local Listings' && editingRow?.parentId ? LOCAL_LISTING_SUB_ROW_STATUSES : statusOptions).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                 </select>
                               </div>
 
@@ -5701,7 +5713,7 @@ export default function WorkspaceProjectView({
                                  ? ['Not Started', 'Planning', 'In Progress', 'On Hold', 'Awaiting Review', 'Done']
                                  : editingRow?.parentId
                                    ? (projectType === 'Local Listings'
-                                     ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
+                                     ? LOCAL_LISTING_SUB_ROW_STATUSES
                                      : projectType === 'Social Media'
                                        ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done']
                                        : ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'])
@@ -6275,7 +6287,7 @@ export default function WorkspaceProjectView({
                             <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1">
                               Select Status
                             </div>
-                            {statusOptions.map(opt => (
+                            {bulkStatusOptions.map(opt => (
                               <button
                                 key={opt}
                                 onClick={() => {

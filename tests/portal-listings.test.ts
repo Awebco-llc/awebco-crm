@@ -70,7 +70,8 @@ test('projects only the public resource and listing fields', () => {
 
 test('maps Local Listings status values and defaults unknown values safely', () => {
   assert.equal(mapListingStatus('Running'), 'active');
-  assert.equal(mapListingStatus('Down'), 'attention');
+  assert.equal(mapListingStatus('Live'), 'active');
+  for (const status of ['Down', 'Needs Updated', 'Needs Replaced', 'Site Down', '404 or Error']) assert.equal(mapListingStatus(status), 'attention');
   assert.equal(mapListingStatus('On Hold'), 'on_hold');
   for (const status of ['Not Started', 'Setup', 'In Progress']) assert.equal(mapListingStatus(status), 'pending');
   assert.equal(mapListingStatus('Done'), 'unknown');
