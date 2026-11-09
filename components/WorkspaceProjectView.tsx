@@ -29,7 +29,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMember, EditableStatus, EditablePriority, AssigneeDropdown, Company, Toggle, Ticket, EditableDeadline } from '@/components/Shared';
-import { subscribeTickets, createTicket, updateTicket, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour, createGroupWithId, createMessage } from '@/lib/crmStore';
+import { subscribeTickets, createTicket, updateTicket, deleteTicketUpdate, deleteTicket, subscribeGroups, updateGroup, createGroup, deleteGroup, subscribeBillableHours, createBillableHour, createGroupWithId, createMessage } from '@/lib/crmStore';
 import TicketImportModal from './TicketImportModal';
 import RichTextEditor from './RichTextEditor';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -3317,6 +3317,26 @@ export default function WorkspaceProjectView({
     }
   };
 
+  const [deletingUpdateIds, setDeletingUpdateIds] = useState<Set<string>>(new Set());
+
+  const handleDeleteUpdate = async (rowId: string, update: NonNullable<Ticket['updates']>[number]) => {
+    if (!confirm('Delete this update? This cannot be undone.')) return;
+    const key = `${rowId}:${update.id}`;
+    setDeletingUpdateIds(prev => new Set(prev).add(key));
+    try {
+      await deleteTicketUpdate(rowId, update);
+    } catch (err) {
+      console.error('Failed to delete update', err);
+      alert('Failed to delete update. Please try again.');
+    } finally {
+      setDeletingUpdateIds(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
   const handleAddUpdate = async (rowId: string) => {
     if (!newUpdateText.trim() && !attachedFile) return;
 
@@ -5540,9 +5560,21 @@ export default function WorkspaceProjectView({
                                       </div>
                                       <span className="font-bold text-xs text-[#1C1F23] truncate">{update.author}</span>
                                     </div>
-                                    <span className="text-[10px] font-medium text-[#8E9299]">
-                                      {safeFormatDate(update.timestamp)}
-                                    </span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="text-[10px] font-medium text-[#8E9299]">
+                                        {safeFormatDate(update.timestamp)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        aria-label="Delete update"
+                                        title="Delete update"
+                                        disabled={deletingUpdateIds.has(`${editingRowId}:${update.id}`)}
+                                        onClick={() => handleDeleteUpdate(editingRowId, update)}
+                                        className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
                                   <p className="text-sm text-[#4A4D53] whitespace-pre-wrap pl-9">{update.text}</p>
                                   {update.attachment && (
@@ -5987,9 +6019,21 @@ export default function WorkspaceProjectView({
                                   </div>
                                   <span className="font-semibold text-xs text-[#1C1F23] truncate">{update.author}</span>
                                 </div>
-                                <span className="text-[10px] text-[#8E9299]">
-                                  {safeFormatDate(update.timestamp)}
-                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[10px] text-[#8E9299]">
+                                    {safeFormatDate(update.timestamp)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    aria-label="Delete update"
+                                    title="Delete update"
+                                    disabled={deletingUpdateIds.has(`${editingRowId}:${update.id}`)}
+                                    onClick={() => handleDeleteUpdate(editingRowId, update)}
+                                    className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                               <p className="text-sm text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
                               {update.attachment && (
@@ -6583,9 +6627,21 @@ export default function WorkspaceProjectView({
                   <div key={update.id} className="text-xs bg-[#F9FAFB] rounded-lg p-2 border border-[#E2E4E9] flex flex-col gap-1">
                     <div className="flex justify-between items-center font-semibold text-[#1C1F23]">
                       <span className="truncate max-w-[120px]">{update.author}</span>
-                      <span className="text-[9px] text-[#8E9299]">
-                        {safeFormatDate(update.timestamp)}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[9px] text-[#8E9299]">
+                          {safeFormatDate(update.timestamp)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Delete update"
+                          title="Delete update"
+                          disabled={deletingUpdateIds.has(`${row.id}:${update.id}`)}
+                          onClick={() => handleDeleteUpdate(row.id, update)}
+                          className="p-1 text-[#8E9299] hover:text-[#D32F2F] hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[#4A4D53] whitespace-pre-wrap">{update.text}</p>
                   </div>
