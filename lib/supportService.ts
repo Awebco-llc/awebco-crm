@@ -1,5 +1,5 @@
 import { allocateSupportNumber, ensureSupportNumber } from './supportNumbers';
-import { ticketReference, supportTitle } from './ticketIdentity';
+import { referenceForTicket, needsTicketReference, supportTitle } from './ticketIdentity';
 import {
   supportMessagePresentation,
   supportNotification,
@@ -62,6 +62,9 @@ export const ticketFields = [
   "updatedAt",
   "ticketNumber",
   "completedAt",
+  "supportSource",
+  "supportEntryId",
+  "supportPortalClientId",
   "isManual",
   "supportVisibility",
 ];
@@ -74,7 +77,7 @@ export function publicSupportTicket(
   return {
     id,
     title: supportTitle(data.projectName).slice(0, 500),
-    ...(ticketReference(data.ticketNumber) ? { ticket_number: ticketReference(data.ticketNumber)! } : {}),
+    ...(referenceForTicket(data) ? { ticket_number: referenceForTicket(data)! } : {}),
     completed_at: supportStatus(data.status) === "Completed" ? date(data.completedAt) : null,
     description: detail ? String(data.description || "").slice(0, 20000) : "",
     status: supportStatus(data.status),
@@ -210,7 +213,7 @@ export class SupportService {
       (shared && !shareSupportTicket(data, companyId))
     )
       throw new SupportError(404, "Ticket not found.");
-    return ticketReference(data.ticketNumber) ? data : await ensureSupportNumber(this.db, ticketId) ?? data;
+    return !needsTicketReference(data) ? data : await ensureSupportNumber(this.db, ticketId) ?? data;
   }
   async saveProfile(
     companyId: string,
@@ -256,7 +259,7 @@ export class SupportService {
       );
     const tickets = [];
     for (const doc of result.docs.filter((doc) => shareSupportTicket(doc.data(), companyId))) {
-      const data = ticketReference(doc.data().ticketNumber) ? doc.data() : await ensureSupportNumber(this.db, doc.id);
+      const data = !needsTicketReference(doc.data()) ? doc.data() : await ensureSupportNumber(this.db, doc.id);
       if (data) tickets.push(publicSupportTicket(doc.id, data));
     }
     return tickets.sort(

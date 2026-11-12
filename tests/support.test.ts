@@ -1483,7 +1483,7 @@ test('ticket references allocate once across concurrent reads and creation sourc
   const before = structuredClone(db.records.get(`tickets/${legacy}`));
   const values = await Promise.all(Array.from({length: 5}, () => ensureSupportNumber(db as never, legacy)));
   assert.equal(new Set(values.map(value => value?.ticketNumber)).size, 1);
-  assert.match(String(values[0]?.ticketNumber), /^AW-\d{6}$/);
+  assert.equal(values[0]?.ticketNumber, '6148');
   assert.equal(db.records.get(`tickets/${legacy}`)?.projectName, before!.projectName);
   assert.equal(db.records.get(`tickets/${legacy}`)?.completedAt, before!.completedAt);
   const publicTicket = await service.detail(legacy, company);
@@ -1514,4 +1514,24 @@ test('legacy reference fill is staff-only, bounded and idempotent', async () => 
   const rejected=createSupportHandlers(()=>db as never,async()=>{throw new (await import('../lib/supportService')).SupportError(403,'Support ticket access is required.');});
   assert.equal((await rejected.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references',{method:'POST'}))).status,403);
   assert.equal((await api.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:Array(101).fill(ticketId)})}))).status,400);
+});
+
+
+test('public form submissions retain their original number while Portal/manual requests get new references', async () => {
+  const input={entryId:'6209',subject:'Ticket #6209 - Opening hours',description:'Update the opening hours.',email:'owner@example.com',contactName:'Owner',companyName:'Example client',category:'Website Updates',priority:'Low',files:[]};
+  const id=await upsertPublicSupport(input,()=>db as never);
+  assert.equal(db.records.get(`tickets/${id}`)?.ticketNumber,'6209');
+  assert.equal(db.records.get(`tickets/${id}`)?.projectName,input.subject);
+  assert.equal(await upsertPublicSupport(input,()=>db as never),id);
+  const {ensureSupportNumber}=await import('../lib/supportNumbers');
+  const existing='existing-public-number';
+  db.records.set(`tickets/${existing}`,ticket({projectName:'Ticket #6148 - Existing request',ticketNumber:'AW-000999'}));
+  const before=structuredClone(db.records.get(`tickets/${existing}`));
+  assert.equal((await ensureSupportNumber(db as never,existing))?.ticketNumber,'6148');
+  const after=db.records.get(`tickets/${existing}`)!;
+  for(const key of Object.keys(before!)) if(key!=='ticketNumber') assert.deepEqual(after[key],before![key]);
+  const manual='manual-without-reference';db.records.set(`tickets/${manual}`,ticket({projectName:'New manual request',isManual:true}));
+  assert.match(String((await ensureSupportNumber(db as never,manual))?.ticketNumber),/^AW-\d{6}$/);
+  const {referenceForTicket}=await import('../lib/ticketIdentity');
+  assert.equal(referenceForTicket({projectName:'Edited title',supportSource:'awebco.com',supportEntryId:'6176',ticketNumber:'AW-000123'}),'6176');
 });

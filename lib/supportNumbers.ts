@@ -1,5 +1,5 @@
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
-import { ticketReference } from './ticketIdentity';
+import { legacyTicketReference, ticketReference } from './ticketIdentity';
 
 export async function allocateSupportNumber(db: Firestore, tx: Transaction) {
   const counter = db.collection('supportCounters').doc('tickets');
@@ -14,8 +14,9 @@ export async function ensureSupportNumber(db: Firestore, id: string) {
   return db.runTransaction(async tx => {
     const ref = db.collection('tickets').doc(id), saved = await tx.get(ref), ticket = saved.data();
     if (!ticket || ticket.workspace !== 'Support Tickets' || ticket.parentId) return ticket;
-    if (ticketReference(ticket.ticketNumber)) return ticket;
-    const ticketNumber = await allocateSupportNumber(db, tx);
+    const legacy = legacyTicketReference(ticket);
+    if (legacy ? legacy === ticket.ticketNumber : ticketReference(ticket.ticketNumber)) return ticket;
+    const ticketNumber = legacy ?? await allocateSupportNumber(db, tx);
     tx.update(ref, { ticketNumber });
     return { ...ticket, ticketNumber };
   });

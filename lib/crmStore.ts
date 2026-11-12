@@ -1,4 +1,4 @@
-import { ticketReference, ticketCompletionPatch } from './ticketIdentity';
+import { needsTicketReference, ticketCompletionPatch } from './ticketIdentity';
 import {
   addDoc,
   arrayRemove,
@@ -331,7 +331,7 @@ export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]
     onChange(tickets);
     // Use the already-visible authoritative snapshot to fill legacy references once.
     if (workspace === 'Support Tickets') {
-      const missing = tickets.filter(ticket => !ticket.parentId && !ticketReference(ticket.ticketNumber) && !numbering.has(ticket.id)).map(ticket => ticket.id);
+      const missing = tickets.filter(ticket => !ticket.parentId && needsTicketReference(ticket) && !numbering.has(ticket.id)).map(ticket => ticket.id);
       missing.forEach(id => numbering.add(id));
       if (missing.length) void (async () => {
         const user = getAuth().currentUser;

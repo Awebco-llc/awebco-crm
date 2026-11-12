@@ -1,5 +1,5 @@
 'use client';
-import { supportTitle } from '@/lib/ticketIdentity';
+import { referenceForTicket, supportTitle } from '@/lib/ticketIdentity';
 
 import { listingHandoff } from '@/lib/listingHandoff';
 import { SupportConversation, SupportConversationPanel } from './SupportConversation';
@@ -1440,7 +1440,7 @@ const SortableRow = React.memo(function SortableRow({
                 renderValue={
                   col.id === 'projectName' ? (v) => (
                     <div className="flex items-center gap-2 min-w-0">
-                      <strong className={`truncate ${isSubRow ? 'font-medium text-[#4A4D53]' : ''}`}>{row.ticketNumber && <span className="mr-2 font-normal text-[#626C8F]">#{row.ticketNumber}</span>}{row.ticketNumber ? supportTitle(v) : v}</strong>
+                      <strong className={`truncate ${isSubRow ? 'font-medium text-[#4A4D53]' : ''}`}>{referenceForTicket(row) && <span className="mr-2 font-normal text-[#626C8F]">#{referenceForTicket(row)}</span>}{referenceForTicket(row) ? supportTitle(v) : v}</strong>
                       {row.companyId && projectType === 'Local Listings' && (
                         <span
                           className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-[#1061E3] border border-blue-200 text-[10px] font-semibold shrink-0 select-none"
