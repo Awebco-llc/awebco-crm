@@ -1,3 +1,4 @@
+import { ticketCompletionPatch } from '../ticketIdentity';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createHash } from 'node:crypto';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
@@ -78,7 +79,7 @@ export function createCrmServer(access: McpAccess, database = mcpDb) {
       const task = snapshot.data()!;
       workspaceSchema.parse(task.workspace);
       if (patch?.status && !statusesForWorkspace(task.workspace).includes(patch.status)) throw new Error('Status is not valid for this workspace. Use crm_info to see allowed statuses.');
-      const changes: Record<string, unknown> = { ...patch, updatedAt: FieldValue.serverTimestamp() };
+      const changes: Record<string, unknown> = { ...patch, ...ticketCompletionPatch(task, patch?.status, FieldValue.serverTimestamp()), updatedAt: FieldValue.serverTimestamp() };
       if (patch?.description !== undefined) changes.description = escapeNote(patch.description);
       if (patch?.status) {
         const group = groupForStatus(task.workspace, patch.status, task.groupId);

@@ -1,3 +1,4 @@
+import { ensureSupportNumber } from './supportNumbers';
 import { getAuth } from "firebase-admin/auth";
 import { getApp } from "firebase-admin/app";
 import { NextRequest, NextResponse } from "next/server";
@@ -217,6 +218,17 @@ export function createSupportHandlers(
     download: route("portal", async (_r, service, p) =>
       service.download(p.ticketId!, p.messageId!, p.fileId!, p.resourceId!),
     ),
+    staffReferences: route("staff", async (r, service) => {
+      const body = await supportBody(r);
+      const input = z.object({ ids: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)).max(100) }).strict().parse(body.payload);
+      if (body.files.length) throw new SupportError(400, 'Use ticket references only.');
+      const references = [];
+      for (const id of [...new Set(input.ids)]) {
+        const ticket = await ensureSupportNumber(service.db, id);
+        if (ticket?.ticketNumber) references.push({ id, ticket_number: ticket.ticketNumber });
+      }
+      return { references };
+    }),
     staffDetail: route("staff", async (_r, service, p) =>
       service.detail(p.ticketId!, undefined, true),
     ),

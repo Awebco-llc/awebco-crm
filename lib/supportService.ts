@@ -1,3 +1,5 @@
+import { allocateSupportNumber, ensureSupportNumber } from './supportNumbers';
+import { ticketReference, supportTitle } from './ticketIdentity';
 import {
   supportMessagePresentation,
   supportNotification,
@@ -58,6 +60,8 @@ export const ticketFields = [
   "status",
   "createdAt",
   "updatedAt",
+  "ticketNumber",
+  "completedAt",
   "isManual",
   "supportVisibility",
 ];
@@ -69,7 +73,9 @@ export function publicSupportTicket(
 ) {
   return {
     id,
-    title: String(data.projectName || "Support request").slice(0, 500),
+    title: supportTitle(data.projectName).slice(0, 500),
+    ...(ticketReference(data.ticketNumber) ? { ticket_number: ticketReference(data.ticketNumber)! } : {}),
+    completed_at: supportStatus(data.status) === "Completed" ? date(data.completedAt) : null,
     description: detail ? String(data.description || "").slice(0, 20000) : "",
     status: supportStatus(data.status),
     created_at: date(data.createdAt),
@@ -204,7 +210,7 @@ export class SupportService {
       (shared && !shareSupportTicket(data, companyId))
     )
       throw new SupportError(404, "Ticket not found.");
-    return data;
+    return ticketReference(data.ticketNumber) ? data : await ensureSupportNumber(this.db, ticketId) ?? data;
   }
   async saveProfile(
     companyId: string,
@@ -248,10 +254,12 @@ export class SupportService {
         503,
         "Ticket history is unavailable. Contact Awebco.",
       );
-    return result.docs
-      .filter((doc) => shareSupportTicket(doc.data(), companyId))
-      .map((doc) => publicSupportTicket(doc.id, doc.data()))
-      .sort(
+    const tickets = [];
+    for (const doc of result.docs.filter((doc) => shareSupportTicket(doc.data(), companyId))) {
+      const data = ticketReference(doc.data().ticketNumber) ? doc.data() : await ensureSupportNumber(this.db, doc.id);
+      if (data) tickets.push(publicSupportTicket(doc.id, data));
+    }
+    return tickets.sort(
         (a, b) =>
           (b.created_at || "").localeCompare(a.created_at || "") ||
           a.id.localeCompare(b.id),
@@ -431,7 +439,9 @@ export class SupportService {
           );
         return;
       }
+      const ticketNumber = await allocateSupportNumber(this.db, tx);
       tx.create(ticketRef, {
+        ticketNumber,
         workspace: "Support Tickets",
         groupId: "group-active",
         companyId,

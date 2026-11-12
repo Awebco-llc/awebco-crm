@@ -1,3 +1,4 @@
+import { allocateSupportNumber } from './supportNumbers';
 import type { Firestore } from "firebase-admin/firestore";
 import { getPortalListingsFirestore } from "./portalListingsDb";
 import {
@@ -120,7 +121,9 @@ export async function upsertPublicSupport(
       return prior.docs[0].id;
     }
     const at = new Date().toISOString();
+    const ticketNumber = await allocateSupportNumber(db, tx);
     tx.create(deterministic, {
+      ticketNumber,
       projectName: input.subject,
       description: input.description || "No content",
       workspace: "Support Tickets",

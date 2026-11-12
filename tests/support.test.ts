@@ -1475,3 +1475,43 @@ test("profile corrections and photos apply to existing ticket conversations and 
   );
   assert.equal(await service.profile(company, profile.email, "team"), null);
 });
+
+test('ticket references allocate once across concurrent reads and creation sources without changing legacy identity', async () => {
+  const { ensureSupportNumber } = await import('../lib/supportNumbers');
+  const legacy = 'legacy-reference';
+  db.records.set(`tickets/${legacy}`, ticket({projectName:'Ticket #6148 - Change hours', completedAt:'2026-10-24T14:00:00Z'}));
+  const before = structuredClone(db.records.get(`tickets/${legacy}`));
+  const values = await Promise.all(Array.from({length: 5}, () => ensureSupportNumber(db as never, legacy)));
+  assert.equal(new Set(values.map(value => value?.ticketNumber)).size, 1);
+  assert.match(String(values[0]?.ticketNumber), /^AW-\d{6}$/);
+  assert.equal(db.records.get(`tickets/${legacy}`)?.projectName, before!.projectName);
+  assert.equal(db.records.get(`tickets/${legacy}`)?.completedAt, before!.completedAt);
+  const publicTicket = await service.detail(legacy, company);
+  assert.equal(publicTicket.title, 'Change hours');
+  assert.equal(publicTicket.ticket_number, values[0]?.ticketNumber);
+  assert.equal(publicTicket.completed_at, '2026-10-24T14:00:00.000Z');
+});
+
+test('completion dates follow finished/reopened transitions and stay independent from billing and conversation changes', async () => {
+  const { ticketCompletionPatch } = await import('../lib/ticketIdentity');
+  const at='2026-11-12T20:00:00Z', original='2026-10-24T14:00:00Z';
+  const current={workspace:'Support Tickets', status:'In Progress'};
+  assert.deepEqual(ticketCompletionPatch(current,'Needs Invoiced',at),{completedAt:at});
+  assert.deepEqual(ticketCompletionPatch({...current,status:'Needs Invoiced',completedAt:original},'Done',at),{});
+  assert.deepEqual(ticketCompletionPatch({...current,status:'Done',completedAt:original},'In Progress',at),{completedAt:null});
+  assert.deepEqual(ticketCompletionPatch({...current,status:'Done'},undefined,at),{});
+  assert.deepEqual(ticketCompletionPatch({...current,workspace:'SEO'},'Done',at),{});
+  assert.deepEqual(ticketCompletionPatch({...current,parentId:'parent'},'Done',at),{});
+});
+
+test('legacy reference fill is staff-only, bounded and idempotent', async () => {
+  const api = handlers();
+  const references = await api.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[ticketId,ticketId]})}));
+  assert.equal(references.status,200);
+  const result=await references.json();
+  assert.equal(result.references.length,1);
+  assert.match(result.references[0].ticket_number,/^AW-\d{6}$/);
+  const rejected=createSupportHandlers(()=>db as never,async()=>{throw new (await import('../lib/supportService')).SupportError(403,'Support ticket access is required.');});
+  assert.equal((await rejected.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references',{method:'POST'}))).status,403);
+  assert.equal((await api.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:Array(101).fill(ticketId)})}))).status,400);
+});
