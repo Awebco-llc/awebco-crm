@@ -22,6 +22,7 @@ type Context = {
     ticketId?: string;
     messageId?: string;
     fileId?: string;
+    personId?: string;
   }>;
 };
 export function supportJson(body: unknown, status = 200) {
@@ -98,6 +99,7 @@ export async function supportStaff(request: Request, service: SupportService) {
     name: String(profile!.name || "Awebco"),
     email,
     direction: "team" as const,
+    role: ['admin', 'master_admin'].includes(String(profile!.role)) ? 'admin' as const : 'staff' as const,
   };
 }
 export function createSupportHandlers(
@@ -204,13 +206,14 @@ export function createSupportHandlers(
             .max(254)
             .transform((v) => v.toLowerCase()),
           name: z.string().trim().min(1).max(200),
+          direction: z.enum(['client', 'team']).default('client'),
         })
         .parse(body.payload);
       return service.reply(
         p.ticketId!,
         input.request_id,
         input.text,
-        { name: input.name, email: input.email, direction: "client" },
+        await service.portalActor({ name: input.name, email: input.email, direction: input.direction }),
         body.files,
         p.resourceId!,
       );
@@ -228,6 +231,16 @@ export function createSupportHandlers(
         if (ticket?.ticketNumber) references.push({ id, ticket_number: ticket.ticketNumber });
       }
       return { references };
+    }),
+    photo: route('portal', async (_r, service, p) => service.photo(p.ticketId!, p.personId!, p.resourceId!)),
+    staffStatus: route('staff', async (r, service, p, actor) => {
+      const body = await supportBody(r);
+      if (body.files.length) throw new SupportError(400, 'Check the request and try again.');
+      const input = z.object({
+        status: z.enum(['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done', 'Closed']),
+        groupId: z.string().min(1).max(128).optional(),
+      }).strict().parse(body.payload);
+      return service.changeStatus(p.ticketId!, input.status, actor!, input.groupId);
     }),
     staffDetail: route("staff", async (_r, service, p) =>
       service.detail(p.ticketId!, undefined, true),

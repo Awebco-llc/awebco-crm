@@ -4,6 +4,7 @@ import {
   arrayRemove,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -405,6 +406,22 @@ export async function createTicket(input: Omit<Ticket, 'id'>): Promise<string> {
 
 export async function updateTicket(id: string, patch: Partial<Omit<Ticket, 'id'>>): Promise<void> {
   const cleanPatch = cleanUndefined(patch);
+  if (cleanPatch.status) {
+    const current = (await getDoc(doc(getDb(), 'tickets', id))).data();
+    if (current?.workspace === 'Support Tickets' && !current.parentId) {
+      const user = getAuth().currentUser;
+      if (!user) throw new Error('Sign in to the CRM again.');
+      const {status, groupId, ...other} = cleanPatch;
+      if (Object.keys(other).length)
+        await setDoc(doc(getDb(), 'tickets', id), {...other, updatedAt: serverTimestamp()}, {merge: true});
+      const response = await fetch(`/api/support/tickets/${encodeURIComponent(id)}/status`, {
+        method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`},
+        body: JSON.stringify({status, ...(groupId ? {groupId} : {})}),
+      });
+      if (!response.ok) throw new Error('Ticket status could not be saved. Refresh and try again.');
+      return;
+    }
+  }
   if (patch.status !== undefined) {
     const db = getDb(), ref = doc(db, 'tickets', id);
     await runTransaction(db, async tx => {

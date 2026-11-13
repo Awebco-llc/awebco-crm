@@ -104,3 +104,22 @@ Portal profile corrections are synchronized over the existing dedicated support 
 Public awebco.com form submissions keep the original Gravity Forms ticket number, including existing `Ticket #6148` subjects and future entry numbers. Only tickets without an existing reference receive a sequential `AW-000001` reference from the shared Firestore `supportCounters/tickets` transaction. Existing viewed roots receive references through a bounded staff-authenticated backfill using their existing CRM snapshot IDs, or when read through the tenant API. Existing display references are recovered from the original form number before allocating anything new. Stored legacy form subjects and IDs stay unchanged; client projections and the CRM name cell show the stable reference separately. Retries never allocate another number.
 
 `completedAt` records entry into Needs Invoiced, Done or Closed. Transitions within those completed states preserve the timestamp; reopening clears it and the next completion records the new finish time. Browser and MCP status writes share this rule. Replies, notes, billing and deadlines do not set completion dates. Existing completed tickets without an authoritative timestamp remain undated; do not infer completion from a due date or last edit. Portal month filtering uses this timestamp in the client's timezone and freezes the selected tickets in new report snapshots.
+
+## Completion notifications and Portal administrators
+
+The first transition into Needs Invoiced, Done or Closed records `completedAt` and,
+for a client-shared ticket, creates one durable `ticket-closed` conversation event.
+Browser status edits use the authenticated staff status endpoint; MCP status edits
+record the same event in their existing transaction. Notification claims retain the
+existing accepted/failed/uncertain delivery handling. Invoice-to-closed edits and
+reopening retain the first completion date and never create another closure event.
+Already-completed historical tickets do not receive retroactive closure emails.
+Internal tickets remain private. Portal dashboard/report month allocation continues
+to use this completion date in the client's timezone and immutable report snapshots.
+
+The trusted Portal supplies the signed-in viewer's reply direction. Team replies
+must resolve to one current, active CRM staff account with support access. They use
+its current name and headshot and expose an Admin reply label for administrators.
+Client request bodies cannot choose their identity/direction. Embedded CRM raster
+headshots are served through authenticated company/ticket/participant photo routes;
+photo bytes and staff email addresses stay out of Portal conversation JSON.

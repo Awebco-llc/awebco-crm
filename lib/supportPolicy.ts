@@ -65,6 +65,8 @@ export type SupportMessage = {
   author: string;
   author_email?: string;
   author_image?: string;
+  author_id?: string;
+  author_role?: 'admin' | 'staff';
   text: string;
   created_at: string;
   direction: "client" | "team";

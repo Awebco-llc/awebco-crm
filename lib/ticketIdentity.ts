@@ -22,7 +22,7 @@ export function supportTitle(value: unknown): string {
 export const completedSupportStatus = (status: unknown) => ['Needs Invoiced', 'Done', 'Closed'].includes(String(status));
 export function ticketCompletionPatch(current: Record<string, unknown>, status: unknown, at: unknown): Record<string, unknown> {
   if (current.workspace !== 'Support Tickets' || current.parentId || status === undefined || status === current.status) return {};
-  if (!completedSupportStatus(status)) return { completedAt: null };
+  if (!completedSupportStatus(status) || current.completedAt) return {};
   // Invoice/closed transitions within the completed state keep the actual finish time.
   if (completedSupportStatus(current.status)) return {};
   return { completedAt: at };

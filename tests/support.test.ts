@@ -87,7 +87,7 @@ class Ref {
   }
 }
 class Query {
-  filters: Array<[string, unknown]> = [];
+  filters: Array<[string, string, unknown]> = [];
   selected: string[] = [];
   max = Infinity;
   sort = "";
@@ -98,8 +98,8 @@ class Query {
   doc(id: string) {
     return new Ref(this.db, `${this.path}/${id}`);
   }
-  where(key: string, _op: string, value: unknown) {
-    this.filters.push([key, value]);
+  where(key: string, op: string, value: unknown) {
+    this.filters.push([key, op, value]);
     return this;
   }
   select(...keys: string[]) {
@@ -119,7 +119,7 @@ class Query {
       ([path, value]) =>
         path.startsWith(`${this.path}/`) &&
         path.split("/").length === this.path.split("/").length + 1 &&
-        this.filters.every(([key, want]) => value[key] === want),
+        this.filters.every(([key, op, want]) => op === "in" ? Array.isArray(want) && want.includes(value[key]) : value[key] === want),
     );
     if (this.sort)
       entries.sort((a, b) =>
@@ -233,6 +233,7 @@ function handlers() {
       name: "Agency staff",
       email: "staff@awebco.com",
       direction: "team",
+      role: "staff" as const,
     }),
   );
 }
@@ -1498,7 +1499,7 @@ test('completion dates follow finished/reopened transitions and stay independent
   const current={workspace:'Support Tickets', status:'In Progress'};
   assert.deepEqual(ticketCompletionPatch(current,'Needs Invoiced',at),{completedAt:at});
   assert.deepEqual(ticketCompletionPatch({...current,status:'Needs Invoiced',completedAt:original},'Done',at),{});
-  assert.deepEqual(ticketCompletionPatch({...current,status:'Done',completedAt:original},'In Progress',at),{completedAt:null});
+  assert.deepEqual(ticketCompletionPatch({...current,status:'Done',completedAt:original},'In Progress',at),{});
   assert.deepEqual(ticketCompletionPatch({...current,status:'Done'},undefined,at),{});
   assert.deepEqual(ticketCompletionPatch({...current,workspace:'SEO'},'Done',at),{});
   assert.deepEqual(ticketCompletionPatch({...current,parentId:'parent'},'Done',at),{});
@@ -1534,4 +1535,69 @@ test('public form submissions retain their original number while Portal/manual r
   assert.match(String((await ensureSupportNumber(db as never,manual))?.ticketNumber),/^AW-\d{6}$/);
   const {referenceForTicket}=await import('../lib/ticketIdentity');
   assert.equal(referenceForTicket({projectName:'Edited title',supportSource:'awebco.com',supportEntryId:'6176',ticketNumber:'AW-000123'}),'6176');
+});
+
+
+test('either completion status sends one closure per recipient and invoicing preserves the first date', async () => {
+  for (const initial of ['Needs Invoiced', 'Closed']) {
+    const id = initial === 'Closed' ? 'closure-direct' : 'closure-billable';
+    db.records.set(`tickets/${id}`, ticket({status:'In Progress'}));
+    const before = structuredClone(db.records.get(`tickets/${id}`)!);
+    const actor = {name:'Agency staff',email:'staff@awebco.com',direction:'team' as const};
+    const count = sent.length;
+    await Promise.all(Array.from({length:3}, () => service.changeStatus(id, initial, actor)));
+    const completed = structuredClone(db.records.get(`tickets/${id}`)!);
+    assert.equal(sent.length,count+1);
+    assert.match(sent.at(-1)!.body,/Your ticket is closed/);
+    assert.doesNotMatch(sent.at(-1)!.body,/Needs Invoiced|billing|invoice/i);
+    assert.equal((await service.detail(id,company)).status,'Completed');
+    for (const status of ['Closed','Needs Invoiced','In Progress','Closed']) await service.changeStatus(id,status,actor);
+    assert.equal(sent.length,count+1);
+    assert.equal(db.records.get(`tickets/${id}`)!.completedAt,completed.completedAt);
+    for (const key of ['createdAt','deadline','billableHours','notes','updates']) assert.deepEqual(db.records.get(`tickets/${id}`)![key],before[key]);
+  }
+});
+
+test('historic completed and internal tickets do not send a retroactive closure notification', async () => {
+  const actor={name:'Staff',email:'staff@awebco.com',direction:'team' as const};
+  await service.changeStatus(ticketId,'Closed',actor);
+  assert.equal(sent.length,0);
+  assert.ok(!db.records.has(`tickets/${ticketId}/messages/ticket-closed`));
+  db.records.set('tickets/private-close',ticket({status:'In Progress',supportVisibility:'internal'}));
+  await service.changeStatus('private-close','Closed',actor);
+  assert.equal(sent.length,0);
+  assert.equal(db.records.get('tickets/private-close')!.status,'Closed');
+});
+
+test('CRM raster headshots are private, tied to ticket participants, and beat stale Portal team profiles', async () => {
+  const photo='data:image/png;base64,iVBORw0KGgo=';
+  db.records.get('users/staff')!.photoUrl=photo;
+  const actor=await service.portalActor({name:'Portal name',email:'staff@awebco.com',direction:'team'});
+  assert.equal(actor.name,'Agency staff');
+  assert.equal(actor.role,'admin');
+  await service.reply(ticketId,crypto.randomUUID(),'A team reply',actor,[],company);
+  await service.saveProfile(company,{name:'Old Portal name',email:actor.email,direction:'team',image:null});
+  const message=(await service.detail(ticketId,company)).messages[0];
+  assert.equal(message.author,'Agency staff');
+  assert.equal(message.author_id,'staff');
+  assert.equal(message.author_role,'admin');
+  assert.ok(!JSON.stringify(message).includes(photo));
+  const response=await service.photo(ticketId,'staff',company);
+  assert.equal(response.headers.get('Content-Type'),'image/png');
+  assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()),new Uint8Array([137,80,78,71,13,10,26,10]));
+  await assert.rejects(service.photo(ticketId,'staff','company-b'),{status:404});
+  db.records.set('users/unrelated',{email:'other@awebco.com',role:'admin',photoUrl:photo});
+  await assert.rejects(service.photo(ticketId,'unrelated',company),{status:404});
+  await assert.rejects(service.portalActor({name:'Client',email:'owner@example.com',direction:'team'}),{status:403});
+  const revoked=new SupportService(db as never,async()=>[]);
+  await assert.rejects(revoked.portalActor(actor),{status:403});
+});
+
+test('support status endpoint is staff-only, validates its payload, and ignores client directions', async () => {
+  const denied=createSupportHandlers(()=>db as never,async()=>{throw new (await import('../lib/supportService')).SupportError(403,'Denied');});
+  const path=`/api/support/tickets/${ticketId}/status`;
+  assert.equal((await denied.staffStatus(request(path,'POST',{status:'Closed'}),context())).status,403);
+  assert.equal((await handlers().staffStatus(request(path,'POST',{status:'Closed',email:'forged@example.com'}),context())).status,400);
+  assert.equal((await handlers().staffStatus(request(path,'POST',{status:'Closed'}),context())).status,200);
 });

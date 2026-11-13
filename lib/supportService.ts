@@ -34,6 +34,7 @@ import {
   type supportProfileInput,
 } from "./supportPolicy";
 import type { z } from "zod";
+import { closureMessageId, recordSupportCompletion } from './supportCompletion';
 
 export class SupportError extends Error {
   constructor(
@@ -44,8 +45,13 @@ export class SupportError extends Error {
   }
 }
 type RecordData = Record<string, unknown>;
-type Actor = { name: string; email: string; direction: "client" | "team" };
+type Actor = { name: string; email: string; direction: "client" | "team"; role?: 'admin' | 'staff' };
 type CreateInput = z.infer<typeof supportCreateInput>;
+function supportPhoto(value: unknown) {
+  if (typeof value !== 'string' || value.length > 1_000_000) return null;
+  const match = /^data:(image\/(?:jpeg|png|gif|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+  return match ? {type: match[1], bytes: Buffer.from(match[2], 'base64')} : null;
+}
 const date = (value: unknown) => {
   const input = value as { toDate?: () => Date };
   const parsed =
@@ -123,6 +129,7 @@ function publicMessage(id: string, data: RecordData): SupportMessage | null {
     ...(presentation.quoted ? { email_quoted: presentation.quoted } : {}),
     created_at: String(data.created_at),
     direction: data.direction as "client" | "team",
+    ...(['admin', 'staff'].includes(String(data.author_role)) ? {author_role: data.author_role as 'admin' | 'staff'} : {}),
     ...(data.kind === "request" ? { kind: "request" as const } : {}),
     ...(presentation.signature
       ? { email_signature: presentation.signature }
@@ -177,6 +184,49 @@ export class SupportService {
     private activeRecipients = activeSupportRecipients,
     private storage = getStorageAdmin,
   ) {}
+  async portalActor(actor: Actor): Promise<Actor> {
+    if (actor.direction !== 'team') return actor;
+    const matches = await this.db.collection('users').where('email', '==', actor.email).limit(2).get();
+    const person = matches.docs[0];
+    if (matches.size !== 1 || !supportTeamAccess(person.data()) ||
+      !(await this.activeRecipients([{id: person.id, data: person.data()}])).length)
+      throw new SupportError(403, 'Your Awebco account cannot reply to this ticket. Contact your administrator.');
+    const data = person.data();
+    return {name: String(data.name || actor.name), email: actor.email, direction: 'team',
+      role: ['admin', 'master_admin'].includes(String(data.role)) ? 'admin' : 'staff'};
+  }
+  async changeStatus(ticketId: string, status: string, actor: Actor, groupId?: string) {
+    const ref = this.db.collection('tickets').doc(ticketId);
+    const notify = await this.db.runTransaction(async tx => {
+      const ticket = (await tx.get(ref)).data();
+      if (!ticket || ticket.workspace !== 'Support Tickets' || ticket.parentId)
+        throw new SupportError(404, 'Ticket not found.');
+      const at = new Date().toISOString();
+      const completion = recordSupportCompletion(tx, ref, ticket, status, actor, at);
+      tx.update(ref, {status, ...(groupId ? {groupId} : {}), ...completion,
+        // Invoice bookkeeping must not change the work's date.
+        ...(supportStatus(status) === 'Completed' && supportStatus(ticket.status) === 'Completed'
+          ? {} : {updatedAt: at}),
+      });
+      return !!completion.completedAt && shareSupportTicket(ticket);
+    });
+    if (notify) await this.notify(ticketId, closureMessageId);
+    return {updated: true};
+  }
+  async photo(ticketId: string, personId: string, companyId: string) {
+    await this.ticket(ticketId, companyId);
+    const person = (await this.db.collection('users').doc(personId).get()).data();
+    if (!supportTeamAccess(person)) throw new SupportError(404, 'Photo not found.');
+    const messages = await this.db.collection('tickets').doc(ticketId).collection('messages')
+      .where('sender_email', '==', supportEmail(person!.email)).limit(501).get();
+    if (!messages.docs.some(doc => doc.data().direction === 'team' && doc.data().visibility === 'client'))
+      throw new SupportError(404, 'Photo not found.');
+    const photo = supportPhoto(person!.photoUrl);
+    if (!photo) throw new SupportError(404, 'Photo not found.');
+    return new Response(new Uint8Array(photo.bytes), {headers: {
+      'Content-Type': photo.type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+    }});
+  }
   async companies() {
     const result = await this.db
       .collection("companies")
@@ -319,6 +369,8 @@ export class SupportService {
           )
             continue;
           message.author = String(person.name || message.author).slice(0, 200);
+          message.author_role = ['admin', 'master_admin'].includes(String(person.role)) ? 'admin' : 'staff';
+          if (supportPhoto(person.photoUrl)) message.author_id = profile.id;
           if (
             typeof person.photoUrl === "string" &&
             /^https:\/\//.test(person.photoUrl) &&
@@ -339,7 +391,7 @@ export class SupportService {
           const split = identity.indexOf(":");
           const direction = identity.slice(0, split),
             email = identity.slice(split + 1);
-          const person = await this.profile(ticket.companyId, email, direction);
+          const person = direction === 'team' ? null : await this.profile(ticket.companyId, email, direction);
           if (!person) return;
           for (const message of publicMessages) {
             if (
@@ -548,6 +600,7 @@ export class SupportService {
         visibility: "client",
         direction: actor.direction,
         author: actor.name,
+        ...(actor.role ? {author_role: actor.role} : {}),
         sender_email: actor.email,
         text: text.trim(),
         ...(email
@@ -749,6 +802,7 @@ export class SupportService {
       link: legacy && audience === "client" ? "" : link,
       audience,
       received: message.kind === "request" && audience === "client",
+      closed: message.kind === 'closed',
       created: message.kind === "request",
       attachments: presentation.attachments.map((file) => file.name),
     });
@@ -758,7 +812,7 @@ export class SupportService {
     form.set("to", email);
     form.set(
       "subject",
-      `${message.kind === "request" && audience === "client" ? "Request received: " : message.kind === "request" ? "New ticket: " : "Re: "}${String(
+      `${message.kind === 'closed' ? 'Ticket closed: ' : message.kind === "request" && audience === "client" ? "Request received: " : message.kind === "request" ? "New ticket: " : "Re: "}${String(
         ticket.projectName,
       )
         .replace(/[\r\n]/g, " ")

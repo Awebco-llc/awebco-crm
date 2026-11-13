@@ -418,10 +418,11 @@ export function supportNotification(input: {
   audience: "team" | "client";
   received: boolean;
   created?: boolean;
+  closed?: boolean;
   attachments: string[];
 }) {
   const title = input.title.replace(/[\r\n]/g, " ").slice(0, 150);
-  const heading = input.received
+  const heading = input.closed ? 'Your ticket is closed' : input.received
     ? "We received your request"
     : input.audience === "team"
       ? input.created

@@ -3,6 +3,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createHash } from 'node:crypto';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
+import { recordSupportCompletion, closureMessageId } from '../supportCompletion';
+import { SupportService } from '../supportService';
+import { supportStatus, shareSupportTicket } from '../supportPolicy';
 import { mcpDb, type McpAccess } from './access';
 import { canManageConnections, escapeNote, fields, groupForStatus, idSchema, MAX_REQUESTS, MAX_WRITES, PAGE_SIZE, patchSchema, PRIVATE_COLLECTION, projectRecord, statusesForWorkspace, workspaces, workspaceSchema } from './policy';
 
@@ -86,12 +89,21 @@ export function createCrmServer(access: McpAccess, database = mcpDb) {
         if (group) changes.groupId = group;
       }
       if (note) changes.updates = FieldValue.arrayUnion({ id: operationId, author: `${access.name} (AI)`, text: escapeNote(note), timestamp: new Date().toISOString() });
+      let closed = false;
+      if (patch?.status && task.workspace === 'Support Tickets' && !task.parentId) {
+        const completion = recordSupportCompletion(transaction, taskRef, task, patch.status,
+          {name: access.name, email: String(user.data()?.email || '')});
+        Object.assign(changes, completion);
+        closed = !!completion.completedAt && shareSupportTicket(task);
+        if (supportStatus(task.status) === 'Completed' && supportStatus(patch.status) === 'Completed') delete changes.updatedAt;
+      }
       transaction.update(taskRef, changes);
       transaction.update(budgetRef, { writes: budgetData.writes + 1 });
       // Store a digest rather than task content in the audit event.
       transaction.create(auditRef, { taskId: id, uid: access.uid, keyId: access.keyId, fields: Object.keys(changes), requestHash, createdAt: FieldValue.serverTimestamp() });
-      return { id, updated: true };
+      return { id, updated: true, closed };
     }, { maxAttempts: 3 });
+    if ('closed' in updated && updated.closed) await new SupportService(db).notify(id, closureMessageId);
     return result(updated);
   });
   return server;
