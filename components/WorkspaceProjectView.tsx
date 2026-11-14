@@ -2457,7 +2457,7 @@ export default function WorkspaceProjectView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, rowId: string, isSubRow: boolean } | null>(null);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(projectType === 'SEO' ? 'hide-done' : 'all');
   const getSubtaskRows = useCallback((parentId: string, visibleDataList: any[]) => {
     let subRows = data.filter((sub: any) => sub.parentId === parentId);
     const filterVal = subtaskFilters[parentId] || 'all';
@@ -2494,6 +2494,9 @@ export default function WorkspaceProjectView({
 
   const rowMatchesStatus = useCallback((row: any) => {
     if (statusFilter === 'all') return true;
+    if (statusFilter === 'hide-done') {
+      return Boolean(row.parentId) || row.status?.trim().toLowerCase() !== 'done';
+    }
     if (row.parentId) {
       return row.status === statusFilter;
     } else {
@@ -4378,10 +4381,12 @@ export default function WorkspaceProjectView({
             </div>
           )}
           <select
+            aria-label="Filter by status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-4 py-2 rounded-md text-sm font-semibold border border-[#E2E4E9] bg-white text-[#1C1F23] outline-none focus:ring-2 focus:ring-[#1061E3]"
           >
+            {projectType === 'SEO' && <option value="hide-done">Hide Done Projects</option>}
             <option value="all">All Statuses</option>
             {filterStatusOptions.map((status) => (
               <option key={status} value={status}>{status}</option>
