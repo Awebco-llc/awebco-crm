@@ -226,7 +226,18 @@ export function supportEmailContent(
       // fields, or remove a quote from only one alternative. Account for those
       // known blocks, but require every remaining word in BOTH provider replies
       // to survive. A provider HTML reply inside a quote still prevents collapse.
+      // Mailgun can split one marked signature between stripped-text and
+      // stripped-signature (for example, Outlook contact details followed by
+      // website/review links). Rejoin those clues before subtracting complete
+      // known blocks; otherwise a partial signature vetoes all cleanup.
       let providerText = compact(original.strippedText);
+      const providerSignature = compact(original.strippedSignature || "");
+      if (
+        providerSignature &&
+        !providerText.endsWith(providerSignature) &&
+        compact(body).includes(providerText + providerSignature)
+      )
+        providerText += providerSignature;
       for (const part of html) {
         if (
           part.kind === "quote" ||

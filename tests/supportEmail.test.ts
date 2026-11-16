@@ -465,3 +465,66 @@ test("Gmail header separated from quoted history by a blank line is hidden", () 
   assert.match(notification.text, /New ticket created/);
   assert.doesNotMatch(notification.text, /wrote:|Old message/);
 });
+
+test("Mailgun signature fields split inside an Outlook signature still clean the reply and its files", () => {
+  const reply =
+    "Reply as admin from email.\n\nPlease keep this second instruction.";
+  const contact =
+    "[cid:portrait]\nTroy Idlett\nDeveloper\n📞 (217) 555-0100\n📍 100 Example St. Danville, IL\n📅 Book an Appointment<https://example.com/book>";
+  const links =
+    "www.awebco.com<https://www.awebco.com/>\nWrite a Review<https://example.com/review>";
+  const signature = `${contact}\n${links}`;
+  const signatureHtml =
+    '<div id="Signature" class="elementToProof"><table><tr><td><img src="cid:portrait"></td><td><div>Troy Idlett</div><div>Developer</div><div>📞 (217) 555-0100</div><div>📍 100 Example St. Danville, IL</div><div>📅 <a href="https://example.com/book">Book\n an Appointment</a></div><div><a href="https://www.awebco.com/">www.awebco.com</a></div><div><a href="https://example.com/review">Write\n a Review</a></div></td></tr></table></div>';
+  const replyHtml =
+    "<div>Reply as admin from email.</div><div>Please keep this second instruction.</div>";
+  const header =
+    "From: Awebco Support <tickets@awebco.com>\nSent: Monday\nTo: Troy <troy@awebco.com>\nSubject: Re: Test ticket";
+  const raw = `${reply}\n\n${signature}\n\n________________________________\n${header}\nEarlier client reply.`;
+  const email = original(raw, {
+    html: [
+      `${replyHtml}${signatureHtml}<hr><div id="divRplyFwdMsg">${header.replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\n", "<br>")}</div><div>Earlier client reply.</div>`,
+    ],
+    strippedText: `${reply}\n\n${contact}`,
+    strippedHtml: [`${replyHtml}${signatureHtml}<hr>`],
+    strippedSignature: links,
+  });
+  const result = supportMessagePresentation("email-outlook-split", {
+    email_original: email,
+    email_attachment_cids: { portrait: ["portrait"] },
+    attachments: [
+      { id: "portrait", name: "image.png" },
+      { id: "report", name: "report.pdf" },
+    ],
+  });
+  assert.equal(result.text, reply);
+  assert.match(result.signature, /Troy Idlett/);
+  assert.match(result.quoted, /Earlier client reply/);
+  assert.deepEqual(
+    result.inline.map((file) => file.id),
+    ["portrait"],
+  );
+  assert.deepEqual(
+    result.attachments.map((file) => file.id),
+    ["report"],
+  );
+  assert.equal(result.original, raw);
+  // Do not append a duplicate or unrelated provider signature to a complete reply.
+  for (const strippedSignature of [links, "Unrelated provider clue"]) {
+    assert.equal(
+      supportEmailContent(raw, {
+        ...email,
+        strippedText: `${reply}\n\n${signature}`,
+        strippedSignature,
+      }).text,
+      reply,
+    );
+  }
+  // Provider clues must still prevent hiding an unquoted instruction in history.
+  const edited = supportEmailContent(raw, {
+    ...email,
+    strippedText: `${email.strippedText}\nEarlier client reply.`,
+  });
+  assert.match(edited.text, /Earlier client reply/);
+  assert.equal(edited.quoted, "");
+});

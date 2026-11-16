@@ -1043,8 +1043,11 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
       }),
     })) as never,
   );
-  const raw =
-    "Your update is complete.\n\n[cid:logo]\nJamie Client\nSupport specialist\n(217) 555-0100\nhttps://example.com/";
+  const contact = "[cid:logo]\nTroy Idlett\nSupport specialist\n(217) 555-0100";
+  const links = "www.awebco.com<https://www.awebco.com/>";
+  const signatureHtml = '<div id="Signature"><img src="cid:logo"><div>Troy Idlett</div><div>Support specialist</div><div>(217) 555-0100</div><a href="https://www.awebco.com/">www.awebco.com</a></div>';
+  const header = "From: Support\nSent: Monday\nTo: Troy\nSubject: Re: Update";
+  const raw = `Your update is complete.\n\n${contact}\n${links}\n\n________________________________\n${header}\nOld ticket reply.`;
   const files = [
     new File(["inline logo"], "logo.png", { type: "image/png" }),
     new File(["real report"], "report.pdf", { type: "application/pdf" }),
@@ -1060,10 +1063,11 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
       messageId: "<staff-reply@example.com>",
       original: {
         plain: raw,
-        html: [],
-        strippedHtml: [],
+        html: [`<div>Your update is complete.</div>${signatureHtml}<hr><div id="divRplyFwdMsg">${header.replaceAll("\n", "<br>")}</div><div>Old ticket reply.</div>`],
+        strippedText: `Your update is complete.\n\n${contact}`,
+        strippedHtml: [`<div>Your update is complete.</div>${signatureHtml}`],
         contentIds: { logo: "attachment-1" },
-        strippedSignature: raw.split("\n\n")[1],
+        strippedSignature: links,
       },
       attachmentCids: [["logo"], []],
     },
@@ -1075,13 +1079,14 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
   assert.equal(sent[0].parent, "<staff-reply@example.com>");
   assert.ok(!sent[0].body.includes("[cid:"));
   assert.ok(!sent[0].body.includes("Support specialist"));
+  assert.ok(!sent[0].body.includes("Old ticket reply"));
   assert.ok(!sent[0].body.includes("staging-portal"));
   assert.ok(sent[0].html.includes("View your support ticket"));
   const detail = await service.detail(ticketId, company);
   assert.equal(detail.messages[0].text, "Your update is complete.");
   assert.equal(detail.messages[0].attachments.length, 1);
   assert.equal(detail.messages[0].inline_attachments!.length, 1);
-  assert.match(detail.messages[0].email_signature!, /Jamie Client/);
+  assert.match(detail.messages[0].email_signature!, /Troy Idlett/);
   assert.ok(!JSON.stringify(detail).includes("support/"));
   assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
 });
