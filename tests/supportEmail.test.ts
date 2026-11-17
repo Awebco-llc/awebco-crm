@@ -528,3 +528,64 @@ test("Mailgun signature fields split inside an Outlook signature still clean the
   assert.match(edited.text, /Earlier client reply/);
   assert.equal(edited.quoted, "");
 });
+
+test("Mailgun's emptied Outlook header still marks retained history, while changed provider words stay visible", () => {
+  const reply =
+    "Admin email verification.\n\nPlease keep this second paragraph.";
+  const signature =
+    "[cid:portrait]\nTroy Idlett\nSEO & PPC Manager\n(217) 555-0100\n[network icon]<https://example.com/social>";
+  const sigHtml =
+    '<div id="Signature"><img src="cid:portrait"><div>Troy Idlett</div><div>SEO &amp; PPC Manager</div><div>(217) 555-0100</div><a href="https://example.com/social"><img src="cid:network" alt="network icon"></a></div>';
+  const replyHtml =
+    "<div>Admin email verification.</div><div>Please keep this second paragraph.</div>";
+  const header =
+    "From: Awebco Support\nSent: Tuesday\nTo: Troy\nSubject: Re: Test";
+  for (const signatureFirst of [false, true]) {
+    const raw = `${signatureFirst ? `${signature}\n${reply}` : `${reply}\n${signature}`}\n________________________________\n${header}\nEarlier client message.`;
+    const authoredHtml = signatureFirst
+      ? sigHtml + replyHtml
+      : replyHtml + sigHtml;
+    const email = original(raw, {
+      html: [
+        `${authoredHtml}<hr><div id="divRplyFwdMsg">${header.replaceAll("\n", "<br>")}</div><div>Earlier client message.</div>`,
+      ],
+      strippedText: signatureFirst
+        ? `${signature}\n${reply}`
+        : `${reply}\n${signature}`,
+      strippedHtml: [
+        `${authoredHtml}<hr><div id="divRplyFwdMsg"></div><div>Earlier client message.</div>`,
+      ],
+    });
+    const message = supportMessagePresentation("email-empty-outlook-header", {
+      email_original: email,
+      email_attachment_cids: { portrait: ["portrait"], network: ["network"] },
+      attachments: [
+        { id: "portrait", name: "image.png" },
+        { id: "network", name: "image.png" },
+        { id: "screenshot", name: "screenshot.png" },
+      ],
+    });
+    assert.equal(message.text, reply);
+    assert.deepEqual(
+      message.inline.map((file) => file.id),
+      ["portrait", "network"],
+    );
+    assert.deepEqual(
+      message.attachments.map((file) => file.id),
+      ["screenshot"],
+    );
+    assert.match(message.quoted, /Earlier client message/);
+    assert.equal(message.original, raw);
+    const edited = supportEmailContent(raw, {
+      ...email,
+      strippedHtml: [
+        email.strippedHtml[0].replace(
+          "Earlier client message.",
+          "Please also keep this provider-only instruction.",
+        ),
+      ],
+    });
+    assert.match(edited.text, /Earlier client message/);
+    assert.equal(edited.quoted, "");
+  }
+});

@@ -221,7 +221,9 @@ export function supportEmailContent(
       ),
     ].filter((value) => value.trim());
     if (original?.strippedHtml.length === 1 && original.strippedText?.trim()) {
-      const provider = htmlParts(original.strippedHtml[0]);
+      // Mailgun can empty Outlook's header while retaining its marker and
+      // the old message below it. Keep that structural boundary in both views.
+      const provider = htmlParts(original.strippedHtml[0], true);
       // Providers can retain marked signatures and blockquotes in both stripped
       // fields, or remove a quote from only one alternative. Account for those
       // known blocks, but require every remaining word in BOTH provider replies
@@ -251,7 +253,13 @@ export function supportEmailContent(
           .filter(
             (part) =>
               part.kind === "reply" ||
-              (part.kind === "signature" && !safeSignature(part.text)),
+              (part.kind === "signature" && !safeSignature(part.text)) ||
+              (part.kind === "quote" &&
+                !html.some(
+                  (known) =>
+                    known.kind === "quote" &&
+                    compact(known.text).includes(compact(part.text)),
+                )),
           )
           .map((part) => part.text)
           .join("\n"),
