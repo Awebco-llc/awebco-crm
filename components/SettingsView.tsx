@@ -21,7 +21,8 @@ const ALL_WORKSPACES = [
   'SEO',
   'Local Listings',
   'Google Ads',
-  'Social Media'
+  'Social Media',
+  'Email Marketing'
 ];
 
 export default function SettingsView({

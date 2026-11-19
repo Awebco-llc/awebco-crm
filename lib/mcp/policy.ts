@@ -1,16 +1,17 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { EMAIL_MARKETING_STATUSES, emailMarketingGroupForStatus } from '../emailMarketingWorkspace';
 
 export const MAX_REQUESTS = 100;
 export const MAX_WRITES = 25;
 export const PAGE_SIZE = 25;
 export const PRIVATE_COLLECTION = '_mcp';
 export const canManageConnections = (role: unknown) => role === 'master_admin' || role === 'admin';
-export const workspaces = ['Awebco', 'Websites', 'Design & Print', 'Google Ads', 'Local Listings', 'SEO', 'Social Media', 'Support Tickets'] as const;
+export const workspaces = ['Awebco', 'Websites', 'Design & Print', 'Google Ads', 'Local Listings', 'SEO', 'Social Media', 'Email Marketing', 'Support Tickets'] as const;
 export const idSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 export const workspaceSchema = z.enum(workspaces);
 export const patchSchema = z.object({
-  status: z.enum(['Not Started', 'Setup', 'Planning', 'In Progress', 'Awaiting Customer', 'Awaiting Review', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Closed', 'Down', 'S7: Content Collection', 'S8: Design', 'S9: Design Proofing', 'S10: Development', 'S11: Development Proofing', 'S12: Final Payment', 'S13: Launch Checklist', 'S14: Launched', 'ON HOLD']).optional(),
+  status: z.enum(['Not Started', 'Setup', 'Planning', 'In Progress', 'Awaiting Customer', 'Awaiting Review', 'Needs Invoiced', 'Running', 'Cancelled', 'On Hold', 'Done', 'Closed', 'Down', 'S7: Content Collection', 'S8: Design', 'S9: Design Proofing', 'S10: Development', 'S11: Development Proofing', 'S12: Final Payment', 'S13: Launch Checklist', 'S14: Launched', 'ON HOLD']).optional(),
   deadline: z.string().refine(value => value === '' || (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value), 'Use a valid YYYY-MM-DD date or an empty string').optional(),
   priority: z.enum(['', 'Low', 'Medium', 'High', 'Urgent']).optional(),
   description: z.string().max(8000).optional(),
@@ -44,6 +45,7 @@ export function nextBudget(data: Record<string, unknown>, day: string, write = f
 }
 
 export function groupForStatus(workspace: string, status: string, current?: string) {
+  if (workspace === 'Email Marketing') return emailMarketingGroupForStatus(status);
   if (workspace === 'SEO') return undefined;
   if (workspace === 'Google Ads') return status === 'Running' ? 'group-running' : 'group-active';
   if (status === 'Running') return 'group-running';
@@ -56,6 +58,7 @@ export function groupForStatus(workspace: string, status: string, current?: stri
 }
 
 export function statusesForWorkspace(workspace: string): string[] {
+  if (workspace === 'Email Marketing') return EMAIL_MARKETING_STATUSES;
   if (workspace === 'Websites') return ['S7: Content Collection', 'S8: Design', 'S9: Design Proofing', 'S10: Development', 'S11: Development Proofing', 'S12: Final Payment', 'S13: Launch Checklist', 'S14: Launched', 'ON HOLD'];
   if (workspace === 'Awebco') return ['Not Started', 'Planning', 'In Progress', 'On Hold', 'Awaiting Review', 'Done'];
   const statuses = ['Not Started', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'On Hold', 'Done'];

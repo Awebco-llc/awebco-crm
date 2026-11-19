@@ -8,6 +8,7 @@ import RichTextEditor from './RichTextEditor';
 import { createCompany, updateCompany, deleteCompany, createTicket, createGroup, createGroupWithId, updateTicket, deleteGroup, deleteTicket } from '@/lib/crmStore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase';
+import { EMAIL_MARKETING_GROUPS } from '@/lib/emailMarketingWorkspace';
 import {
   DndContext,
   closestCenter,
@@ -682,6 +683,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
           ll: 'Local Listings',
           ppc: 'Google Ads',
           smm: 'Social Media',
+          em: 'Email Marketing',
           dp: 'Design & Print',
         };
 
@@ -763,7 +765,9 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
               targetGroupId = existingGroups[0].id;
             } else {
               // No groups exist in Firestore for this workspace. Initialize default groups.
-              const defaults = workspaceName === 'Local Listings'
+              const defaults = workspaceName === 'Email Marketing'
+                ? EMAIL_MARKETING_GROUPS
+                : workspaceName === 'Local Listings'
                 ? [{ id: 'group-setup', name: 'Setup' }, { id: 'group-running', name: 'Running' }]
                 : workspaceName === 'Social Media'
                 ? [{ id: 'group-smm', name: 'Social Media Management' }, { id: 'group-sma', name: 'Social Media Advertising' }]
@@ -802,7 +806,7 @@ export default function CompaniesView({ teamMembers, companies, setCompanies, co
                 projectName: company.name,
                 assignee: company.assignedToId || '',
                 assignees: company.assignedToId ? [company.assignedToId] : [],
-                status: 'Not Started',
+                status: workspaceName === 'Email Marketing' ? 'Setup' : 'Not Started',
                 deadline: company.deadline || '',
                 url: company.domain || '',
                 description: '',

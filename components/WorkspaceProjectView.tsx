@@ -1,6 +1,7 @@
 'use client';
 
 import { listingHandoff } from '@/lib/listingHandoff';
+import { EMAIL_MARKETING_GROUPS, EMAIL_MARKETING_STATUSES, emailMarketingGroupForStatus } from '@/lib/emailMarketingWorkspace';
 import { SupportConversation, SupportConversationPanel } from './SupportConversation';
 import { PortalSeoVisibility } from './PortalSeoVisibility';
 
@@ -1274,7 +1275,9 @@ const SortableRow = React.memo(function SortableRow({
             <EditableStatus
               value={row[col.id]}
               options={
-                projectType === 'Local Listings' && row.parentId
+                projectType === 'Email Marketing'
+                  ? EMAIL_MARKETING_STATUSES
+                  : projectType === 'Local Listings' && row.parentId
                   ? LOCAL_LISTING_SUB_ROW_STATUSES
                   : projectType === 'Local Listings'
                   ? ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down']
@@ -1361,6 +1364,7 @@ const SortableRow = React.memo(function SortableRow({
                     case 'Google Ads': return comp.ppcNotes || '';
                     case 'SEO': return comp.seoNotes || '';
                     case 'Social Media': return comp.smmNotes || '';
+                    case 'Email Marketing': return comp.emNotes || '';
                     case 'Websites': return comp.webNotes || '';
                     case 'Local Listings': return comp.llNotes || '';
                     case 'Design & Print': return comp.dpNotes || '';
@@ -2107,7 +2111,7 @@ export default function WorkspaceProjectView({
       filtered.splice(5, 0, { id: 'billableHours', header: 'Billable Hours' });
       filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
       result = filtered;
-    } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
+    } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media' || projectType === 'Email Marketing') {
       result = INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
       if (projectType === 'Google Ads') {
         result.push({ id: 'planDescription', header: 'Plan Description' });
@@ -2172,7 +2176,7 @@ export default function WorkspaceProjectView({
         filtered.splice(5, 0, { id: 'billableHours', header: 'Billable Hours' });
         filtered.splice(4, 0, { id: 'priority', header: 'Priority' });
         result = filtered;
-      } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media') {
+      } else if (projectType === 'SEO' || projectType === 'Google Ads' || projectType === 'Social Media' || projectType === 'Email Marketing') {
         result = INITIAL_COLUMNS.filter(c => !['pastelUrl', 'companyName', 'contactName', 'email', 'category'].includes(c.id));
         if (projectType === 'Google Ads') {
           result.push({ id: 'planDescription', header: 'Plan Description' });
@@ -2899,6 +2903,10 @@ export default function WorkspaceProjectView({
       return gid;
     }
 
+    if (projectType === 'Email Marketing') {
+      return emailMarketingGroupForStatus(row.status);
+    }
+
     // If gid is a default or status is completed, map to the completed group
     const isCompletedStatus = projectType !== 'SEO' && (row.status === 'S14: Launched' || row.status === 'Launched' || row.status === 'Done' || row.status === 'Closed');
     if (gid === 'group-completed' || isCompletedStatus) {
@@ -2938,6 +2946,7 @@ export default function WorkspaceProjectView({
   };
 
   const getStatusOptions = () => {
+    if (projectType === 'Email Marketing') return EMAIL_MARKETING_STATUSES;
     if (projectType === 'Local Listings') {
       return [
         'Not Started',
@@ -3030,7 +3039,9 @@ export default function WorkspaceProjectView({
       if (fetchedGroups.length === 0) {
         setIsDefaultGroups(true);
         // Just show the UI defaults for now
-        const defaults = projectType === 'Local Listings'
+        const defaults = projectType === 'Email Marketing'
+          ? EMAIL_MARKETING_GROUPS
+          : projectType === 'Local Listings'
           ? [{ name: 'Setup', id: 'group-setup' }, { name: 'Running', id: 'group-running' }]
           : projectType === 'SEO' || projectType === 'Google Ads'
             ? [{ name: 'Setup', id: 'group-active' }, { name: 'Running', id: 'group-running' }]
@@ -3048,7 +3059,9 @@ export default function WorkspaceProjectView({
     }, (err: any) => {
       console.error('Group subscription error:', err);
       // Fallback to defaults on error
-      const defaults = [{ id: 'group-active', name: 'Active' }, { id: 'group-completed', name: 'Completed' }];
+      const defaults = projectType === 'Email Marketing'
+        ? EMAIL_MARKETING_GROUPS
+        : [{ id: 'group-active', name: 'Active' }, { id: 'group-completed', name: 'Completed' }];
       setRawGroups(defaults);
       setIsGroupsLoaded(true);
       setIsDefaultGroups(true);
@@ -3164,7 +3177,9 @@ export default function WorkspaceProjectView({
         const row = data.find(r => r.id === id);
         const currentGroupId = row ? (row.groupId || getRowGroupId(row)) : 'group-active';
 
-        if (projectType === 'Google Ads') {
+        if (projectType === 'Email Marketing') {
+          updatedPatch.groupId = emailMarketingGroupForStatus(status);
+        } else if (projectType === 'Google Ads') {
           updatedPatch.groupId = status === 'Running' ? 'group-running' : 'group-active';
         } else if (status === 'Running' && projectType === 'Local Listings') {
           const runningGroup = groups.find((g: any) => g.id === 'group-running' || g.name.toLowerCase().includes('run'));
@@ -3734,13 +3749,13 @@ export default function WorkspaceProjectView({
       projectName: 'New Sub-Task',
       assignee: '',
       assignees: [],
-      status: 'Not Started',
+      status: projectType === 'Email Marketing' ? 'Setup' : 'Not Started',
       deadline: '',
       url: '',
       description: '',
       notes: '',
       files: [],
-      groupId: parent?.groupId || groups[0]?.id || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
+      groupId: parent?.groupId || groups[0]?.id || (projectType === 'Email Marketing' ? emailMarketingGroupForStatus('Setup') : projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
       workspace: projectType,
       order: minOrder - 1,
       isDraft: moveSubtaskToBottom,
@@ -4126,7 +4141,7 @@ export default function WorkspaceProjectView({
         notes: '',
         files: [],
         isManual: true,
-        groupId: groups[0]?.id || (projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
+        groupId: groups[0]?.id || (projectType === 'Email Marketing' ? emailMarketingGroupForStatus('Setup') : projectType === 'Local Listings' ? 'group-setup' : projectType === 'Social Media' ? 'group-smm' : 'group-active'),
         workspace: projectType,
         order: maxOrder + 1,
       };
@@ -5741,7 +5756,9 @@ export default function WorkspaceProjectView({
                               }}
                               className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] focus:border-transparent bg-white"
                             >
-                              {(projectType === 'Awebco'
+                              {(projectType === 'Email Marketing'
+                                 ? EMAIL_MARKETING_STATUSES
+                                 : projectType === 'Awebco'
                                  ? ['Not Started', 'Planning', 'In Progress', 'On Hold', 'Awaiting Review', 'Done']
                                  : editingRow?.parentId
                                    ? (projectType === 'Local Listings'

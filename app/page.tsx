@@ -73,7 +73,8 @@ const NAV_ITEMS_WORKSPACE = [
   { name: 'SEO', icon: LineChart },
   { name: 'Local Listings', icon: MapPin },
   { name: 'Google Ads', icon: MousePointerClick },
-  { name: 'Social Media', icon: Share2 }
+  { name: 'Social Media', icon: Share2 },
+  { name: 'Email Marketing', icon: Mail }
 ];
 const WORKSPACE_NAV_NAMES = NAV_ITEMS_WORKSPACE.map(item => item.name);
 const NAV_ITEMS_SETTINGS = [
@@ -717,7 +718,7 @@ export default function Page() {
         const allNavs = [
           'My Tasks', 'Inbox', 'Contacts', 'Companies', 'Deals / Sales', 
           'Proposals', 'Price Catalog', 'Files', 'Awebco', 'Support Tickets', 'Websites', 
-          'Design & Print', 'SEO', 'Local Listings', 'Google Ads', 'Social Media', 
+          'Design & Print', 'SEO', 'Local Listings', 'Google Ads', 'Social Media', 'Email Marketing',
           'Settings', 'Profile'
         ];
         if (allNavs.includes(decodedNav)) {
@@ -2051,6 +2052,8 @@ export default function Page() {
           <WorkspaceProjectView key={`seo-${workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="SEO" flagKey="seo" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'SEO' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingRows={canDeleteRows} allowDeletingGroups={canDeleteGroups} allowDeletingColumns={canDeleteColumns} onCloseRow={handleCloseRow} />
         ) : activeContentNav === 'Social Media' ? (
           <WorkspaceProjectView key={`social-${workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Social Media" flagKey="smm" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Social Media' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingRows={canDeleteRows} allowDeletingGroups={canDeleteGroups} allowDeletingColumns={canDeleteColumns} onCloseRow={handleCloseRow} />
+        ) : activeContentNav === 'Email Marketing' ? (
+          <WorkspaceProjectView key={`em-${workspaceOpenRequest?.navName === 'Email Marketing' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Email Marketing" flagKey="em" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Email Marketing' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingRows={canDeleteRows} allowDeletingGroups={canDeleteGroups} allowDeletingColumns={canDeleteColumns} onCloseRow={handleCloseRow} />
         ) : activeContentNav === 'Support Tickets' ? (
           <WorkspaceProjectView key={`support-${workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.requestId : 'base'}`} teamMembers={teamMembers} companies={companies} projectType="Support Tickets" flagKey="support" currentUserName={currentUserName} currentUserId={currentTeamMember?.id} openRowId={workspaceOpenRequest?.navName === 'Support Tickets' ? workspaceOpenRequest.rowId : undefined} onMention={createMentionNotifications} canManageBoardMembers={canManageBoardMembers} onUpdateMemberPermissions={handleToggleWorkspaceAccess} useFullScreenUnifiedTicketView={useFullScreenUnifiedTicketView} allowDeletingRows={canDeleteRows} allowDeletingGroups={canDeleteGroups} allowDeletingColumns={canDeleteColumns} onCloseRow={handleCloseRow} />
         ) : canAccessCRM && activeContentNav === 'Companies' ? (

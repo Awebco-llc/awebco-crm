@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, Contact, TeamMember, Ticket, getStatusBadgeClasses } from './Shared';
 import { subscribeAllTickets, subscribeAllGroups, updateTicket } from '@/lib/crmStore';
+import { EMAIL_MARKETING_STATUSES, emailMarketingGroupForStatus } from '@/lib/emailMarketingWorkspace';
 
 import { ChevronUp, ChevronDown, ChevronsUpDown, Calendar, List, Clock, AlertCircle } from 'lucide-react';
 
@@ -67,6 +68,7 @@ function getDeadlineCategory(deadlineStr?: string): string {
 }
 
 function getGroupIdForStatus(status: string, workspace: string, currentGroupId?: string): string | undefined {
+  if (workspace === 'Email Marketing') return emailMarketingGroupForStatus(status);
   if (workspace === 'SEO') return undefined;
   
   if (workspace === 'Google Ads') {
@@ -90,6 +92,7 @@ function getGroupIdForStatus(status: string, workspace: string, currentGroupId?:
 }
 
 function getStatusOptionsForWorkspace(workspace: string): string[] {
+  if (workspace === 'Email Marketing') return EMAIL_MARKETING_STATUSES;
   if (workspace === 'Local Listings') {
     return ['Not Started', 'Setup', 'In Progress', 'Awaiting Customer', 'Needs Invoiced', 'Running', 'On Hold', 'Done', 'Down'];
   }
@@ -114,6 +117,7 @@ const WORKSPACE_SERVICES: Array<{ key: keyof Company; label: string }> = [
   { key: 'ppc', label: 'Google Ads' },
   { key: 'smm', label: 'Social Media Management' },
   { key: 'sma', label: 'Social Media Ads' },
+  { key: 'em', label: 'Email Marketing' },
   { key: 'support', label: 'Support Tickets' },
 ];
 
@@ -136,6 +140,7 @@ function isCompletedStatus(status?: string) {
     s === 'needs invoiced' || 
     s === 'invoiced' || 
     s === 'closed' || 
+    s === 'cancelled' ||
     s === 'completed / launched' || 
     s === 'launched' ||
     s === 'running' ||
@@ -255,6 +260,7 @@ export default function MyTasksView({
     'Local Listings': 'll',
     'Google Ads': 'ppc',
     'Social Media': 'smm',
+    'Email Marketing': 'em',
     'Design & Print': 'dp',
     'Awebco': 'awebco',
     'Support Tickets': 'support',
