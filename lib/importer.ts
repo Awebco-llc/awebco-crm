@@ -338,7 +338,7 @@ export function mapImportData(rawData: any[]): ImportResult[] {
     phone: row['Phone'] || row['phone'] || row['Cell Phone'] || '',
     companyName: row['Accounts'] || row['Company'] || row['company'] || '',
     title: row['Title'] || row['title'] || '',
-    assignedToName: row['People'] || row['Assigned To'] || '',
+    assignedToName: row['Assigned Staff'] || row['People'] || row['Assigned To'] || '',
   })).filter(item => item.firstName || item.lastName || item.email);
 }
 

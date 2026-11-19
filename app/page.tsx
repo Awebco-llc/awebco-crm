@@ -277,6 +277,19 @@ function SortableRow({
         <CompanyDropdown value={contact.companyId} onSave={v => onUpdate(contact.id, 'companyId', v)} companies={companies} />
       </td>
 
+      <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2 min-w-[140px]">
+          <AssigneeDropdown
+            value={contact.assignedToId || ''}
+            onSave={value => onUpdate(contact.id, 'assignedToId', value)}
+            teamMembers={teamMembers}
+          />
+          <span className="truncate text-[#4A4D53]">
+            {teamMembers.find(member => member.id === contact.assignedToId)?.name || 'Unassigned'}
+          </span>
+        </div>
+      </td>
+
       <td className="px-4 py-3 text-[13px] border-b border-[#F0F2F5]">
         <div className="flex items-center justify-between group">
           <EditableCell value={contact.email} onSave={v => onUpdate(contact.id, 'email', v)} />
@@ -514,7 +527,7 @@ function DroppableTable({
   return (
     <SortableContext id={id} items={contacts.map(c => c.id)} strategy={verticalListSortingStrategy}>
       <div className="overflow-x-auto w-full bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E4E9]">
-        <table className="w-full border-collapse text-left min-w-[1000px]" style={{ minWidth: '1000px' }}>
+        <table className="w-full border-collapse text-left min-w-[1160px]" style={{ minWidth: '1160px' }}>
         <thead className="sticky top-0 z-10 shadow-sm select-none">
           <tr>
             <th className="w-10 sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 border-b border-[#E2E4E9]">
@@ -575,6 +588,16 @@ function DroppableTable({
               </div>
             </th>
 
+            <th
+              onClick={() => onSort('assignedToId')}
+              className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
+            >
+              <div className="flex items-center gap-1">
+                <span>ASSIGNED STAFF</span>
+                {renderSortIcon('assignedToId')}
+              </div>
+            </th>
+
             <th 
               onClick={() => onSort('email')}
               className="sticky top-0 bg-[#F9FAFB] z-10 px-4 py-3 text-xs font-semibold text-[#8E9299] border-b border-[#E2E4E9] cursor-pointer hover:bg-[#F0F2F5] transition-colors group/th"
@@ -591,7 +614,7 @@ function DroppableTable({
         <tbody ref={setNodeRef} className="min-h-[50px]">
           {contacts.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
+              <td colSpan={10} className="px-4 py-8 text-center text-[#8E9299] text-sm">No contacts found. Drop here to add.</td>
             </tr>
           ) : contacts.map(contact => (
             <SortableRow 
@@ -779,7 +802,7 @@ export default function Page() {
     
     const selectedContacts = contacts.filter(c => selectedContactIds.has(c.id));
     
-    const csvHeaders = ['First Name', 'Last Name', 'Title', 'Phone', 'Company', 'Email', 'Status', 'Group'];
+    const csvHeaders = ['First Name', 'Last Name', 'Title', 'Phone', 'Company', 'Assigned Staff', 'Email', 'Status', 'Group'];
     
     const csvRows = selectedContacts.map(c => {
       const companyName = companies.find(comp => comp.id === c.companyId)?.name || '';
@@ -790,6 +813,7 @@ export default function Page() {
         c.title || '',
         c.phone || '',
         companyName,
+        teamMembers.find(member => member.id === c.assignedToId)?.name || '',
         c.email || '',
         c.status || '',
         groupName
@@ -1168,6 +1192,7 @@ export default function Page() {
   const [newTitle, setNewTitle] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newCompanyId, setNewCompanyId] = useState('');
+  const [newAssignedToId, setNewAssignedToId] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newStatus, setNewStatus] = useState<Status>('Lead');
   const [newContactGroupId, setNewContactGroupId] = useState('');
@@ -1259,6 +1284,9 @@ export default function Page() {
           const compB = companies.find(c => c.id === b.companyId);
           aVal = compA ? compA.name : '';
           bVal = compB ? compB.name : '';
+        } else if (sortConfig.column === 'assignedToId') {
+          aVal = teamMembers.find(member => member.id === a.assignedToId)?.name || '';
+          bVal = teamMembers.find(member => member.id === b.assignedToId)?.name || '';
         } else if (sortConfig.column === 'email') {
           aVal = a.email || '';
           bVal = b.email || '';
@@ -1273,7 +1301,7 @@ export default function Page() {
         contacts: sortedContacts,
       };
     });
-  }, [contactGroups, filteredContacts, sortConfig, companies]);
+  }, [contactGroups, filteredContacts, sortConfig, companies, teamMembers]);
 
   const handleCreateContactGroup = async () => {
     const colors = ['#D32F2F', '#10B981', '#1061E3', '#8B5CF6', '#F59E0B', '#0D9488'];
@@ -1354,6 +1382,7 @@ export default function Page() {
     setNewTitle('');
     setNewPhone('');
     setNewCompanyId('');
+    setNewAssignedToId('');
     setNewEmail('');
     setNewStatus('Lead');
     setNewContactGroupId(contactGroups[0]?.id || '');
@@ -1368,6 +1397,7 @@ export default function Page() {
     setNewTitle(contact.title || '');
     setNewPhone(contact.phone || '');
     setNewCompanyId(contact.companyId || '');
+    setNewAssignedToId(contact.assignedToId || '');
     setNewEmail(contact.email || '');
     setNewStatus(contact.status || 'Lead');
     setNewContactGroupId(contact.groupId || contactGroups[0]?.id || '');
@@ -1390,6 +1420,7 @@ export default function Page() {
           title: newTitle,
           phone: newPhone,
           companyId: newCompanyId,
+          assignedToId: newAssignedToId,
           email: newEmail,
           status: newStatus,
           groupId: newContactGroupId,
@@ -1413,7 +1444,7 @@ export default function Page() {
         email: newEmail,
         status: newStatus,
         groupId: newContactGroupId,
-        assignedToId: ''
+        assignedToId: newAssignedToId
       };
 
       try {
@@ -2240,6 +2271,20 @@ export default function Page() {
                           <option value="">No Company</option>
                           {companies.map(c => (
                             <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="contact-assigned-staff" className="block text-sm font-semibold text-[#4A4D53] mb-1.5">Assigned Staff</label>
+                        <select
+                          id="contact-assigned-staff"
+                          value={newAssignedToId}
+                          onChange={e => setNewAssignedToId(e.target.value)}
+                          className="w-full px-3 py-2 border border-[#E2E4E9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#1061E3] bg-white"
+                        >
+                          <option value="">Unassigned</option>
+                          {teamMembers.map(member => (
+                            <option key={member.id} value={member.id}>{member.name}</option>
                           ))}
                         </select>
                       </div>
