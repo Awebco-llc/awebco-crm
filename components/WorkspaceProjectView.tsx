@@ -3182,7 +3182,7 @@ export default function WorkspaceProjectView({
         const currentGroupId = row ? (row.groupId || getRowGroupId(row)) : 'group-active';
 
         if (projectType === 'Email Marketing') {
-          updatedPatch.groupId = emailMarketingGroupForStatus(status);
+          updatedPatch.groupId = emailMarketingGroupForStatus(status, currentGroupId);
         } else if (projectType === 'Google Ads') {
           updatedPatch.groupId = status === 'Running' ? 'group-running' : 'group-active';
         } else if (status === 'Running' && projectType === 'Local Listings') {

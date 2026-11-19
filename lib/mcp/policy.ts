@@ -11,7 +11,7 @@ export const workspaces = ['Awebco', 'Websites', 'Design & Print', 'Google Ads',
 export const idSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 export const workspaceSchema = z.enum(workspaces);
 export const patchSchema = z.object({
-  status: z.enum(['Not Started', 'Setup', 'Planning', 'In Progress', 'Awaiting Customer', 'Awaiting Review', 'Needs Invoiced', 'Running', 'Cancelled', 'On Hold', 'Done', 'Closed', 'Down', 'S7: Content Collection', 'S8: Design', 'S9: Design Proofing', 'S10: Development', 'S11: Development Proofing', 'S12: Final Payment', 'S13: Launch Checklist', 'S14: Launched', 'ON HOLD']).optional(),
+  status: z.enum(['Not Started', 'Setup', 'Planning', 'In Progress', 'Scheduled', 'Awaiting Customer', 'Awaiting Review', 'Needs Invoiced', 'Running', 'Complete', 'Cancelled', 'On Hold', 'Done', 'Closed', 'Down', 'S7: Content Collection', 'S8: Design', 'S9: Design Proofing', 'S10: Development', 'S11: Development Proofing', 'S12: Final Payment', 'S13: Launch Checklist', 'S14: Launched', 'ON HOLD']).optional(),
   deadline: z.string().refine(value => value === '' || (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value), 'Use a valid YYYY-MM-DD date or an empty string').optional(),
   priority: z.enum(['', 'Low', 'Medium', 'High', 'Urgent']).optional(),
   description: z.string().max(8000).optional(),
@@ -45,7 +45,7 @@ export function nextBudget(data: Record<string, unknown>, day: string, write = f
 }
 
 export function groupForStatus(workspace: string, status: string, current?: string) {
-  if (workspace === 'Email Marketing') return emailMarketingGroupForStatus(status);
+  if (workspace === 'Email Marketing') return emailMarketingGroupForStatus(status, current);
   if (workspace === 'SEO') return undefined;
   if (workspace === 'Google Ads') return status === 'Running' ? 'group-running' : 'group-active';
   if (status === 'Running') return 'group-running';

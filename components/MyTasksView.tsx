@@ -68,7 +68,7 @@ function getDeadlineCategory(deadlineStr?: string): string {
 }
 
 function getGroupIdForStatus(status: string, workspace: string, currentGroupId?: string): string | undefined {
-  if (workspace === 'Email Marketing') return emailMarketingGroupForStatus(status);
+  if (workspace === 'Email Marketing') return emailMarketingGroupForStatus(status, currentGroupId);
   if (workspace === 'SEO') return undefined;
   
   if (workspace === 'Google Ads') {
