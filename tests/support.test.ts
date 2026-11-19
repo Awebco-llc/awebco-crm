@@ -87,7 +87,7 @@ class Ref {
   }
 }
 class Query {
-  filters: Array<[string, unknown]> = [];
+  filters: Array<[string, string, unknown]> = [];
   selected: string[] = [];
   max = Infinity;
   sort = "";
@@ -98,8 +98,8 @@ class Query {
   doc(id: string) {
     return new Ref(this.db, `${this.path}/${id}`);
   }
-  where(key: string, _op: string, value: unknown) {
-    this.filters.push([key, value]);
+  where(key: string, op: string, value: unknown) {
+    this.filters.push([key, op, value]);
     return this;
   }
   select(...keys: string[]) {
@@ -119,7 +119,7 @@ class Query {
       ([path, value]) =>
         path.startsWith(`${this.path}/`) &&
         path.split("/").length === this.path.split("/").length + 1 &&
-        this.filters.every(([key, want]) => value[key] === want),
+        this.filters.every(([key, op, want]) => op === "in" ? Array.isArray(want) && want.includes(value[key]) : value[key] === want),
     );
     if (this.sort)
       entries.sort((a, b) =>
@@ -233,6 +233,7 @@ function handlers() {
       name: "Agency staff",
       email: "staff@awebco.com",
       direction: "team",
+      role: "staff" as const,
     }),
   );
 }
@@ -1042,8 +1043,11 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
       }),
     })) as never,
   );
-  const raw =
-    "Your update is complete.\n\n[cid:logo]\nJamie Client\nSupport specialist\n(217) 555-0100\nhttps://example.com/";
+  const contact = "[cid:logo]\nTroy Idlett\nSupport specialist\n(217) 555-0100";
+  const links = "www.awebco.com<https://www.awebco.com/>";
+  const signatureHtml = '<div id="Signature"><img src="cid:logo"><div>Troy Idlett</div><div>Support specialist</div><div>(217) 555-0100</div><a href="https://www.awebco.com/">www.awebco.com</a></div>';
+  const header = "From: Support\nSent: Monday\nTo: Troy\nSubject: Re: Update";
+  const raw = `Your update is complete.\n\n${contact}\n${links}\n\n________________________________\n${header}\nOld ticket reply.`;
   const files = [
     new File(["inline logo"], "logo.png", { type: "image/png" }),
     new File(["real report"], "report.pdf", { type: "application/pdf" }),
@@ -1059,10 +1063,11 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
       messageId: "<staff-reply@example.com>",
       original: {
         plain: raw,
-        html: [],
-        strippedHtml: [],
+        html: [`<div>Your update is complete.</div>${signatureHtml}<hr><div id="divRplyFwdMsg">${header.replaceAll("\n", "<br>")}</div><div>Old ticket reply.</div>`],
+        strippedText: `Your update is complete.\n\n${contact}`,
+        strippedHtml: [`<div>Your update is complete.</div>${signatureHtml}`],
         contentIds: { logo: "attachment-1" },
-        strippedSignature: raw.split("\n\n")[1],
+        strippedSignature: links,
       },
       attachmentCids: [["logo"], []],
     },
@@ -1074,13 +1079,14 @@ test("forwarded replies use matching Awebco sender branding, thread headers, and
   assert.equal(sent[0].parent, "<staff-reply@example.com>");
   assert.ok(!sent[0].body.includes("[cid:"));
   assert.ok(!sent[0].body.includes("Support specialist"));
+  assert.ok(!sent[0].body.includes("Old ticket reply"));
   assert.ok(!sent[0].body.includes("staging-portal"));
   assert.ok(sent[0].html.includes("View your support ticket"));
   const detail = await service.detail(ticketId, company);
   assert.equal(detail.messages[0].text, "Your update is complete.");
   assert.equal(detail.messages[0].attachments.length, 1);
   assert.equal(detail.messages[0].inline_attachments!.length, 1);
-  assert.match(detail.messages[0].email_signature!, /Jamie Client/);
+  assert.match(detail.messages[0].email_signature!, /Troy Idlett/);
   assert.ok(!JSON.stringify(detail).includes("support/"));
   assert.equal(db.records.get(`tickets/${ticketId}`)!.deadline, "2026-10-24");
 });
@@ -1474,4 +1480,129 @@ test("profile corrections and photos apply to existing ticket conversations and 
     null,
   );
   assert.equal(await service.profile(company, profile.email, "team"), null);
+});
+
+test('ticket references allocate once across concurrent reads and creation sources without changing legacy identity', async () => {
+  const { ensureSupportNumber } = await import('../lib/supportNumbers');
+  const legacy = 'legacy-reference';
+  db.records.set(`tickets/${legacy}`, ticket({projectName:'Ticket #6148 - Change hours', completedAt:'2026-10-24T14:00:00Z'}));
+  const before = structuredClone(db.records.get(`tickets/${legacy}`));
+  const values = await Promise.all(Array.from({length: 5}, () => ensureSupportNumber(db as never, legacy)));
+  assert.equal(new Set(values.map(value => value?.ticketNumber)).size, 1);
+  assert.equal(values[0]?.ticketNumber, '6148');
+  assert.equal(db.records.get(`tickets/${legacy}`)?.projectName, before!.projectName);
+  assert.equal(db.records.get(`tickets/${legacy}`)?.completedAt, before!.completedAt);
+  const publicTicket = await service.detail(legacy, company);
+  assert.equal(publicTicket.title, 'Change hours');
+  assert.equal(publicTicket.ticket_number, values[0]?.ticketNumber);
+  assert.equal(publicTicket.completed_at, '2026-10-24T14:00:00.000Z');
+});
+
+test('completion dates follow finished/reopened transitions and stay independent from billing and conversation changes', async () => {
+  const { ticketCompletionPatch } = await import('../lib/ticketIdentity');
+  const at='2026-11-12T20:00:00Z', original='2026-10-24T14:00:00Z';
+  const current={workspace:'Support Tickets', status:'In Progress'};
+  assert.deepEqual(ticketCompletionPatch(current,'Needs Invoiced',at),{completedAt:at});
+  assert.deepEqual(ticketCompletionPatch({...current,status:'Needs Invoiced',completedAt:original},'Done',at),{});
+  assert.deepEqual(ticketCompletionPatch({...current,status:'Done',completedAt:original},'In Progress',at),{});
+  assert.deepEqual(ticketCompletionPatch({...current,status:'Done'},undefined,at),{});
+  assert.deepEqual(ticketCompletionPatch({...current,workspace:'SEO'},'Done',at),{});
+  assert.deepEqual(ticketCompletionPatch({...current,parentId:'parent'},'Done',at),{});
+});
+
+test('legacy reference fill is staff-only, bounded and idempotent', async () => {
+  const api = handlers();
+  const references = await api.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[ticketId,ticketId]})}));
+  assert.equal(references.status,200);
+  const result=await references.json();
+  assert.equal(result.references.length,1);
+  assert.match(result.references[0].ticket_number,/^AW-\d{6}$/);
+  const rejected=createSupportHandlers(()=>db as never,async()=>{throw new (await import('../lib/supportService')).SupportError(403,'Support ticket access is required.');});
+  assert.equal((await rejected.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references',{method:'POST'}))).status,403);
+  assert.equal((await api.staffReferences(new NextRequest('https://crm.example/api/support/tickets/references',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:Array(101).fill(ticketId)})}))).status,400);
+});
+
+
+test('public form submissions retain their original number while Portal/manual requests get new references', async () => {
+  const input={entryId:'6209',subject:'Ticket #6209 - Opening hours',description:'Update the opening hours.',email:'owner@example.com',contactName:'Owner',companyName:'Example client',category:'Website Updates',priority:'Low',files:[]};
+  const id=await upsertPublicSupport(input,()=>db as never);
+  assert.equal(db.records.get(`tickets/${id}`)?.ticketNumber,'6209');
+  assert.equal(db.records.get(`tickets/${id}`)?.projectName,input.subject);
+  assert.equal(await upsertPublicSupport(input,()=>db as never),id);
+  const {ensureSupportNumber}=await import('../lib/supportNumbers');
+  const existing='existing-public-number';
+  db.records.set(`tickets/${existing}`,ticket({projectName:'Ticket #6148 - Existing request',ticketNumber:'AW-000999'}));
+  const before=structuredClone(db.records.get(`tickets/${existing}`));
+  assert.equal((await ensureSupportNumber(db as never,existing))?.ticketNumber,'6148');
+  const after=db.records.get(`tickets/${existing}`)!;
+  for(const key of Object.keys(before!)) if(key!=='ticketNumber') assert.deepEqual(after[key],before![key]);
+  const manual='manual-without-reference';db.records.set(`tickets/${manual}`,ticket({projectName:'New manual request',isManual:true}));
+  assert.match(String((await ensureSupportNumber(db as never,manual))?.ticketNumber),/^AW-\d{6}$/);
+  const {referenceForTicket}=await import('../lib/ticketIdentity');
+  assert.equal(referenceForTicket({projectName:'Edited title',supportSource:'awebco.com',supportEntryId:'6176',ticketNumber:'AW-000123'}),'6176');
+});
+
+
+test('either completion status sends one closure per recipient and invoicing preserves the first date', async () => {
+  for (const initial of ['Needs Invoiced', 'Closed']) {
+    const id = initial === 'Closed' ? 'closure-direct' : 'closure-billable';
+    db.records.set(`tickets/${id}`, ticket({status:'In Progress'}));
+    const before = structuredClone(db.records.get(`tickets/${id}`)!);
+    const actor = {name:'Agency staff',email:'staff@awebco.com',direction:'team' as const};
+    const count = sent.length;
+    await Promise.all(Array.from({length:3}, () => service.changeStatus(id, initial, actor)));
+    const completed = structuredClone(db.records.get(`tickets/${id}`)!);
+    assert.equal(sent.length,count+1);
+    assert.match(sent.at(-1)!.body,/Your ticket is closed/);
+    assert.doesNotMatch(sent.at(-1)!.body,/Needs Invoiced|billing|invoice/i);
+    assert.equal((await service.detail(id,company)).status,'Completed');
+    for (const status of ['Closed','Needs Invoiced','In Progress','Closed']) await service.changeStatus(id,status,actor);
+    assert.equal(sent.length,count+1);
+    assert.equal(db.records.get(`tickets/${id}`)!.completedAt,completed.completedAt);
+    for (const key of ['createdAt','deadline','billableHours','notes','updates']) assert.deepEqual(db.records.get(`tickets/${id}`)![key],before[key]);
+  }
+});
+
+test('historic completed and internal tickets do not send a retroactive closure notification', async () => {
+  const actor={name:'Staff',email:'staff@awebco.com',direction:'team' as const};
+  await service.changeStatus(ticketId,'Closed',actor);
+  assert.equal(sent.length,0);
+  assert.ok(!db.records.has(`tickets/${ticketId}/messages/ticket-closed`));
+  db.records.set('tickets/private-close',ticket({status:'In Progress',supportVisibility:'internal'}));
+  await service.changeStatus('private-close','Closed',actor);
+  assert.equal(sent.length,0);
+  assert.equal(db.records.get('tickets/private-close')!.status,'Closed');
+});
+
+test('CRM raster headshots are private, tied to ticket participants, and beat stale Portal team profiles', async () => {
+  const photo='data:image/png;base64,iVBORw0KGgo=';
+  db.records.get('users/staff')!.photoUrl=photo;
+  const actor=await service.portalActor({name:'Portal name',email:'staff@awebco.com',direction:'team'});
+  assert.equal(actor.name,'Agency staff');
+  assert.equal(actor.role,'admin');
+  await service.reply(ticketId,crypto.randomUUID(),'A team reply',actor,[],company);
+  await service.saveProfile(company,{name:'Old Portal name',email:actor.email,direction:'team',image:null});
+  const message=(await service.detail(ticketId,company)).messages[0];
+  assert.equal(message.author,'Agency staff');
+  assert.equal(message.author_id,'staff');
+  assert.equal(message.author_role,'admin');
+  assert.ok(!JSON.stringify(message).includes(photo));
+  const response=await service.photo(ticketId,'staff',company);
+  assert.equal(response.headers.get('Content-Type'),'image/png');
+  assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()),new Uint8Array([137,80,78,71,13,10,26,10]));
+  await assert.rejects(service.photo(ticketId,'staff','company-b'),{status:404});
+  db.records.set('users/unrelated',{email:'other@awebco.com',role:'admin',photoUrl:photo});
+  await assert.rejects(service.photo(ticketId,'unrelated',company),{status:404});
+  await assert.rejects(service.portalActor({name:'Client',email:'owner@example.com',direction:'team'}),{status:403});
+  const revoked=new SupportService(db as never,async()=>[]);
+  await assert.rejects(revoked.portalActor(actor),{status:403});
+});
+
+test('support status endpoint is staff-only, validates its payload, and ignores client directions', async () => {
+  const denied=createSupportHandlers(()=>db as never,async()=>{throw new (await import('../lib/supportService')).SupportError(403,'Denied');});
+  const path=`/api/support/tickets/${ticketId}/status`;
+  assert.equal((await denied.staffStatus(request(path,'POST',{status:'Closed'}),context())).status,403);
+  assert.equal((await handlers().staffStatus(request(path,'POST',{status:'Closed',email:'forged@example.com'}),context())).status,400);
+  assert.equal((await handlers().staffStatus(request(path,'POST',{status:'Closed'}),context())).status,200);
 });

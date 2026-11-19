@@ -120,7 +120,9 @@ export async function upsertPublicSupport(
       return prior.docs[0].id;
     }
     const at = new Date().toISOString();
+    const ticketNumber = input.entryId;
     tx.create(deterministic, {
+      ticketNumber,
       projectName: input.subject,
       description: input.description || "No content",
       workspace: "Support Tickets",

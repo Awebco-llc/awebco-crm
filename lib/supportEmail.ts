@@ -221,12 +221,25 @@ export function supportEmailContent(
       ),
     ].filter((value) => value.trim());
     if (original?.strippedHtml.length === 1 && original.strippedText?.trim()) {
-      const provider = htmlParts(original.strippedHtml[0]);
+      // Mailgun can empty Outlook's header while retaining its marker and
+      // the old message below it. Keep that structural boundary in both views.
+      const provider = htmlParts(original.strippedHtml[0], true);
       // Providers can retain marked signatures and blockquotes in both stripped
       // fields, or remove a quote from only one alternative. Account for those
       // known blocks, but require every remaining word in BOTH provider replies
       // to survive. A provider HTML reply inside a quote still prevents collapse.
+      // Mailgun can split one marked signature between stripped-text and
+      // stripped-signature (for example, Outlook contact details followed by
+      // website/review links). Rejoin those clues before subtracting complete
+      // known blocks; otherwise a partial signature vetoes all cleanup.
       let providerText = compact(original.strippedText);
+      const providerSignature = compact(original.strippedSignature || "");
+      if (
+        providerSignature &&
+        !providerText.endsWith(providerSignature) &&
+        compact(body).includes(providerText + providerSignature)
+      )
+        providerText += providerSignature;
       for (const part of html) {
         if (
           part.kind === "quote" ||
@@ -240,7 +253,13 @@ export function supportEmailContent(
           .filter(
             (part) =>
               part.kind === "reply" ||
-              (part.kind === "signature" && !safeSignature(part.text)),
+              (part.kind === "signature" && !safeSignature(part.text)) ||
+              (part.kind === "quote" &&
+                !html.some(
+                  (known) =>
+                    known.kind === "quote" &&
+                    compact(known.text).includes(compact(part.text)),
+                )),
           )
           .map((part) => part.text)
           .join("\n"),
@@ -418,10 +437,11 @@ export function supportNotification(input: {
   audience: "team" | "client";
   received: boolean;
   created?: boolean;
+  closed?: boolean;
   attachments: string[];
 }) {
   const title = input.title.replace(/[\r\n]/g, " ").slice(0, 150);
-  const heading = input.received
+  const heading = input.closed ? 'Your ticket is closed' : input.received
     ? "We received your request"
     : input.audience === "team"
       ? input.created

@@ -1,11 +1,14 @@
+import { needsTicketReference, ticketCompletionPatch } from './ticketIdentity';
 import {
   addDoc,
   arrayRemove,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -310,6 +313,7 @@ export async function deleteFileMetadata(id: string): Promise<void> {
 type TicketDoc = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: unknown; updatedAt?: unknown; };
 
 export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]) => void, onError?: (e: unknown) => void): Unsubscribe {
+  const numbering = new Set<string>();
   const q = query(
     collection(getDb(), 'tickets'),
     where('workspace', '==', workspace)
@@ -326,6 +330,19 @@ export function subscribeTickets(workspace: string, onChange: (tickets: Ticket[]
     });
     tickets.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
     onChange(tickets);
+    // Use the already-visible authoritative snapshot to fill legacy references once.
+    if (workspace === 'Support Tickets') {
+      const missing = tickets.filter(ticket => !ticket.parentId && needsTicketReference(ticket) && !numbering.has(ticket.id)).map(ticket => ticket.id);
+      missing.forEach(id => numbering.add(id));
+      if (missing.length) void (async () => {
+        const user = getAuth().currentUser;
+        if (!user) return;
+        for (let index = 0; index < missing.length; index += 100) {
+          const response = await fetch('/api/support/tickets/references', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ ids: missing.slice(index, index + 100) }) });
+          if (!response.ok) throw new Error('Ticket numbers could not be assigned. Reload to try again.');
+        }
+      })().catch(error => onError?.(error));
+    }
   }, (e) => onError?.(e));
 }
 
@@ -371,15 +388,50 @@ function cleanUndefined(obj: any): any {
 
 export async function createTicket(input: Omit<Ticket, 'id'>): Promise<string> {
   const cleanInput = cleanUndefined(input);
-  const ref = await addDoc(collection(getDb(), 'tickets'), {
-    ...cleanInput, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-  });
+  const db = getDb(), ref = doc(collection(db, 'tickets'));
+  if (input.workspace === 'Support Tickets' && !input.parentId) {
+    await runTransaction(db, async tx => {
+      const counter = doc(db, 'supportCounters', 'tickets'), saved = await tx.get(counter);
+      const previous = saved.data()?.value ?? 0;
+      if (!Number.isSafeInteger(previous) || previous < 0 || previous >= 999999999999) throw new Error('Ticket numbering is unavailable.');
+      const value = previous + 1;
+      tx.set(counter, { value });
+      tx.set(ref, { ...cleanInput, ticketNumber: `AW-${String(value).padStart(6, '0')}`, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...( ['Needs Invoiced', 'Done', 'Closed'].includes(input.status) ? {completedAt: serverTimestamp()} : {} ) });
+    });
+  } else {
+    await setDoc(ref, { ...cleanInput, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  }
   return ref.id;
 }
 
 export async function updateTicket(id: string, patch: Partial<Omit<Ticket, 'id'>>): Promise<void> {
   const cleanPatch = cleanUndefined(patch);
-  await setDoc(doc(getDb(), 'tickets', id), { ...cleanPatch, updatedAt: serverTimestamp() }, { merge: true });
+  if (cleanPatch.status) {
+    const current = (await getDoc(doc(getDb(), 'tickets', id))).data();
+    if (current?.workspace === 'Support Tickets' && !current.parentId) {
+      const user = getAuth().currentUser;
+      if (!user) throw new Error('Sign in to the CRM again.');
+      const {status, groupId, ...other} = cleanPatch;
+      if (Object.keys(other).length)
+        await setDoc(doc(getDb(), 'tickets', id), {...other, updatedAt: serverTimestamp()}, {merge: true});
+      const response = await fetch(`/api/support/tickets/${encodeURIComponent(id)}/status`, {
+        method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`},
+        body: JSON.stringify({status, ...(groupId ? {groupId} : {})}),
+      });
+      if (!response.ok) throw new Error('Ticket status could not be saved. Refresh and try again.');
+      return;
+    }
+  }
+  if (patch.status !== undefined) {
+    const db = getDb(), ref = doc(db, 'tickets', id);
+    await runTransaction(db, async tx => {
+      const current = await tx.get(ref);
+      if (!current.exists()) throw new Error('Ticket not found.');
+      tx.update(ref, { ...cleanPatch, ...ticketCompletionPatch(current.data(), patch.status, serverTimestamp()), updatedAt: serverTimestamp() });
+    });
+  } else {
+    await setDoc(doc(getDb(), 'tickets', id), { ...cleanPatch, updatedAt: serverTimestamp() }, { merge: true });
+  }
 }
 
 export async function deleteTicketUpdate(id: string, update: NonNullable<Ticket['updates']>[number]): Promise<void> {
