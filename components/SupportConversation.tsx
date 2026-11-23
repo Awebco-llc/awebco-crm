@@ -17,11 +17,6 @@ type Message = {
   kind?: string;
   attachments: Attachment[];
   email_status?: string;
-  email_signature?: string;
-  email_quoted?: string;
-  email_original_text?: string;
-  email_original_note?: string;
-  inline_attachments?: Attachment[];
 };
 type Detail = {
   shared: boolean;
@@ -144,12 +139,7 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                   ...data,
                   id: doc.id,
                   text: content.text,
-                  email_signature: content.signature,
-                  email_quoted: content.quoted,
-                  email_original_text: content.original,
-                  email_original_note: content.originalNote,
                   attachments: content.attachments,
-                  inline_attachments: content.inline,
                 } as Message;
               }),
           );
@@ -293,72 +283,21 @@ export function SupportConversation({ ticketId }: { ticketId: string }) {
                   {file.name}
                 </button>
               ))}
-              {(message.email_signature ||
-                message.email_quoted ||
-                !!message.inline_attachments?.length) && (
-                <details className="mt-3 text-sm text-[#4A4D53]">
-                  <summary className="cursor-pointer">
-                    Signature and quoted history
-                  </summary>
-                  {message.email_signature && (
-                    <p className="whitespace-pre-wrap [overflow-wrap:anywhere] mt-2">
-                      {message.email_signature}
-                    </p>
-                  )}
-                  {message.email_quoted && (
-                    <p className="whitespace-pre-wrap [overflow-wrap:anywhere] mt-2">
-                      {message.email_quoted}
-                    </p>
-                  )}
-                  {message.inline_attachments?.map((file) => (
-                    <button
-                      type="button"
-                      key={file.id}
-                      disabled={busy}
-                      onClick={() => void download(message.id, file)}
-                      className="flex items-start gap-2 text-blue-700 underline mt-2 text-left [overflow-wrap:anywhere]"
-                    >
-                      <Paperclip size={15} className="shrink-0" />
-                      {file.name}
-                    </button>
-                  ))}
-                </details>
+              {message.email_status === "failed" && (
+                <p className="text-xs text-[#4A4D53] mt-2">
+                  Message saved. Email notification could not be sent.
+                </p>
               )}
-              {message.email_original_text !== undefined && (
-                <details className="mt-3 text-sm text-[#4A4D53]">
-                  <summary className="cursor-pointer">Original email</summary>
-                  {message.email_original_note && (
-                    <p className="mt-2">{message.email_original_note}</p>
-                  )}
-                  <p className="whitespace-pre-wrap [overflow-wrap:anywhere] mt-2">
-                    {message.email_original_text}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void download(message.id, {
-                        id: "original-email",
-                        name: "original-email.json",
-                      })
-                    }
-                    className="text-blue-700 underline mt-2"
-                  >
-                    Download stored email content
-                  </button>
-                </details>
+              {message.email_status === "uncertain" && (
+                <p className="text-xs text-[#4A4D53] mt-2">
+                  Message saved. Email delivery is not confirmed.
+                </p>
               )}
-              <p className="text-xs text-[#4A4D53] mt-2">
-                {message.email_status === "accepted"
-                  ? "Email notification accepted"
-                  : message.email_status === "failed"
-                    ? "Message saved. Email notification could not be sent."
-                    : message.email_status === "not_required"
-                      ? "Message saved. No email notification required."
-                      : message.email_status === "uncertain"
-                        ? "Message saved. Email delivery is not confirmed."
-                        : "Message saved. Email notification pending."}
-              </p>
+              {message.email_status === "pending" && (
+                <p className="text-xs text-[#4A4D53] mt-2">
+                  Message saved. Email notification pending.
+                </p>
+              )}
               {message.email_status === "failed" && (
                 <button
                   type="button"
